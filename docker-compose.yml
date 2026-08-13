@@ -1,23 +1,68 @@
+# Local development stack for the ecommerce backend.
+#
+# Container names and host ports are namespaced with the `tws_ec2_` / 55xxx
+# prefix so this stack can run alongside the older `ecommerce_1` stack without
+# colliding on names, ports, or volumes.
+
 services:
   postgres:
     image: postgres:16
-    container_name: tws_ecommerce_postgres
+    container_name: tws_ec2_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: tws_ecommerce
-      POSTGRES_USER: tws
-      POSTGRES_PASSWORD: tws_dev_password
+      POSTGRES_DB: ${POSTGRES_DB:-tws_ecommerce}
+      POSTGRES_USER: ${POSTGRES_USER:-tws}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tws_dev_password}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-55432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tws} -d ${POSTGRES_DB:-tws_ecommerce}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: tws_ecommerce_redis
+    container_name: tws_ec2_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    container_name: tws_ec2_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # The image deliberately excludes .env (see .dockerignore), so configuration
+    # is injected here. env_file carries everything (secrets, seed values, pool
+    # and rate-limit tuning); the environment block below then overrides the
+    # datastore URLs, which must use in-network hostnames rather than localhost.
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tws}:${POSTGRES_PASSWORD:-tws_dev_password}@postgres:5432/${POSTGRES_DB:-tws_ecommerce}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${API_PORT:-58000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   postgres_data:
+    name: tws_ec2_postgres_data

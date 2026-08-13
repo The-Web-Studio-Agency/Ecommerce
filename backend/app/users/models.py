@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,6 +17,13 @@ class User(Base, TimestampMixin):
             "email",
             name="uq_users_tenant_email",
         ),
+        # The application already restricts roles, but the column is a plain
+        # string: without this the database would happily accept a typo or a
+        # role invented by a future code path.
+        CheckConstraint(
+            "role IN ({})".format(", ".join(f"'{role.value}'" for role in UserRole)),
+            name="role_valid",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -25,6 +32,7 @@ class User(Base, TimestampMixin):
         default=uuid.uuid4,
     )
 
+    # Nullable because platform-level users sit above the tenant boundary.
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -32,7 +40,6 @@ class User(Base, TimestampMixin):
             ondelete="CASCADE",
         ),
         nullable=True,
-        index=True,
     )
 
     email: Mapped[str] = mapped_column(
@@ -49,7 +56,7 @@ class User(Base, TimestampMixin):
     role: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        default=UserRole.TENANT_ADMIN.value,
+        default=UserRole.CUSTOMER.value,
     )
 
     is_active: Mapped[bool] = mapped_column(

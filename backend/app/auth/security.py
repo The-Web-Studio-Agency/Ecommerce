@@ -1,82 +1,171 @@
+"""Password hashing and JWT issuing/verification.
+
+Hashing runs in a worker thread. Argon2id deliberately costs ~250ms of CPU per
+call; running that inline on the asyncio event loop would block every other
+in-flight request on the worker for the duration, capping the whole process at
+roughly four logins per second. `anyio.to_thread.run_sync` moves the cost onto
+the threadpool so only the calling request waits.
+
+Access and refresh tokens are signed with SEPARATE secrets so that a leaked
+access-token secret cannot be used to mint refresh tokens. Tokens carry the
+tenant id, which the tenant-context dependency validates on every request - the
+token is a claim, never the authority, for tenant scoping.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
-from jose import JWTError, jwt
+import anyio.to_thread
+import jwt
 from pwdlib import PasswordHash
+from pwdlib.exceptions import PwdlibError
 
-from app.core.config import settings
+from app.core.config import get_settings
+from app.core.exceptions import AuthenticationError
 
-
-ALGORITHM = "HS256"
+TokenType = Literal["access", "refresh"]
 
 password_hash = PasswordHash.recommended()
 
+#: Hash of a throwaway password, used to spend comparable CPU time when the
+#: account does not exist so that login timing does not reveal which emails are
+#: registered. Computed lazily on first use.
+_DUMMY_HASH: str | None = None
 
-def hash_password(password: str) -> str:
+
+@dataclass(frozen=True)
+class TokenPayload:
+    """Decoded, verified JWT claims."""
+
+    subject: str
+    token_type: TokenType
+    role: str | None
+    tenant_id: str | None
+    jti: str
+    expires_at: datetime
+
+
+# --------------------------------------------------------------- passwords
+
+
+def _hash_sync(plain_password: str) -> str:
+    return password_hash.hash(plain_password)
+
+
+def _verify_sync(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return password_hash.verify(plain_password, hashed_password)
+    except (ValueError, TypeError, PwdlibError):
+        # A corrupt row, or a hash written by a hasher that is no longer
+        # enabled, is a failed login - never a 500 that reveals the stored
+        # value is unreadable.
+        return False
+
+
+async def hash_password(plain_password: str) -> str:
+    """Hash a plaintext password with Argon2id, off the event loop."""
+    return await anyio.to_thread.run_sync(_hash_sync, plain_password)
+
+
+async def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Check a plaintext password against its stored hash, off the event loop."""
+    return await anyio.to_thread.run_sync(_verify_sync, plain_password, hashed_password)
+
+
+async def spend_dummy_verification() -> None:
+    """Burn the same CPU as a real verification for a non-existent account.
+
+    Without this, "no such user" returns in microseconds while a wrong password
+    takes ~250ms, which turns response latency into a user-enumeration oracle.
     """
-    Hash a password using the recommended password hashing
-    algorithm provided by pwdlib.
-    """
-    return password_hash.hash(password)
+    global _DUMMY_HASH
+    if _DUMMY_HASH is None:
+        _DUMMY_HASH = await hash_password(uuid.uuid4().hex)
+    await verify_password("not-the-password", _DUMMY_HASH)
 
 
-def verify_password(
-    plain_password: str,
-    hashed_password: str,
-) -> bool:
-    """
-    Verify a plaintext password against its stored hash.
-    """
-    return password_hash.verify(
-        plain_password,
-        hashed_password,
-    )
+# ------------------------------------------------------------------ tokens
 
 
-def create_access_token(
+def _create_token(
     *,
     subject: str,
+    token_type: TokenType,
+    expires_delta: timedelta,
+    secret: str,
+    role: str | None,
     tenant_id: str | None,
-    role: str,
 ) -> str:
+    settings = get_settings()
     now = datetime.now(timezone.utc)
-
-    expires_at = now + timedelta(
-        minutes=settings.access_token_expire_minutes
-    )
-
-    payload: dict[str, Any] = {
+    claims: dict[str, Any] = {
         "sub": subject,
-        "tenant_id": tenant_id,
+        "type": token_type,
         "role": role,
-        "type": "access",
-        "iat": now,
-        "exp": expires_at,
+        "tid": tenant_id,
+        "jti": uuid.uuid4().hex,
+        "iat": int(now.timestamp()),
+        "exp": int((now + expires_delta).timestamp()),
     }
+    return jwt.encode(claims, secret, algorithm=settings.jwt_algorithm)
 
-    return jwt.encode(
-        payload,
-        settings.jwt_secret,
-        algorithm=ALGORITHM,
+
+def create_access_token(*, subject: str, role: str | None, tenant_id: str | None) -> str:
+    settings = get_settings()
+    return _create_token(
+        subject=subject,
+        token_type="access",
+        expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
+        secret=settings.jwt_secret,
+        role=role,
+        tenant_id=tenant_id,
     )
 
 
-def decode_access_token(token: str) -> dict[str, Any]:
+def create_refresh_token(*, subject: str, role: str | None, tenant_id: str | None) -> str:
+    settings = get_settings()
+    return _create_token(
+        subject=subject,
+        token_type="refresh",
+        expires_delta=timedelta(days=settings.refresh_token_expire_days),
+        secret=settings.jwt_refresh_secret,
+        role=role,
+        tenant_id=tenant_id,
+    )
+
+
+def decode_token(token: str, *, expected_type: TokenType) -> TokenPayload:
+    """Verify a JWT and return its claims.
+
+    Raises AuthenticationError for expired, malformed, or wrong-type tokens.
+    Because each token type is signed with its own secret, a refresh token
+    presented as an access token fails signature verification outright.
+    """
+    settings = get_settings()
+    secret = settings.jwt_secret if expected_type == "access" else settings.jwt_refresh_secret
     try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret,
-            algorithms=[ALGORITHM],
-        )
-    except JWTError as exc:
-        raise ValueError(
-            "Invalid or expired access token"
-        ) from exc
+        claims = jwt.decode(token, secret, algorithms=[settings.jwt_algorithm])
+    except jwt.ExpiredSignatureError as exc:
+        raise AuthenticationError("Token has expired", error_code="TOKEN_EXPIRED") from exc
+    except jwt.PyJWTError as exc:
+        raise AuthenticationError("Invalid authentication token") from exc
 
-    if payload.get("type") != "access":
-        raise ValueError("Invalid token type")
+    if claims.get("type") != expected_type:
+        raise AuthenticationError("Invalid authentication token")
 
-    if not payload.get("sub"):
-        raise ValueError("Token subject is missing")
+    subject = claims.get("sub")
+    if not subject:
+        raise AuthenticationError("Invalid authentication token")
 
-    return payload
+    return TokenPayload(
+        subject=str(subject),
+        token_type=expected_type,
+        role=claims.get("role"),
+        tenant_id=claims.get("tid"),
+        jti=str(claims.get("jti", "")),
+        expires_at=datetime.fromtimestamp(claims["exp"], tz=timezone.utc),
+    )
