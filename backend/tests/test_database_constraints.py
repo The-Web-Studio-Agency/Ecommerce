@@ -62,8 +62,16 @@ async def test_role_must_be_a_known_value(session, tenant):
 
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 async def test_every_application_role_is_accepted(session, tenant, role):
-    """The check constraint and the UserRole enum must not drift apart."""
-    session.add(_user(tenant.id, f"{role.lower()}@example.com", role=role))
+    """The check constraint and the UserRole enum must not drift apart.
+
+    Each role is inserted at the tenant scope it is actually defined for:
+    ck_users_role_matches_tenant_scope requires PLATFORM_ADMIN to have no
+    tenant and every other role to have one, so a single fixed scope could
+    not satisfy the whole enum.
+    """
+    is_platform = role == UserRole.PLATFORM_ADMIN.value
+    tenant_id = None if is_platform else tenant.id
+    session.add(_user(tenant_id, f"{role.lower()}@example.com", role=role))
 
     await session.commit()  # must not raise
 

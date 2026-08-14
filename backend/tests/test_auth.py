@@ -239,3 +239,92 @@ async def test_refresh_rejected_after_tenant_deactivated(client, session, tenant
         "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
     assert response.status_code == 401
+
+
+# -------------------------------------------------- rotation and revocation
+
+
+async def test_rotation_invalidates_the_previous_refresh_token(client, tenant, user):
+    """A refresh token is single-use: rotating it spends it."""
+    first = (
+        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    ).json()["data"]["tokens"]["refresh_token"]
+
+    rotated = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    assert rotated.status_code == 200
+    second = rotated.json()["data"]["tokens"]["refresh_token"]
+    assert second != first
+
+    replay = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    assert replay.status_code == 401
+
+
+async def test_reuse_of_a_rotated_token_revokes_every_session(client, tenant, user):
+    """Replay means two parties hold the token, so every session is cut.
+
+    This is the whole point of rotation: the replay itself is the signal, and
+    because we cannot tell the legitimate client from the thief, the live
+    token issued by the rotation must die too.
+    """
+    first = (
+        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    ).json()["data"]["tokens"]["refresh_token"]
+
+    second = (
+        await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    ).json()["data"]["tokens"]["refresh_token"]
+
+    # The attacker (or the client) replays the already-spent token.
+    replay = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    assert replay.status_code == 401
+
+    # The still-live token from the rotation is now dead as well.
+    after = await client.post("/api/v1/auth/refresh", json={"refresh_token": second})
+    assert after.status_code == 401
+
+
+async def test_logout_revokes_the_refresh_token(client, tenant, user):
+    refresh_token = (
+        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    ).json()["data"]["tokens"]["refresh_token"]
+
+    logged_out = await client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
+    assert logged_out.status_code == 204
+
+    response = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+    assert response.status_code == 401
+
+
+async def test_logout_is_not_an_oracle(client, tenant, user):
+    """Unknown and already-revoked tokens must look exactly like valid ones."""
+    refresh_token = (
+        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    ).json()["data"]["tokens"]["refresh_token"]
+
+    assert (
+        await client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
+    ).status_code == 204
+    # Same token again - already revoked.
+    assert (
+        await client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
+    ).status_code == 204
+    # A token this server never issued.
+    never_issued = create_refresh_token(subject=str(user.id), role=user.role, tenant_id=None)
+    assert (
+        await client.post("/api/v1/auth/logout", json={"refresh_token": never_issued})
+    ).status_code == 204
+
+
+async def test_logout_does_not_disturb_another_session(client, tenant, user):
+    """Logging out one session must not sign the user out everywhere."""
+    first = (
+        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    ).json()["data"]["tokens"]["refresh_token"]
+    second = (
+        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    ).json()["data"]["tokens"]["refresh_token"]
+
+    await client.post("/api/v1/auth/logout", json={"refresh_token": first})
+
+    still_valid = await client.post("/api/v1/auth/refresh", json={"refresh_token": second})
+    assert still_valid.status_code == 200

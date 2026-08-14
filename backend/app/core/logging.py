@@ -69,9 +69,13 @@ def configure_logging() -> None:
                     "level": settings.log_level.upper(),
                     "propagate": False,
                 },
+                # Silenced deliberately: the request-context middleware in
+                # `app.main` logs one richer line per request (it adds the
+                # request id and the duration). Leaving this at INFO would log
+                # every request twice.
                 "uvicorn.access": {
                     "handlers": ["console"],
-                    "level": settings.log_level.upper(),
+                    "level": "WARNING",
                     "propagate": False,
                 },
                 "sqlalchemy.engine": {

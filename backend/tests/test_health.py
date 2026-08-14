@@ -7,7 +7,7 @@ import pytest
 
 async def test_liveness_has_no_dependencies(client):
     """Liveness must not fail because a datastore is briefly unavailable."""
-    response = await client.get("/health")
+    response = await client.get("/health/live")
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -31,13 +31,13 @@ async def test_unknown_route_uses_the_error_envelope(client):
 
 
 async def test_every_response_carries_a_request_id(client):
-    response = await client.get("/health")
+    response = await client.get("/health/live")
 
     assert response.headers["X-Request-Id"]
 
 
 async def test_supplied_request_id_is_echoed(client):
-    response = await client.get("/health", headers={"X-Request-Id": "trace-me"})
+    response = await client.get("/health/live", headers={"X-Request-Id": "trace-me"})
 
     assert response.headers["X-Request-Id"] == "trace-me"
 

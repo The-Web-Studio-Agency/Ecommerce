@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -105,14 +106,33 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def request_context(request: Request, call_next: Callable[[Request], Awaitable]):
-        """Attach a request id to logs and to the response."""
+        """Attach a request id to logs and to the response, and time the request.
+
+        This one line per request is the API's access log: it carries request
+        rate, latency and error rate, correlated by request id. It replaces
+        uvicorn's own access log (silenced in `configure_logging`) rather than
+        adding to it, so each request is logged once.
+        """
         # Sanitised: the inbound value is client-controlled and gets written to
         # every log line for this request.
         request_id = sanitize_request_id(request.headers.get("X-Request-Id"))
         set_request_id(request_id)
         request.state.request_id = request_id
+
+        started = perf_counter()
         response = await call_next(request)
+        duration_ms = (perf_counter() - started) * 1000
+
         response.headers["X-Request-Id"] = request_id
+        # Path only, never the query string: filters routinely carry data we do
+        # not want copied into logs.
+        logger.info(
+            "request method=%s path=%s status=%s duration_ms=%.1f",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
         return response
 
     # ------------------------------------------------------------- handlers
@@ -243,6 +263,11 @@ def create_app() -> FastAPI:
         if not cache_ok:
             logger.warning("health.redis_degraded rate limiting is not being enforced")
 
+        # Connection-pool saturation is the failure mode that turns a slow query
+        # into a site-wide outage: once every connection is checked out, further
+        # requests queue for `pool_timeout` and then fail. Reported here because
+        # readiness is already scraped, so it needs no separate endpoint.
+        pool = engine.pool
         return JSONResponse(
             status_code=status.HTTP_200_OK if database_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -250,6 +275,11 @@ def create_app() -> FastAPI:
                 "checks": {
                     "database": "ok" if database_ok else "unavailable",
                     "redis": "ok" if cache_ok else "degraded",
+                },
+                "pool": {
+                    "size": pool.size(),
+                    "checked_out": pool.checkedout(),
+                    "overflow": pool.overflow(),
                 },
             },
         )

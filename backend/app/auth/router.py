@@ -23,8 +23,8 @@ from app.auth.service import AuthService
 from app.core import rate_limit
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.responses import ApiResponse, ok
 from app.core.request_context import client_ip
+from app.core.responses import ApiResponse, ok
 from app.users.models import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from app.auth.constants import UserRole
+from app.auth.security import create_access_token
 from app.users.models import User
 from app.users.repository import UserRepository
 from tests.conftest import USER_PASSWORD, access_token_for, login
@@ -58,6 +60,78 @@ async def test_header_cannot_override_the_authenticated_tenant(
 
     assert response.status_code == 200
     assert response.json()["data"]["tenant_id"] == str(tenant.id)
+
+
+async def test_query_parameters_cannot_override_the_authenticated_tenant(
+    client, tenant, other_tenant, user
+):
+    """Scope comes from the user row, so an unexpected query param changes nothing."""
+    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+
+    response = await client.get(
+        "/api/v1/auth/me",
+        params={"tenant_id": str(other_tenant.id), "tenant_slug": "acme"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["tenant_id"] == str(tenant.id)
+
+
+async def test_a_forged_tenant_claim_does_not_move_the_user(client, tenant, other_tenant, user):
+    """The JWT's tenant claim is a claim, never the authority.
+
+    A token signed with the real secret but carrying another tenant's id must
+    still resolve to the tenant on the user's database row.
+    """
+    forged = create_access_token(
+        subject=str(user.id), role=user.role, tenant_id=str(other_tenant.id)
+    )
+
+    response = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {forged}"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["tenant_id"] == str(tenant.id)
+
+
+async def test_registration_body_cannot_place_a_user_in_another_tenant(
+    client, tenant, other_tenant
+):
+    """`tenant_id` in the body is ignored; only the named slug decides."""
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "tenant_slug": "zeen",
+            "email": "smuggler@example.com",
+            "password": "hunter2hunter2",
+            "tenant_id": str(other_tenant.id),
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["tenant_id"] == str(tenant.id)
+
+
+async def test_a_platform_admin_is_not_reachable_through_tenant_login(
+    client, tenant, make_user
+):
+    """Platform users sit above the tenant boundary.
+
+    Login resolves a user by (tenant, email) and a platform admin has no
+    tenant, so it cannot authenticate one. There is no platform login route
+    yet - when platform operations are built, they will need one.
+    """
+    await make_user(
+        tenant=None, email="platform@tws.com", role=UserRole.PLATFORM_ADMIN.value
+    )
+
+    response = await login(
+        client, slug="zeen", email="platform@tws.com", password=USER_PASSWORD
+    )
+
+    assert response.status_code == 401
 
 
 async def test_lookup_by_email_requires_the_right_tenant(
