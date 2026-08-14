@@ -11,12 +11,16 @@ let them be "cleaned up".
 """
 
 from app.auth.models import RefreshToken
+from app.catalogue.models import Category, Product, ProductVariant
 from app.models.base import Base
 from app.tenants.models import Tenant
 from app.users.models import User
 
 __all__ = [
     "Base",
+    "Category",
+    "Product",
+    "ProductVariant",
     "RefreshToken",
     "Tenant",
     "User",

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.constants import UserRole
+from app.catalogue.constants import CatalogueStatus
+from app.catalogue.models import Category, Product, ProductVariant
 from app.tenants.models import Tenant
 from app.users.models import User
 
@@ -127,3 +130,219 @@ async def test_user_ids_are_not_sequential(session, tenant):
 
     assert isinstance(first.id, uuid.UUID)
     assert first.id != second.id
+
+
+# ----------------------------------------------------------------- catalogue
+
+
+def _category(tenant_id, slug: str = "dresses", name: str = "Dresses") -> Category:
+    return Category(tenant_id=tenant_id, name=name, slug=slug, is_active=True)
+
+
+def _product(tenant_id, category_id, slug: str = "dress", name: str = "Dress") -> Product:
+    return Product(
+        tenant_id=tenant_id,
+        category_id=category_id,
+        name=name,
+        slug=slug,
+        status=CatalogueStatus.DRAFT.value,
+    )
+
+
+def _variant(tenant_id, product_id, sku: str = "SKU-1", price: str = "10.00") -> ProductVariant:
+    return ProductVariant(
+        tenant_id=tenant_id,
+        product_id=product_id,
+        sku=sku,
+        name="Small / Black",
+        price=Decimal(price),
+        status=CatalogueStatus.DRAFT.value,
+    )
+
+
+async def test_a_product_cannot_reference_another_tenants_category(
+    session, tenant, other_tenant
+):
+    """The composite foreign key, not the service, is the last line here.
+
+    Even with the application bypassed entirely, a product in one tenant cannot
+    point at a category in another.
+    """
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+
+    session.add(_product(other_tenant.id, category.id))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_a_variant_cannot_reference_another_tenants_product(
+    session, tenant, other_tenant
+):
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+    product = _product(tenant.id, category.id)
+    session.add(product)
+    await session.commit()
+
+    session.add(_variant(other_tenant.id, product.id))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_a_category_slug_is_unique_within_a_tenant(session, tenant):
+    session.add(_category(tenant.id))
+    await session.commit()
+
+    session.add(_category(tenant.id))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_the_same_category_slug_is_allowed_across_tenants(
+    session, tenant, other_tenant
+):
+    session.add_all([_category(tenant.id), _category(other_tenant.id)])
+
+    await session.commit()  # must not raise
+
+
+async def test_a_sku_is_unique_within_a_tenant(session, tenant):
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+    product = _product(tenant.id, category.id)
+    session.add(product)
+    await session.commit()
+
+    session.add(_variant(tenant.id, product.id))
+    await session.commit()
+    session.add(_variant(tenant.id, product.id))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("slug", "Dresses"),      # ck_categories_slug_is_lowercase
+        ("name", "   "),          # ck_categories_name_not_blank
+    ],
+)
+async def test_category_check_constraints_reject_bad_values(session, tenant, field, value):
+    category = _category(tenant.id)
+    setattr(category, field, value)
+    session.add(category)
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_a_product_status_must_be_a_known_value(session, tenant):
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+
+    product = _product(tenant.id, category.id)
+    product.status = "ON_FIRE"
+    session.add(product)
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_a_negative_price_is_rejected_by_the_database(session, tenant):
+    """Pydantic checks this too; the column must not depend on that."""
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+    product = _product(tenant.id, category.id)
+    session.add(product)
+    await session.commit()
+
+    session.add(_variant(tenant.id, product.id, price="-1.00"))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_a_lowercase_sku_is_rejected_by_the_database(session, tenant):
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+    product = _product(tenant.id, category.id)
+    session.add(product)
+    await session.commit()
+
+    session.add(_variant(tenant.id, product.id, sku="sku-lower"))
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_deleting_a_product_cascades_to_its_variants(session, tenant):
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+    product = _product(tenant.id, category.id)
+    session.add(product)
+    await session.commit()
+    session.add(_variant(tenant.id, product.id))
+    await session.commit()
+
+    await session.delete(product)
+    await session.commit()
+
+    remaining = (await session.execute(select(ProductVariant))).scalars().all()
+    assert remaining == []
+
+
+async def test_deleting_a_category_in_use_is_refused(session, tenant):
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+    session.add(_product(tenant.id, category.id))
+    await session.commit()
+
+    await session.delete(category)
+
+    with pytest.raises(IntegrityError):
+        await session.commit()
+    await session.rollback()
+
+
+async def test_deleting_a_tenant_cascades_through_the_whole_catalogue(session, tenant):
+    """Categories, products and variants all go with their tenant.
+
+    This is why the product -> category foreign key is NO ACTION rather than
+    RESTRICT: RESTRICT is checked immediately and would fire part-way through
+    this cascade, depending on the order Postgres happens to delete in.
+    """
+    category = _category(tenant.id)
+    session.add(category)
+    await session.commit()
+    product = _product(tenant.id, category.id)
+    session.add(product)
+    await session.commit()
+    session.add(_variant(tenant.id, product.id))
+    await session.commit()
+
+    await session.delete(tenant)
+    await session.commit()
+
+    for model in (Category, Product, ProductVariant):
+        assert (await session.execute(select(model))).scalars().all() == []

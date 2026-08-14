@@ -175,3 +175,29 @@ async def access_token_for(client: AsyncClient, *, slug: str, email: str, passwo
     response = await login(client, slug=slug, email=email, password=password)
     assert response.status_code == 200, response.text
     return response.json()["data"]["tokens"]["access_token"]
+
+
+async def headers_for(client: AsyncClient, *, slug: str, email: str) -> dict[str, str]:
+    """Bearer header obtained by actually logging in.
+
+    Tenant-scoped modules are tested through the full chain - login, token,
+    user row, permission - rather than with a hand-minted token.
+    """
+    token = await access_token_for(client, slug=slug, email=email, password=USER_PASSWORD)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def admin_headers(client, tenant, make_user) -> dict[str, str]:
+    """A TENANT_ADMIN of the `tenant` fixture (slug "zeen")."""
+    await make_user(tenant=tenant, email="admin@zeen.com", role=UserRole.TENANT_ADMIN.value)
+    return await headers_for(client, slug=tenant.slug, email="admin@zeen.com")
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def other_admin_headers(client, other_tenant, make_user) -> dict[str, str]:
+    """A TENANT_ADMIN of the `other_tenant` fixture (slug "acme")."""
+    await make_user(
+        tenant=other_tenant, email="admin@acme.com", role=UserRole.TENANT_ADMIN.value
+    )
+    return await headers_for(client, slug=other_tenant.slug, email="admin@acme.com")

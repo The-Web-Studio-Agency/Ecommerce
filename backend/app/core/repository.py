@@ -6,9 +6,11 @@ repository that extends `TenantScopedRepository` cannot be constructed without a
 tenant id, starts every read from a tenant-filtered SELECT, and stamps that
 tenant id onto every write.
 
-It is deliberately small. There is no pagination, no query-decorator hook, no
-generic CRUD - add those to a concrete repository when a real endpoint needs
-them.
+It is deliberately small. There is no query-decorator hook and no generic CRUD -
+add those to a concrete repository when a real endpoint needs them. `paginate`
+is here because the catalogue's three list endpoints (categories, products,
+variants) all needed the same page-plus-total pair; the first one would have
+kept it local.
 
 Auth-layer lookups (`users`, `tenants`) do NOT use this: authentication has to
 find a user before a tenant is known, so those repositories are plain classes
@@ -17,13 +19,15 @@ that take an explicit tenant id.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Generic, TypeVar
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.core.pagination import PageParams
 from app.models.base import Base
 
 ModelT = TypeVar("ModelT", bound=Base)
@@ -65,3 +69,23 @@ class TenantScopedRepository(Generic[ModelT]):
         self.session.add(entity)
         await self.session.flush()
         return entity
+
+    async def paginate(
+        self, stmt: Select[tuple[ModelT]], params: PageParams
+    ) -> tuple[Sequence[ModelT], int]:
+        """Return one page of `stmt` plus the total row count it spans.
+
+        The total is counted over the same statement so that any filter applied
+        by the caller is reflected in it - a total that ignored the filter would
+        tell the client there are more pages than it can actually fetch.
+        """
+        total = await self.session.scalar(
+            select(func.count()).select_from(stmt.order_by(None).subquery())
+        )
+        rows = await self.session.scalars(stmt.offset(params.offset).limit(params.limit))
+        return rows.all(), int(total or 0)
+
+    async def delete(self, entity: ModelT) -> None:
+        """Remove a row. The caller is responsible for the business rules."""
+        await self.session.delete(entity)
+        await self.session.flush()

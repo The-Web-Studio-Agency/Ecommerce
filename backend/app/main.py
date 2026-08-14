@@ -44,6 +44,7 @@ every error returns `{success, message, error:{code, details, request_id}}`.
 TAGS_METADATA = [
     {"name": "Health", "description": "Liveness and readiness probes."},
     {"name": "Auth", "description": "Authentication (JWT access/refresh)."},
+    {"name": "Catalogue", "description": "Categories, products and product variants."},
 ]
 
 

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import decode_token
 from app.core.database import get_db
-from app.core.exceptions import AuthenticationError
+from app.core.exceptions import AuthenticationError, PermissionDeniedError
 from app.users.models import User
 from app.users.repository import UserRepository
 
@@ -53,3 +53,16 @@ async def get_current_user(
         raise AuthenticationError("Invalid authentication credentials")
 
     return user
+
+
+def tenant_id_of(user: User) -> UUID:
+    """The tenant a request operates in, for tenant-scoped modules.
+
+    A platform user has no tenant. Today none of them holds a tenant-scoped
+    permission, so this cannot trigger through a guarded route - but a
+    `TenantScopedRepository` built with None would silently match no rows
+    instead of failing, so the impossible case is made loud rather than quiet.
+    """
+    if user.tenant_id is None:
+        raise PermissionDeniedError("This operation requires a tenant-scoped account")
+    return user.tenant_id

@@ -11,7 +11,14 @@ from app.models.base import Base
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
-EXPECTED_TABLES = {"tenants", "users"}
+EXPECTED_TABLES = {
+    "tenants",
+    "users",
+    "refresh_tokens",
+    "categories",
+    "products",
+    "product_variants",
+}
 
 
 def _import_in_fresh_interpreter(module: str) -> subprocess.CompletedProcess:
@@ -58,7 +65,7 @@ def test_every_model_is_registered_on_the_metadata():
 
 
 def test_registry_exports_every_model():
-    for name in ("Base", "Tenant", "User"):
+    for name in ("Base", "Tenant", "User", "RefreshToken", "Category", "Product", "ProductVariant"):
         assert name in registry.__all__
         assert hasattr(registry, name)
 
