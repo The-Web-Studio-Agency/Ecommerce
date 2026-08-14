@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     db_max_overflow: int = 10
     db_pool_recycle_seconds: int = 1800
     db_echo: bool = False
+    # How long a request waits for a free pooled connection before failing.
+    # Without it a saturated pool turns into unbounded latency.
+    db_pool_timeout_seconds: int = 10
+    # Server-side cap on any single statement. One pathological query would
+    # otherwise hold a pooled connection indefinitely.
+    db_statement_timeout_seconds: int = 15
 
     # --- Authentication ---
     jwt_secret: str
@@ -71,8 +77,16 @@ class Settings(BaseSettings):
     # instead of requiring JSON in .env.
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
+    # Interactive API docs. None means "on outside production"; set explicitly
+    # to publish or suppress the schema regardless of environment.
+    docs_enabled: bool | None = None
+
     # --- Rate limiting ---
+    # Two budgets guard login. The per-account limit stops one account being
+    # brute-forced; the per-IP limit stops one source spraying many accounts,
+    # which the per-account limit alone cannot see.
     login_rate_limit_attempts: int = 10
+    login_ip_rate_limit_attempts: int = 30
     login_rate_limit_window_seconds: int = 60
 
     # --- Seed data ---
@@ -100,8 +114,15 @@ class Settings(BaseSettings):
     def is_testing(self) -> bool:
         return self.environment.lower() in {"test", "testing"}
 
+    @property
+    def api_docs_enabled(self) -> bool:
+        """Whether to publish /docs, /redoc and /openapi.json."""
+        if self.docs_enabled is None:
+            return not self.is_production
+        return self.docs_enabled
+
     @model_validator(mode="after")
-    def _reject_placeholder_secrets_outside_development(self) -> Settings:
+    def _validate_production_safety(self) -> Settings:
         if self.is_production:
             placeholders = [
                 name
@@ -116,6 +137,10 @@ class Settings(BaseSettings):
                     "Refusing to start in production with weak/placeholder secrets: "
                     + ", ".join(placeholders)
                 )
+            # A wildcard origin with credentials allowed lets any site drive the
+            # API as a logged-in user. Fail at startup rather than in the wild.
+            if "*" in self.cors_origins:
+                raise ValueError("Refusing to start in production with CORS_ORIGINS='*'")
         if self.jwt_secret == self.jwt_refresh_secret:
             raise ValueError("JWT_SECRET and JWT_REFRESH_SECRET must differ")
         return self

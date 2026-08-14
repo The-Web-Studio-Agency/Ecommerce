@@ -1,22 +1,25 @@
-"""Tenant data access.
-
-Tenants are the boundary itself, not tenant-owned data, so this extends
-`BaseRepository` rather than `TenantScopedRepository`.
-"""
+"""Tenant data access. Queries only - no business rules, no commits."""
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from app.core.repository import BaseRepository
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.tenants.models import Tenant
 
 
-class TenantRepository(BaseRepository[Tenant]):
-    model = Tenant
+class TenantRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
 
     async def get_active_by_id(self, tenant_id: UUID) -> Tenant | None:
-        return await self.find_one(Tenant.id == tenant_id, Tenant.is_active.is_(True))
+        return await self.session.scalar(
+            select(Tenant).where(Tenant.id == tenant_id, Tenant.is_active.is_(True))
+        )
 
     async def get_active_by_slug(self, slug: str) -> Tenant | None:
-        return await self.find_one(Tenant.slug == slug, Tenant.is_active.is_(True))
+        return await self.session.scalar(
+            select(Tenant).where(Tenant.slug == slug, Tenant.is_active.is_(True))
+        )

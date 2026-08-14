@@ -34,6 +34,16 @@ engine: AsyncEngine = create_async_engine(
     # Recycle below any proxy/database idle timeout so long-lived workers do not
     # hand out connections the server has already closed.
     pool_recycle=_settings.db_pool_recycle_seconds,
+    # Fail fast when the pool is saturated instead of queueing without bound.
+    pool_timeout=_settings.db_pool_timeout_seconds,
+    connect_args={
+        # Server-side cap: Postgres aborts the statement itself, so a runaway
+        # query cannot hold a pooled connection open indefinitely.
+        "server_settings": {
+            "statement_timeout": str(_settings.db_statement_timeout_seconds * 1000),
+            "application_name": _settings.app_name,
+        },
+    },
 )
 
 AsyncSessionLocal = async_sessionmaker(

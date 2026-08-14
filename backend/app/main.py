@@ -7,7 +7,6 @@ internal message to a client.
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -25,6 +24,7 @@ from app.core.config import get_settings
 from app.core.database import dispose_engine, engine
 from app.core.exceptions import AppError, RateLimitedError
 from app.core.logging import configure_logging, get_logger, set_request_id
+from app.core.request_context import sanitize_request_id
 from app.core.responses import ErrorPayload, ErrorResponse
 
 settings = get_settings()
@@ -33,11 +33,10 @@ logger = get_logger("api")
 API_DESCRIPTION = """
 Multi-tenant e-commerce SaaS platform API.
 
-**Tenancy.** Authenticated endpoints take the tenant from the authenticated
-user, never from a header. Public storefront endpoints resolve the tenant from
-`X-Tenant-Slug`.
+**Tenancy.** Endpoints take the tenant from the authenticated user, never from a
+header, so a header cannot widen a caller's scope.
 
-**Responses.** Every endpoint returns `{success, message, data, meta}`;
+**Responses.** Every endpoint returns `{success, message, data}`;
 every error returns `{success, message, error:{code, details, request_id}}`.
 """
 
@@ -81,14 +80,17 @@ def _error_response(
 
 def create_app() -> FastAPI:
     configure_logging()
+    # The schema documents every endpoint and payload shape, so it is published
+    # outside production only unless DOCS_ENABLED says otherwise.
+    docs = settings.api_docs_enabled
     app = FastAPI(
         title=settings.app_name,
         description=API_DESCRIPTION,
         version="1.0.0",
         openapi_tags=TAGS_METADATA,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
         lifespan=lifespan,
     )
 
@@ -104,7 +106,9 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def request_context(request: Request, call_next: Callable[[Request], Awaitable]):
         """Attach a request id to logs and to the response."""
-        request_id = request.headers.get("X-Request-Id") or uuid.uuid4().hex
+        # Sanitised: the inbound value is client-controlled and gets written to
+        # every log line for this request.
+        request_id = sanitize_request_id(request.headers.get("X-Request-Id"))
         set_request_id(request_id)
         request.state.request_id = request_id
         response = await call_next(request)
@@ -208,22 +212,25 @@ def create_app() -> FastAPI:
 
     # --------------------------------------------------------------- routes
 
-    @app.get("/health", tags=["Health"], summary="Liveness probe")
-    async def health() -> dict[str, str]:
+    @app.get("/health/live", tags=["Health"], summary="Liveness probe")
+    async def liveness() -> dict[str, str]:
         """Liveness only - deliberately touches no dependency.
 
-        A load balancer uses this to decide whether to restart the process, so
+        An orchestrator uses this to decide whether to RESTART the process, so
         it must not fail because a downstream datastore is briefly unavailable.
+        Restarting the API does not fix a database outage.
         """
-        return {
-            "status": "ok",
-            "service": settings.app_name,
-            "environment": settings.environment,
-        }
+        return {"status": "ok"}
 
-    @app.get("/health/ready", tags=["Health"], summary="Readiness probe (database + Redis)")
+    @app.get("/health/ready", tags=["Health"], summary="Readiness probe")
     async def readiness() -> JSONResponse:
-        """Readiness - reports whether this process can actually serve traffic."""
+        """Readiness - whether this process should receive traffic.
+
+        Only PostgreSQL decides. Redis backs rate limiting, which degrades
+        gracefully on its own, so reporting unready when Redis blips would pull
+        every instance out of the load balancer over a dependency the API can
+        serve without. Its state is reported for operators, not acted upon.
+        """
         database_ok = True
         try:
             async with engine.connect() as connection:
@@ -233,12 +240,17 @@ def create_app() -> FastAPI:
             database_ok = False
 
         cache_ok = await redis_healthy()
-        ready = database_ok and cache_ok
+        if not cache_ok:
+            logger.warning("health.redis_degraded rate limiting is not being enforced")
+
         return JSONResponse(
-            status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+            status_code=status.HTTP_200_OK if database_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
-                "status": "ready" if ready else "degraded",
-                "checks": {"database": database_ok, "redis": cache_ok},
+                "status": "ready" if database_ok else "unavailable",
+                "checks": {
+                    "database": "ok" if database_ok else "unavailable",
+                    "redis": "ok" if cache_ok else "degraded",
+                },
             },
         )
 

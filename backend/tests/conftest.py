@@ -22,9 +22,13 @@ from app.auth.security import hash_password
 from app.core import cache
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models.base import Base
 from app.tenants.models import Tenant
 from app.users.models import User
+
+# The registry, not app.models.base: it is what imports every model module, so
+# Base.metadata knows about every table. Importing the base alone would create
+# a schema missing whichever models no other import happened to pull in.
+from app.models.registry import Base  # isort: skip
 
 settings = get_settings()
 
@@ -132,9 +136,15 @@ async def make_user(session: AsyncSession):
         tenant: Tenant | None,
         email: str = "user@zeen.com",
         password: str = USER_PASSWORD,
-        role: str = UserRole.CUSTOMER.value,
+        role: str | None = None,
         is_active: bool = True,
     ) -> User:
+        # ck_users_role_matches_tenant_scope: platform users have no tenant and
+        # every other role has one, so the default role follows the tenant.
+        if role is None:
+            role = (
+                UserRole.CUSTOMER.value if tenant is not None else UserRole.PLATFORM_ADMIN.value
+            )
         user = User(
             tenant_id=tenant.id if tenant else None,
             email=email,

@@ -14,6 +14,7 @@ token is a claim, never the authority, for tenant scoping.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -136,6 +137,16 @@ def create_refresh_token(*, subject: str, role: str | None, tenant_id: str | Non
         role=role,
         tenant_id=tenant_id,
     )
+
+
+def hash_refresh_token(token: str) -> str:
+    """Hash a refresh token for storage and lookup.
+
+    SHA-256, not Argon2: the token is already 256+ bits of signed random data,
+    so there is nothing to brute-force, and revocation needs a DETERMINISTIC
+    key to look the row up by. Argon2's salt makes that impossible.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def decode_token(token: str, *, expected_type: TokenType) -> TokenPayload:

@@ -35,6 +35,12 @@ class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
+class LogoutRequest(BaseModel):
+    # Distinct from RefreshRequest so the published OpenAPI schema names the
+    # operation the client is actually performing.
+    refresh_token: str = Field(min_length=1)
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

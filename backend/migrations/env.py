@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 
-# Imports the model registry, which is what populates Base.metadata. Without it
-# autogenerate sees an empty schema and proposes dropping every table.
-from app.models import Base
+# The registry is what populates Base.metadata. Without it autogenerate sees an
+# empty schema and proposes dropping every table.
+from app.models.registry import Base
 
 config = context.config
 

@@ -65,43 +65,37 @@ ruff check .        # lint
 ```
 app/
   api/v1.py        Router aggregation - the only place routes are mounted
-  core/            Cross-cutting primitives, no dependency on feature modules
+  core/            Cross-cutting concerns, no dependency on feature modules
     config          Typed settings; refuses weak secrets in production
     database        Async engine, explicit pool sizing, session dependency
-    repository      BaseRepository / TenantScopedRepository
-    responses       {success, message, data, meta} envelope
+    responses       {success, message, data} envelope
     exceptions      AppError hierarchy -> error envelope
-    tenant_context  The resolved tenant for a request
     cache           Async Redis client
     rate_limit      Fixed-window limiter
     logging         Request-id correlation
-    pagination      Shared page/page_size inputs
-  auth/            Login, registration, refresh, guards
-  tenants/         Tenant model, repository, public resolution
+  auth/            Login, registration, refresh, current-user dependency
+  tenants/         Tenant model and repository
   users/           User model and repository
   models/base.py   Declarative base + naming convention + timestamps
 ```
 
 **Layering.** `router -> service -> repository`. Routers resolve dependencies and
 wrap results in the envelope. Services own the business transaction and commit.
-Repositories do data access only and never commit.
+Repositories are plain classes that run queries - no business rules, no commits,
+no base class. Add an abstraction when a third caller needs it, not before.
 
 ### Tenancy
 
-Tenant isolation is structural, not conventional:
+Every user query is keyed on `(tenant_id, email)`, never email alone, and the
+composite unique index `uq_users_tenant_email` is what makes that exact. The
+authenticated tenant comes from the **user row**, never from a request header,
+so a header cannot widen a caller's scope. `test_tenancy.py` covers the boundary.
 
-- `TenantScopedRepository` cannot be constructed without a `TenantContext`.
-- Every read starts from a tenant-filtered `SELECT`.
-- Every write stamps the context's tenant id over whatever the caller supplied.
-- A row belonging to another tenant is indistinguishable from a missing row, so
-  ids cannot be used to probe for existence across tenants.
-
-Authenticated requests take the tenant from the **authenticated user**, never
-from a header. `X-Tenant-Slug` resolves the tenant for *public* storefront
-traffic only, and cannot widen an authenticated caller's scope.
-
-New tenant-owned models should extend `TenantScopedRepository`. That is the one
-rule that keeps cross-tenant leaks from becoming likely as the schema grows.
+Today only `users` is tenant-owned, so explicit `tenant_id` arguments are enough.
+**When you add the first real tenant-owned table** (products, orders, carts),
+introduce a scoped repository base at that point - one that cannot be built
+without a tenant id, filters every read, and stamps every write. Doing it with
+three or four such models is the right time; doing it with one is speculation.
 
 ### Responses
 

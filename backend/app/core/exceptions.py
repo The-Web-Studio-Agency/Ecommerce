@@ -1,8 +1,11 @@
 """Application exception hierarchy.
 
-Services raise these; the API layer converts them into the standard error
-envelope (see `app.core.responses` and the handlers in `app.main`).
-Nothing below ever carries a stack trace or internal detail to the client.
+Services raise these; the handlers in `app.main` convert them into the error
+envelope. Nothing below ever carries a stack trace or internal detail to the
+client.
+
+Add a subclass when a route needs a status code that is not here yet - not
+before.
 """
 
 from __future__ import annotations
@@ -31,14 +34,6 @@ class AppError(Exception):
         super().__init__(self.message)
 
 
-class ValidationFailedError(AppError):
-    """Input was syntactically valid but violates a business validation rule."""
-
-    status_code = 422
-    error_code = "VALIDATION_ERROR"
-    default_message = "Validation failed"
-
-
 class NotFoundError(AppError):
     status_code = 404
     error_code = "NOT_FOUND"
@@ -46,7 +41,7 @@ class NotFoundError(AppError):
 
 
 class ConflictError(AppError):
-    """Uniqueness or state conflict (duplicate email, slug, SKU...)."""
+    """Uniqueness or state conflict (duplicate email, slug...)."""
 
     status_code = 409
     error_code = "CONFLICT"
@@ -63,14 +58,6 @@ class PermissionDeniedError(AppError):
     status_code = 403
     error_code = "PERMISSION_DENIED"
     default_message = "You do not have permission to perform this action"
-
-
-class TenantContextError(AppError):
-    """The request could not be resolved to exactly one active tenant."""
-
-    status_code = 400
-    error_code = "TENANT_CONTEXT_REQUIRED"
-    default_message = "Tenant context could not be resolved for this request"
 
 
 class RateLimitedError(AppError):

@@ -7,13 +7,14 @@ into the error envelope by the handlers in `app.main`.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.auth.schemas import (
     AuthSession,
     LoginRequest,
+    LogoutRequest,
     RefreshRequest,
     RegisterRequest,
     UserResponse,
@@ -23,25 +24,38 @@ from app.core import rate_limit
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.responses import ApiResponse, ok
+from app.core.request_context import client_ip
 from app.users.models import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-def _login_rate_limit_key(request: Request, data: LoginRequest) -> str:
-    """Budget logins per (client IP, tenant, account).
+async def _throttle_login(request: Request, data: LoginRequest) -> str:
+    """Apply both login budgets. Returns the per-account key for later reset.
 
-    Keying on the account as well as the IP means a distributed attempt against
-    one account is still throttled, while one noisy office NAT cannot lock out
-    every user behind it.
+    Two counters, because they stop different attacks:
+      * per (IP, tenant, account) - brute-forcing one account;
+      * per (IP, tenant) - spraying one password across many accounts, which
+        the per-account counter cannot see because each account has its own.
     """
-    client_ip = request.client.host if request.client else "unknown"
-    return rate_limit.build_key(
-        "login",
-        client_ip,
-        data.tenant_slug.strip().lower(),
-        data.email.strip().lower(),
+    settings = get_settings()
+    ip = client_ip(request)
+    tenant_slug = data.tenant_slug.strip().lower()
+
+    ip_key = rate_limit.build_key("login-ip", ip, tenant_slug)
+    await rate_limit.hit(
+        ip_key,
+        limit=settings.login_ip_rate_limit_attempts,
+        window_seconds=settings.login_rate_limit_window_seconds,
     )
+
+    account_key = rate_limit.build_key("login", ip, tenant_slug, data.email.strip().lower())
+    await rate_limit.hit(
+        account_key,
+        limit=settings.login_rate_limit_attempts,
+        window_seconds=settings.login_rate_limit_window_seconds,
+    )
+    return account_key
 
 
 @router.post(
@@ -54,17 +68,14 @@ async def login(
     data: LoginRequest,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[AuthSession]:
-    settings = get_settings()
-    key = _login_rate_limit_key(request, data)
-
-    await rate_limit.hit(
-        key,
-        limit=settings.login_rate_limit_attempts,
-        window_seconds=settings.login_rate_limit_window_seconds,
-    )
+    account_key = await _throttle_login(request, data)
 
     result = await AuthService(session).login(data)
-    await rate_limit.reset(key)
+
+    # Clear only the per-account budget: a successful login proves this account
+    # is not under attack, but says nothing about the other accounts this IP
+    # may be working through.
+    await rate_limit.reset(account_key)
     return ok(result, message="Login successful")
 
 
@@ -85,7 +96,7 @@ async def register(
 @router.post(
     "/refresh",
     response_model=ApiResponse[AuthSession],
-    summary="Exchange a refresh token for a new token pair",
+    summary="Rotate a refresh token for a new token pair",
 )
 async def refresh(
     data: RefreshRequest,
@@ -93,6 +104,24 @@ async def refresh(
 ) -> ApiResponse[AuthSession]:
     result = await AuthService(session).refresh(data.refresh_token)
     return ok(result, message="Token refreshed successfully")
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revoke a refresh token",
+)
+async def logout(
+    data: LogoutRequest,
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    """Always 204, including for unknown or already-revoked tokens.
+
+    Reporting whether the token existed would turn logout into an oracle, and a
+    client retrying a logout should not be handed an error.
+    """
+    await AuthService(session).logout(data.refresh_token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

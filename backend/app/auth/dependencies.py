@@ -1,14 +1,13 @@
 """Authentication dependencies.
 
-`get_current_identity` is the single place where a bearer token becomes a
-trusted identity. It re-checks state that the token cannot express: a token
-stays cryptographically valid until it expires, so deactivating a user - or
-their whole tenant - only takes effect if it is verified per request.
+`get_current_user` is the single place where a bearer token becomes a trusted
+identity. It re-checks state the token cannot express: a token stays
+cryptographically valid until it expires, so deactivating a user - or their
+whole tenant - only takes effect if it is verified per request.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import Depends
@@ -17,8 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import decode_token
 from app.core.database import get_db
-from app.core.exceptions import AuthenticationError, PermissionDeniedError
-from app.core.tenant_context import TenantContext
+from app.core.exceptions import AuthenticationError
 from app.users.models import User
 from app.users.repository import UserRepository
 
@@ -28,18 +26,10 @@ from app.users.repository import UserRepository
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-@dataclass(frozen=True)
-class CurrentIdentity:
-    """The authenticated user plus the tenant they are acting within."""
-
-    user: User
-    tenant: TenantContext | None
-
-
-async def get_current_identity(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_db),
-) -> CurrentIdentity:
+) -> User:
     if credentials is None or not credentials.credentials:
         raise AuthenticationError("Not authenticated")
 
@@ -62,29 +52,4 @@ async def get_current_identity(
     if user.tenant_id is not None and (tenant is None or not tenant.is_active):
         raise AuthenticationError("Invalid authentication credentials")
 
-    context = (
-        TenantContext(tenant_id=tenant.id, slug=tenant.slug, name=tenant.name)
-        if tenant is not None
-        else None
-    )
-    return CurrentIdentity(user=user, tenant=context)
-
-
-async def get_current_user(
-    identity: CurrentIdentity = Depends(get_current_identity),
-) -> User:
-    """The authenticated user, without requiring a tenant scope."""
-    return identity.user
-
-
-async def get_authenticated_tenant(
-    identity: CurrentIdentity = Depends(get_current_identity),
-) -> TenantContext:
-    """The caller's own tenant scope.
-
-    Reuses the tenant already loaded during authentication, so requiring a
-    tenant scope costs no additional query.
-    """
-    if identity.tenant is None:
-        raise PermissionDeniedError("User is not associated with a tenant")
-    return identity.tenant
+    return user

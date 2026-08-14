@@ -32,9 +32,9 @@ async def seed() -> None:
 
         tenant = await tenants.get_active_by_slug(slug)
         if tenant is None:
-            tenant = await tenants.add(
-                Tenant(name=settings.seed_tenant_name, slug=slug, is_active=True)
-            )
+            tenant = Tenant(name=settings.seed_tenant_name, slug=slug, is_active=True)
+            session.add(tenant)
+            await session.flush()
             print(f"Created tenant: {tenant.name} ({tenant.slug})")
         else:
             print(f"Tenant already exists: {tenant.name} ({tenant.slug})")
