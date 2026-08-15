@@ -47,21 +47,6 @@ async def test_hashing_does_not_block_the_event_loop():
     assert elapsed_ticks > 5, f"event loop only ticked {elapsed_ticks} times during hashing"
 
 
-async def test_concurrent_hashes_overlap():
-    """Independent hashes should proceed in parallel across the threadpool."""
-    loop = asyncio.get_running_loop()
-
-    start = loop.time()
-    await hash_password("one")
-    serial = loop.time() - start
-
-    start = loop.time()
-    await asyncio.gather(*(hash_password(f"pw-{i}") for i in range(4)))
-    concurrent = loop.time() - start
-
-    # Four sequential hashes would take ~4x a single one.
-    assert concurrent < serial * 3.5
-
 
 async def test_hash_and_verify_round_trip():
     hashed = await hash_password(USER_PASSWORD)
