@@ -29,17 +29,17 @@ class OtpVerifyPayload(BaseModel):
     otp: OtpCode
 
 
-class AdminLoginPayload(BaseModel):
+class PasswordLoginPayload(BaseModel):
     identifier: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
 
 
-class AdminOtpVerifyPayload(BaseModel):
+class StaffOtpVerifyPayload(BaseModel):
     verification_id: UUID
     otp: OtpCode
 
 
-class AdminLoginChallenge(BaseModel):
+class StaffLoginChallenge(BaseModel):
     verification_id: UUID
 
 
@@ -56,9 +56,6 @@ class TokenPair(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int = Field(description="Access token lifetime in seconds")
-
-
-AdminLoginResponse = AdminLoginChallenge | TokenPair
 
 
 class UserProfile(BaseModel):

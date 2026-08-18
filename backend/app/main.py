@@ -32,9 +32,8 @@ the caller cannot choose. A request to an unregistered domain is a 404; a token
 issued by one storefront cannot authenticate against another.
 
 **Authentication.** Customers sign in with a phone number and a one-time code.
-Admins sign in with a password. Staff verify a password first and then a
-one-time code. All successful logins end in a JWT access token plus a rotating
-refresh token.
+Admins and staff sign in with an email/phone and password. All successful
+logins end in a JWT access token plus a rotating refresh token.
 
 **Responses.** Every endpoint returns `{success, message, data}`;
 every error returns `{success, message, error:{code, details, request_id}}`.
@@ -43,7 +42,8 @@ every error returns `{success, message, error:{code, details, request_id}}`.
 TAGS_METADATA = [
     {"name": "Health", "description": "Liveness and readiness probes."},
     {"name": "Auth", "description": "Customer authentication (phone + one-time code)."},
-    {"name": "Admin Auth", "description": "Admin and staff authentication."},
+    {"name": "Admin Auth", "description": "Admin authentication (password only)."},
+    {"name": "Staff Auth", "description": "Staff authentication (password only)."},
     {"name": "Catalogue", "description": "Categories, products and product variants."},
 ]
 

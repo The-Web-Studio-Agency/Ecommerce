@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.constants import (
     OTP_EXPIRE_MINUTES,
     OTP_MAX_ATTEMPTS,
-    STAFF_ROLES,
     OtpPurpose,
     UserRole,
 )
@@ -100,56 +99,47 @@ class AuthService:
         return tokens
 
 
-    async def admin_login(self, identifier: str, password: str) -> UUID | TokenPair:
-        user = await self._find_staff(identifier)
-
-        if user is None or user.password_hash is None or not user.is_active:
-            await spend_dummy_verification()
-            raise AuthenticationError(INVALID_CREDENTIALS)
-
-        if not await verify_password(password, user.password_hash):
-            logger.info("auth.login_failed user_id=%s tenant_id=%s", user.id, self.tenant.id)
-            raise AuthenticationError(INVALID_CREDENTIALS)
-
+    async def admin_login(self, identifier: str, password: str) -> TokenPair:
+        user = await self._verify_password_user(
+            identifier, password, roles=frozenset({UserRole.ADMIN.value})
+        )
         await self.challenges.expire_pending_for_user(
             tenant_id=self.tenant.id, user_id=user.id
         )
 
-        if user.role == UserRole.ADMIN.value:
-            user.is_verified = True
-            tokens = await self._issue_tokens(user)
-            await self.session.commit()
-
-            logger.info(
-                "auth.login user_id=%s tenant_id=%s role=%s",
-                user.id,
-                self.tenant.id,
-                user.role,
-            )
-            return tokens
-
-        record = await self._issue_otp(
-            phone=user.phone,
-            purpose=OtpPurpose.ADMIN_LOGIN.value,
-            user_id=user.id,
-        )
-        challenge = await self.challenges.create(
-            tenant_id=self.tenant.id,
-            user_id=user.id,
-            otp_request_id=record.id,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRE_MINUTES),
-        )
+        user.is_verified = True
+        tokens = await self._issue_tokens(user)
         await self.session.commit()
 
         logger.info(
-            "auth.admin_challenge_created user_id=%s tenant_id=%s challenge_id=%s",
+            "auth.login user_id=%s tenant_id=%s role=%s",
             user.id,
             self.tenant.id,
-            challenge.id,
+            user.role,
         )
-        return challenge.id
+        return tokens
 
-    async def verify_admin_otp(self, verification_id: UUID, otp: str) -> TokenPair:
+    async def staff_login(self, identifier: str, password: str) -> TokenPair:
+        user = await self._verify_password_user(
+            identifier, password, roles=frozenset({UserRole.STAFF.value})
+        )
+        await self.challenges.expire_pending_for_user(
+            tenant_id=self.tenant.id, user_id=user.id
+        )
+
+        user.is_verified = True
+        tokens = await self._issue_tokens(user)
+        await self.session.commit()
+
+        logger.info(
+            "auth.login user_id=%s tenant_id=%s role=%s",
+            user.id,
+            self.tenant.id,
+            user.role,
+        )
+        return tokens
+
+    async def verify_staff_otp(self, verification_id: UUID, otp: str) -> TokenPair:
         challenge = await self.challenges.get_pending(
             tenant_id=self.tenant.id, challenge_id=verification_id
         )
@@ -167,7 +157,7 @@ class AuthService:
         user = await self.users.get_by_id(
             tenant_id=self.tenant.id, user_id=challenge.user_id
         )
-        if user is None or not user.is_active or user.role not in STAFF_ROLES:
+        if user is None or not user.is_active or user.role != UserRole.STAFF.value:
             await self.session.commit()
             raise AuthenticationError(INVALID_CREDENTIALS)
 
@@ -236,7 +226,22 @@ class AuthService:
         await self.session.commit()
 
 
-    async def _find_staff(self, identifier: str) -> User | None:
+    async def _verify_password_user(
+        self, identifier: str, password: str, *, roles: frozenset[str]
+    ) -> User:
+        user = await self._find_user(identifier, roles=roles)
+
+        if user is None or user.password_hash is None or not user.is_active:
+            await spend_dummy_verification()
+            raise AuthenticationError(INVALID_CREDENTIALS)
+
+        if not await verify_password(password, user.password_hash):
+            logger.info("auth.login_failed user_id=%s tenant_id=%s", user.id, self.tenant.id)
+            raise AuthenticationError(INVALID_CREDENTIALS)
+
+        return user
+
+    async def _find_user(self, identifier: str, *, roles: frozenset[str]) -> User | None:
         value = identifier.strip()
 
         if "@" in value:
@@ -248,7 +253,7 @@ class AuthService:
                 return None
             user = await self.users.get_by_phone(tenant_id=self.tenant.id, phone=phone)
 
-        return user if user is not None and user.role in STAFF_ROLES else None
+        return user if user is not None and user.role in roles else None
 
     async def _create_customer(self, phone: str) -> User:
         try:

@@ -5,14 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser
 from app.auth.schemas import (
-    AdminLoginChallenge,
-    AdminLoginPayload,
-    AdminLoginResponse,
-    AdminOtpVerifyPayload,
     LogoutPayload,
     OtpRequestPayload,
     OtpVerifyPayload,
+    PasswordLoginPayload,
     RefreshPayload,
+    StaffOtpVerifyPayload,
     TokenPair,
     UserProfile,
 )
@@ -28,6 +26,7 @@ from app.tenants.resolver import CurrentTenant
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 admin_router = APIRouter(prefix="/admin/auth", tags=["Admin Auth"])
+staff_router = APIRouter(prefix="/staff/auth", tags=["Staff Auth"])
 
 
 async def _throttle(
@@ -108,17 +107,15 @@ async def verify_otp(
 
 @admin_router.post(
     "/login",
-    status_code=status.HTTP_202_ACCEPTED,
-    response_model=ApiResponse[AdminLoginResponse],
-    summary="Verify an admin or staff password",
+    response_model=ApiResponse[TokenPair],
+    summary="Verify an admin password and receive a token pair",
 )
 async def admin_login(
     request: Request,
-    response: Response,
-    data: AdminLoginPayload,
+    data: PasswordLoginPayload,
     tenant: CurrentTenant,
     session: AsyncSession = Depends(get_db),
-) -> ApiResponse[AdminLoginResponse]:
+) -> ApiResponse[TokenPair]:
     settings = get_settings()
     key = await _throttle(
         request,
@@ -129,24 +126,20 @@ async def admin_login(
         window_seconds=settings.login_rate_limit_window_seconds,
     )
 
-    result = await AuthService(session, tenant).admin_login(data.identifier, data.password)
+    tokens = await AuthService(session, tenant).admin_login(data.identifier, data.password)
 
     await rate_limit.reset(key)
-    if isinstance(result, TokenPair):
-        response.status_code = status.HTTP_200_OK
-        return ok(result, message="Login successful")
-
-    return ok(AdminLoginChallenge(verification_id=result), message="OTP sent")
+    return ok(tokens, message="Login successful")
 
 
-@admin_router.post(
-    "/verify-otp",
+@staff_router.post(
+    "/login",
     response_model=ApiResponse[TokenPair],
-    summary="Verify a staff code and receive a token pair",
+    summary="Verify a staff password and receive a token pair",
 )
-async def admin_verify_otp(
+async def staff_login(
     request: Request,
-    data: AdminOtpVerifyPayload,
+    data: PasswordLoginPayload,
     tenant: CurrentTenant,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[TokenPair]:
@@ -154,18 +147,58 @@ async def admin_verify_otp(
     key = await _throttle(
         request,
         tenant,
-        "admin-otp-verify",
+        "staff-login",
+        data.identifier.strip().lower(),
+        limit=settings.login_rate_limit_attempts,
+        window_seconds=settings.login_rate_limit_window_seconds,
+    )
+
+    tokens = await AuthService(session, tenant).staff_login(data.identifier, data.password)
+
+    await rate_limit.reset(key)
+    return ok(tokens, message="Login successful")
+
+
+async def _verify_staff_otp(
+    request: Request,
+    data: StaffOtpVerifyPayload,
+    tenant: Tenant,
+    session: AsyncSession,
+) -> ApiResponse[TokenPair]:
+    settings = get_settings()
+    key = await _throttle(
+        request,
+        tenant,
+        "staff-otp-verify",
         str(data.verification_id),
         limit=settings.otp_verify_rate_limit_attempts,
         window_seconds=settings.otp_rate_limit_window_seconds,
     )
 
-    tokens = await AuthService(session, tenant).verify_admin_otp(
+    tokens = await AuthService(session, tenant).verify_staff_otp(
         data.verification_id, data.otp
     )
 
     await rate_limit.reset(key)
     return ok(tokens, message="Login successful")
+
+
+# Note: staff OTP verification is intentionally not exposed publicly.
+# Legacy admin verification route remains at /admin/auth/verify-otp (hidden from docs).
+
+
+@admin_router.post(
+    "/verify-otp",
+    include_in_schema=False,
+    response_model=ApiResponse[TokenPair],
+)
+async def legacy_admin_verify_otp(
+    request: Request,
+    data: StaffOtpVerifyPayload,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[TokenPair]:
+    return await _verify_staff_otp(request, data, tenant, session)
 
 
 @router.post(

@@ -238,13 +238,9 @@ async def sign_in_staff(
     identifier: str,
     password: str = ADMIN_PASSWORD,
 ) -> dict:
-    challenge = await admin_login(client, identifier, password)
-    assert challenge.status_code == 202, challenge.text
-    verification_id = challenge.json()["data"]["verification_id"]
-
     response = await client.post(
-        "/api/v1/admin/auth/verify-otp",
-        json={"verification_id": verification_id, "otp": sent_otps[-1].otp},
+        "/api/v1/staff/auth/login",
+        json={"identifier": identifier, "password": password},
     )
     assert response.status_code == 200, response.text
     return response.json()["data"]
