@@ -1,10 +1,3 @@
-"""Logging configuration and request correlation.
-
-Every log line carries the request id, so an error response returned to a client
-can be traced to the exact server-side event. Credentials, tokens and password
-hashes are never logged - only identifiers.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -27,15 +20,12 @@ def get_request_id() -> str:
 
 
 class RequestIdFilter(logging.Filter):
-    """Inject the current request id into every record."""
-
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = get_request_id()
         return True
 
 
 def configure_logging() -> None:
-    """Install the application-wide logging configuration."""
     settings = get_settings()
     logging.config.dictConfig(
         {
@@ -69,10 +59,6 @@ def configure_logging() -> None:
                     "level": settings.log_level.upper(),
                     "propagate": False,
                 },
-                # Silenced deliberately: the request-context middleware in
-                # `app.main` logs one richer line per request (it adds the
-                # request id and the duration). Leaving this at INFO would log
-                # every request twice.
                 "uvicorn.access": {
                     "handlers": ["console"],
                     "level": "WARNING",
@@ -90,5 +76,4 @@ def configure_logging() -> None:
 
 
 def get_logger(name: str | None = None) -> logging.Logger:
-    """Return a namespaced application logger (`tws.<name>`)."""
     return logging.getLogger(LOGGER_NAME if name is None else f"{LOGGER_NAME}.{name}")

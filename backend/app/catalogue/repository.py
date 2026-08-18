@@ -1,10 +1,3 @@
-"""Catalogue data access. Queries only - no business rules, no commits.
-
-All three extend `TenantScopedRepository`, so every read below already starts
-from a tenant-filtered SELECT and every write is stamped with the tenant. None
-of these methods mentions `tenant_id`: that is the point of the base class.
-"""
-
 from __future__ import annotations
 
 from uuid import UUID
@@ -38,7 +31,6 @@ class ProductRepository(TenantScopedRepository[Product]):
         return await self.find_one(Product.slug == slug)
 
     async def exists_in_category(self, category_id: UUID) -> bool:
-        """Whether a category still has products, so deleting it is refused."""
         product = await self.find_one(Product.category_id == category_id)
         return product is not None
 

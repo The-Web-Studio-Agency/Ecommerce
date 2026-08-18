@@ -9,8 +9,6 @@ testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q --strict-markers"
 asyncio_mode = "auto"
-# The engine and the test database are session-scoped, so tests must share the
-# loop those were created on - asyncpg connections are bound to their loop.
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 
@@ -22,7 +20,6 @@ exclude = [".venv", "migrations/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM"]
 ignore = [
-    # FastAPI dependency injection relies on function calls in argument defaults.
     "B008",
 ]
 

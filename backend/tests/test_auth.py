@@ -1,171 +1,232 @@
-"""Authentication behaviour: login, registration, refresh and token validity."""
-
 from __future__ import annotations
 
-import pytest
+from datetime import datetime, timedelta, timezone
 
-from app.auth.constants import UserRole
+import pytest
+from sqlalchemy import select
+
+from app.auth.constants import OTP_MAX_ATTEMPTS, UserRole, UserStatus
+from app.auth.models import OtpRequest
 from app.auth.security import create_access_token, create_refresh_token
 from app.core.config import get_settings
-from tests.conftest import USER_PASSWORD, access_token_for, login
+from app.users.models import User
+from tests.conftest import (
+    headers_for,
+    request_otp,
+    sign_in_customer,
+    verify_otp,
+)
 
-LONG_PASSWORD = "p" * 200
+PHONE = "+919812345678"
 
 
-# ------------------------------------------------------------------- login
+def auth_header(tokens: dict) -> dict[str, str]:
+    return {"Authorization": f"Bearer {tokens['access_token']}"}
 
 
-async def test_login_succeeds(client, tenant, user):
-    response = await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+async def test_requesting_a_code_sends_one(client, tenant, sent_otps):
+    response = await request_otp(client, PHONE)
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["success"] is True
-    assert body["data"]["tokens"]["access_token"]
-    assert body["data"]["tokens"]["refresh_token"]
-    assert body["data"]["user"]["email"] == user.email
+    assert response.status_code == 202
+    assert response.json()["message"] == "OTP sent"
+    assert sent_otps[-1].phone == PHONE
+    assert len(sent_otps[-1].otp) == 6
+    assert sent_otps[-1].otp.isdigit()
+
+
+async def test_the_response_is_the_same_whether_or_not_an_account_exists(
+    client, tenant, user, sent_otps
+):
+    known = await request_otp(client, user.phone)
+    unknown = await request_otp(client, "+919555000111")
+
+    assert known.status_code == unknown.status_code == 202
+    assert known.json() == unknown.json()
 
 
 @pytest.mark.parametrize(
-    ("slug", "email", "password"),
-    [
-        ("nope", "user@zeen.com", USER_PASSWORD),  # unknown tenant
-        ("zeen", "ghost@zeen.com", USER_PASSWORD),  # unknown user
-        ("zeen", "user@zeen.com", "wrong-password"),  # wrong password
-    ],
+    "typed",
+    ["+919876543210", "919876543210", "09876543210", "9876543210", "+91 98765 43210"],
 )
-async def test_login_failures_are_indistinguishable(client, tenant, user, slug, email, password):
-    """Unknown tenant, unknown user and wrong password must look identical."""
-    response = await login(client, slug=slug, email=email, password=password)
+async def test_one_phone_number_however_it_is_typed(client, tenant, user, sent_otps, typed):
+    response = await request_otp(client, typed)
 
-    assert response.status_code == 401
-    body = response.json()
-    assert body["message"] == "Invalid credentials"
-    assert body["error"]["code"] == "AUTHENTICATION_FAILED"
+    assert response.status_code == 202
+    assert sent_otps[-1].phone == "+919876543210"
 
 
-async def test_login_inactive_user_rejected(client, tenant, make_user):
-    inactive = await make_user(tenant=tenant, email="off@zeen.com", is_active=False)
-
-    response = await login(client, slug="zeen", email=inactive.email, password=USER_PASSWORD)
-
-    assert response.status_code == 401
-
-
-async def test_login_inactive_tenant_rejected(client, session, tenant, user):
-    tenant.is_active = False
-    await session.commit()
-
-    response = await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-
-    assert response.status_code == 401
-
-
-# ------------------------------------------------------------ registration
-
-
-async def test_registration_creates_a_customer(client, tenant):
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={"tenant_slug": "zeen", "email": "New@Zeen.com", "password": "a-good-password"},
-    )
-
-    assert response.status_code == 201
-    data = response.json()["data"]
-    assert data["role"] == UserRole.CUSTOMER.value
-    # Email is normalised on the way in so it cannot collide by case later.
-    assert data["email"] == "new@zeen.com"
-
-
-@pytest.mark.parametrize("role", [r.value for r in UserRole])
-async def test_role_escalation_via_payload_is_impossible(client, tenant, role):
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "tenant_slug": "zeen",
-            "email": f"{role.lower()}@zeen.com",
-            "password": "a-good-password",
-            "role": role,
-        },
-    )
-
-    assert response.status_code == 201
-    assert response.json()["data"]["role"] == UserRole.CUSTOMER.value
-
-
-async def test_duplicate_email_in_same_tenant_rejected(client, tenant, user):
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={"tenant_slug": "zeen", "email": user.email, "password": "a-good-password"},
-    )
-
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "CONFLICT"
-
-
-async def test_registration_unknown_tenant_rejected(client):
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={"tenant_slug": "ghost", "email": "a@b.com", "password": "a-good-password"},
-    )
-
-    assert response.status_code == 404
-
-
-async def test_short_password_is_rejected(client, tenant):
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={"tenant_slug": "zeen", "email": "short@zeen.com", "password": "abc"},
-    )
+@pytest.mark.parametrize("phone", ["not-a-phone", "12", "+0123456789", "++9198765"])
+async def test_an_unusable_phone_number_is_rejected(client, tenant, phone):
+    response = await request_otp(client, phone)
 
     assert response.status_code == 422
 
 
-async def test_a_password_that_can_be_registered_can_also_be_used_to_log_in(client, tenant):
-    """Registration and login must agree on the maximum password length.
+async def test_requesting_again_invalidates_the_previous_code(client, tenant, sent_otps):
+    await request_otp(client, PHONE)
+    first = sent_otps[-1].otp
 
-    Regression: registration allowed 256 characters while login capped at 128,
-    so any account created with a longer password could never authenticate.
-    """
-    registered = await client.post(
-        "/api/v1/auth/register",
-        json={"tenant_slug": "zeen", "email": "long@zeen.com", "password": LONG_PASSWORD},
-    )
-    assert registered.status_code == 201
+    await request_otp(client, PHONE)
+    second = sent_otps[-1].otp
+    assert first != second
 
-    response = await login(client, slug="zeen", email="long@zeen.com", password=LONG_PASSWORD)
-    assert response.status_code == 200
+    stale = await verify_otp(client, PHONE, first)
+    assert stale.status_code == 401
 
-
-# ------------------------------------------------------------------ tokens
+    fresh = await verify_otp(client, PHONE, second)
+    assert fresh.status_code == 200
 
 
-async def test_valid_access_token_works(client, tenant, user):
-    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+async def test_a_valid_code_returns_a_token_pair(client, tenant, sent_otps):
+    tokens = await sign_in_customer(client, sent_otps, PHONE)
 
-    response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert tokens["access_token"]
+    assert tokens["refresh_token"]
+    assert tokens["token_type"] == "bearer"
+    assert tokens["expires_in"] > 0
 
-    assert response.status_code == 200
-    assert response.json()["data"]["id"] == str(user.id)
+
+async def test_a_wrong_code_is_rejected(client, tenant, sent_otps):
+    await request_otp(client, PHONE)
+    wrong = "000000" if sent_otps[-1].otp != "000000" else "111111"
+
+    response = await verify_otp(client, PHONE, wrong)
+
+    assert response.status_code == 401
+    assert response.json()["message"] == "Invalid or expired OTP"
 
 
-async def test_missing_token_rejected(client):
-    response = await client.get("/api/v1/auth/me")
+async def test_an_expired_code_is_rejected(client, session, tenant, sent_otps):
+    await request_otp(client, PHONE)
+    record = await session.scalar(select(OtpRequest))
+    record.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    await session.commit()
+
+    response = await verify_otp(client, PHONE, sent_otps[-1].otp)
 
     assert response.status_code == 401
 
 
+async def test_a_code_cannot_be_used_twice(client, tenant, sent_otps):
+    await request_otp(client, PHONE)
+    otp = sent_otps[-1].otp
+
+    assert (await verify_otp(client, PHONE, otp)).status_code == 200
+    assert (await verify_otp(client, PHONE, otp)).status_code == 401
+
+
+async def test_a_code_dies_after_too_many_wrong_guesses(client, tenant, sent_otps):
+    await request_otp(client, PHONE)
+    otp = sent_otps[-1].otp
+    wrong = "000000" if otp != "000000" else "111111"
+
+    for _ in range(OTP_MAX_ATTEMPTS):
+        assert (await verify_otp(client, PHONE, wrong)).status_code == 401
+
+    assert (await verify_otp(client, PHONE, otp)).status_code == 401
+
+
+async def test_a_failed_attempt_is_recorded(client, session, tenant, sent_otps):
+    await request_otp(client, PHONE)
+    await verify_otp(client, PHONE, "000000")
+
+    record = await session.scalar(select(OtpRequest))
+    await session.refresh(record)
+    assert record.attempts == 1
+
+
+async def test_verifying_without_ever_requesting_is_rejected(client, tenant):
+    response = await verify_otp(client, PHONE, "123456")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("otp", ["12345", "1234567", "abcdef", ""])
+async def test_a_malformed_code_is_rejected(client, tenant, otp):
+    response = await verify_otp(client, PHONE, otp)
+
+    assert response.status_code == 422
+
+
+async def test_a_first_time_customer_gets_an_account(client, session, tenant, sent_otps):
+    await sign_in_customer(client, sent_otps, PHONE)
+
+    created = await session.scalar(select(User).where(User.phone == PHONE))
+    assert created is not None
+    assert created.tenant_id == tenant.id
+    assert created.role == UserRole.CUSTOMER.value
+    assert created.is_verified is True
+    assert created.password_hash is None
+
+
+async def test_an_existing_customer_is_signed_in_not_duplicated(
+    client, session, tenant, user, sent_otps
+):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+
+    me = await client.get("/api/v1/auth/me", headers=auth_header(tokens))
+    assert me.json()["data"]["id"] == str(user.id)
+
+    rows = (await session.execute(select(User).where(User.phone == user.phone))).scalars().all()
+    assert len(rows) == 1
+
+
+async def test_a_deactivated_customer_cannot_sign_in(client, session, tenant, user, sent_otps):
+    user.status = UserStatus.INACTIVE.value
+    await session.commit()
+
+    await request_otp(client, user.phone)
+    response = await verify_otp(client, user.phone, sent_otps[-1].otp)
+
+    assert response.status_code == 401
+
+
+async def test_a_staff_account_cannot_use_the_passwordless_door(
+    client, tenant, make_user, sent_otps
+):
+    admin = await make_user(
+        tenant=tenant, email="admin@zeen.com", role=UserRole.ADMIN.value
+    )
+
+    await request_otp(client, admin.phone)
+    response = await verify_otp(client, admin.phone, sent_otps[-1].otp)
+
+    assert response.status_code == 401
+
+
+async def test_verification_marks_the_account_verified(client, session, tenant, sent_otps):
+    await sign_in_customer(client, sent_otps, PHONE)
+
+    created = await session.scalar(select(User).where(User.phone == PHONE))
+    assert created.is_verified is True
+
+
+async def test_the_access_token_authenticates_a_request(client, tenant, user, sent_otps):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+
+    response = await client.get("/api/v1/auth/me", headers=auth_header(tokens))
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["id"] == str(user.id)
+    assert data["phone"] == user.phone
+    assert data["role"] == UserRole.CUSTOMER.value
+
+
+async def test_missing_token_rejected(client, tenant):
+    assert (await client.get("/api/v1/auth/me")).status_code == 401
+
+
 @pytest.mark.parametrize("token", ["", "not-a-jwt", "eyJhbGciOiJIUzI1NiJ9.e30.bad-signature"])
-async def test_invalid_token_rejected(client, token):
+async def test_invalid_token_rejected(client, tenant, token):
     response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
 
 
 async def test_expired_token_rejected(client, tenant, user, monkeypatch):
-    settings = get_settings()
-    monkeypatch.setattr(settings, "access_token_expire_minutes", -1)
-    expired = create_access_token(subject=str(user.id), role=user.role, tenant_id=str(tenant.id))
+    monkeypatch.setattr(get_settings(), "access_token_expire_minutes", -1)
+    expired = create_access_token(user_id=user.id, tenant_id=tenant.id, role=user.role)
 
     response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {expired}"})
 
@@ -174,65 +235,88 @@ async def test_expired_token_rejected(client, tenant, user, monkeypatch):
 
 
 async def test_refresh_token_rejected_as_access_token(client, tenant, user):
-    """Separate signing secrets mean a refresh token cannot authenticate a request."""
-    refresh = create_refresh_token(subject=str(user.id), role=user.role, tenant_id=str(tenant.id))
+    refresh = create_refresh_token(user_id=user.id, tenant_id=tenant.id)
 
     response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {refresh}"})
 
     assert response.status_code == 401
 
 
-async def test_token_rejected_after_user_deactivated(client, session, tenant, user):
-    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+async def test_token_rejected_after_the_user_is_deactivated(client, session, tenant, user):
+    headers = headers_for(user)
+    assert (await client.get("/api/v1/auth/me", headers=headers)).status_code == 200
 
-    user.is_active = False
+    user.status = UserStatus.INACTIVE.value
     await session.commit()
 
-    response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 401
+    assert (await client.get("/api/v1/auth/me", headers=headers)).status_code == 401
 
 
-async def test_token_rejected_after_tenant_deactivated(client, session, tenant, user):
-    """Deactivating a tenant must take effect immediately, not at token expiry."""
-    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+async def test_the_access_token_carries_nothing_personal(client, tenant, user, sent_otps):
+    import jwt
 
-    tenant.is_active = False
-    await session.commit()
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+    claims = jwt.decode(
+        tokens["access_token"], get_settings().jwt_secret, algorithms=["HS256"]
+    )
 
-    response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 401
+    assert set(claims) == {"sub", "tenant_id", "role", "type", "iat", "exp"}
+    assert claims["sub"] == str(user.id)
+    assert claims["tenant_id"] == str(tenant.id)
 
 
-# ----------------------------------------------------------------- refresh
-
-
-async def test_refresh_issues_a_new_token_pair(client, tenant, user):
-    tokens = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]
+async def test_refresh_issues_a_new_token_pair(client, tenant, user, sent_otps):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
 
     response = await client.post(
         "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
 
     assert response.status_code == 200
-    assert response.json()["data"]["tokens"]["access_token"]
+    assert response.json()["data"]["access_token"]
 
 
-async def test_access_token_rejected_as_refresh_token(client, tenant, user):
-    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+async def test_access_token_rejected_as_refresh_token(client, tenant, user, sent_otps):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
 
-    response = await client.post("/api/v1/auth/refresh", json={"refresh_token": token})
+    response = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["access_token"]}
+    )
 
     assert response.status_code == 401
 
 
-async def test_refresh_rejected_after_tenant_deactivated(client, session, tenant, user):
-    tokens = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]
+async def test_rotation_invalidates_the_previous_refresh_token(client, tenant, user, sent_otps):
+    first = (await sign_in_customer(client, sent_otps, user.phone))["refresh_token"]
 
-    tenant.is_active = False
+    rotated = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    assert rotated.status_code == 200
+    second = rotated.json()["data"]["refresh_token"]
+    assert second != first
+
+    replay = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    assert replay.status_code == 401
+
+
+async def test_reuse_of_a_rotated_token_revokes_every_session(client, tenant, user, sent_otps):
+    first = (await sign_in_customer(client, sent_otps, user.phone))["refresh_token"]
+    second = (
+        await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    ).json()["data"]["refresh_token"]
+
+    replay = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
+    assert replay.status_code == 401
+
+    after = await client.post("/api/v1/auth/refresh", json={"refresh_token": second})
+    assert after.status_code == 401
+
+
+async def test_refresh_rejected_after_the_user_is_deactivated(
+    client, session, tenant, user, sent_otps
+):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+
+    user.status = UserStatus.INACTIVE.value
     await session.commit()
 
     response = await client.post(
@@ -241,88 +325,39 @@ async def test_refresh_rejected_after_tenant_deactivated(client, session, tenant
     assert response.status_code == 401
 
 
-# -------------------------------------------------- rotation and revocation
+async def test_logout_revokes_the_refresh_token(client, tenant, user, sent_otps):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
 
-
-async def test_rotation_invalidates_the_previous_refresh_token(client, tenant, user):
-    """A refresh token is single-use: rotating it spends it."""
-    first = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]["refresh_token"]
-
-    rotated = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
-    assert rotated.status_code == 200
-    second = rotated.json()["data"]["tokens"]["refresh_token"]
-    assert second != first
-
-    replay = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
-    assert replay.status_code == 401
-
-
-async def test_reuse_of_a_rotated_token_revokes_every_session(client, tenant, user):
-    """Replay means two parties hold the token, so every session is cut.
-
-    This is the whole point of rotation: the replay itself is the signal, and
-    because we cannot tell the legitimate client from the thief, the live
-    token issued by the rotation must die too.
-    """
-    first = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]["refresh_token"]
-
-    second = (
-        await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
-    ).json()["data"]["tokens"]["refresh_token"]
-
-    # The attacker (or the client) replays the already-spent token.
-    replay = await client.post("/api/v1/auth/refresh", json={"refresh_token": first})
-    assert replay.status_code == 401
-
-    # The still-live token from the rotation is now dead as well.
-    after = await client.post("/api/v1/auth/refresh", json={"refresh_token": second})
-    assert after.status_code == 401
-
-
-async def test_logout_revokes_the_refresh_token(client, tenant, user):
-    refresh_token = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]["refresh_token"]
-
-    logged_out = await client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
+    logged_out = await client.post(
+        "/api/v1/auth/logout", json={"refresh_token": tokens["refresh_token"]}
+    )
     assert logged_out.status_code == 204
 
-    response = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+    response = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
     assert response.status_code == 401
 
 
-async def test_logout_is_not_an_oracle(client, tenant, user):
-    """Unknown and already-revoked tokens must look exactly like valid ones."""
-    refresh_token = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]["refresh_token"]
+async def test_logout_is_not_an_oracle(client, tenant, user, sent_otps):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+    refresh_token = tokens["refresh_token"]
 
     assert (
         await client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
     ).status_code == 204
-    # Same token again - already revoked.
     assert (
         await client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
     ).status_code == 204
-    # A token this server never issued.
-    never_issued = create_refresh_token(subject=str(user.id), role=user.role, tenant_id=None)
+    never_issued = create_refresh_token(user_id=user.id, tenant_id=tenant.id)
     assert (
         await client.post("/api/v1/auth/logout", json={"refresh_token": never_issued})
     ).status_code == 204
 
 
-async def test_logout_does_not_disturb_another_session(client, tenant, user):
-    """Logging out one session must not sign the user out everywhere."""
-    first = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]["refresh_token"]
-    second = (
-        await login(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-    ).json()["data"]["tokens"]["refresh_token"]
+async def test_logout_does_not_disturb_another_session(client, tenant, user, sent_otps):
+    first = (await sign_in_customer(client, sent_otps, user.phone))["refresh_token"]
+    second = (await sign_in_customer(client, sent_otps, user.phone))["refresh_token"]
 
     await client.post("/api/v1/auth/logout", json={"refresh_token": first})
 

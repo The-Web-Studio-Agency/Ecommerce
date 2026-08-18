@@ -1,12 +1,3 @@
-"""Catalogue routes.
-
-Routes stay thin: resolve dependencies, call the service, wrap the result in the
-standard envelope. Every route declares the permission it needs through the
-existing `require_permission` guard - there is no role check anywhere in this
-module - and takes its tenant from the authenticated user, never from the path,
-query or body.
-"""
-
 from __future__ import annotations
 
 from uuid import UUID
@@ -14,8 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import tenant_id_of
-from app.auth.permissions import Permission, require_permission
+from app.auth.dependencies import require_admin, require_staff
 from app.catalogue.schemas import (
     CategoryCreate,
     CategoryRead,
@@ -36,9 +26,6 @@ from app.users.models import User
 router = APIRouter(prefix="/catalogue", tags=["Catalogue"])
 
 
-# --------------------------------------------------------------- categories
-
-
 @router.post(
     "/categories",
     response_model=ApiResponse[CategoryRead],
@@ -48,9 +35,9 @@ router = APIRouter(prefix="/catalogue", tags=["Catalogue"])
 async def create_category(
     data: CategoryCreate,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_CREATE)),
+    user: User = Depends(require_admin),
 ) -> ApiResponse[CategoryRead]:
-    category = await CategoryService(session, tenant_id_of(user)).create(data)
+    category = await CategoryService(session, user.tenant_id).create(data)
     return ok(CategoryRead.model_validate(category), message="Category created")
 
 
@@ -62,9 +49,9 @@ async def create_category(
 async def list_categories(
     params: PageParams = Depends(page_params),
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_READ)),
+    user: User = Depends(require_staff),
 ) -> ApiResponse[list[CategoryRead]]:
-    categories, total = await CategoryService(session, tenant_id_of(user)).list(params)
+    categories, total = await CategoryService(session, user.tenant_id).list(params)
     return paginated(
         [CategoryRead.model_validate(c) for c in categories],
         total_items=total,
@@ -81,9 +68,9 @@ async def list_categories(
 async def get_category(
     category_id: UUID,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_READ)),
+    user: User = Depends(require_staff),
 ) -> ApiResponse[CategoryRead]:
-    category = await CategoryService(session, tenant_id_of(user)).get(category_id)
+    category = await CategoryService(session, user.tenant_id).get(category_id)
     return ok(CategoryRead.model_validate(category), message="Category retrieved")
 
 
@@ -96,9 +83,9 @@ async def update_category(
     category_id: UUID,
     data: CategoryUpdate,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
+    user: User = Depends(require_admin),
 ) -> ApiResponse[CategoryRead]:
-    category = await CategoryService(session, tenant_id_of(user)).update(category_id, data)
+    category = await CategoryService(session, user.tenant_id).update(category_id, data)
     return ok(CategoryRead.model_validate(category), message="Category updated")
 
 
@@ -110,13 +97,10 @@ async def update_category(
 async def delete_category(
     category_id: UUID,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_DELETE)),
+    user: User = Depends(require_admin),
 ) -> Response:
-    await CategoryService(session, tenant_id_of(user)).delete(category_id)
+    await CategoryService(session, user.tenant_id).delete(category_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# ----------------------------------------------------------------- products
 
 
 @router.post(
@@ -128,9 +112,9 @@ async def delete_category(
 async def create_product(
     data: ProductCreate,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_CREATE)),
+    user: User = Depends(require_admin),
 ) -> ApiResponse[ProductRead]:
-    product = await ProductService(session, tenant_id_of(user)).create(data)
+    product = await ProductService(session, user.tenant_id).create(data)
     return ok(ProductRead.model_validate(product), message="Product created")
 
 
@@ -143,9 +127,9 @@ async def list_products(
     category_id: UUID | None = Query(default=None, description="Filter by category"),
     params: PageParams = Depends(page_params),
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_READ)),
+    user: User = Depends(require_staff),
 ) -> ApiResponse[list[ProductRead]]:
-    products, total = await ProductService(session, tenant_id_of(user)).list(
+    products, total = await ProductService(session, user.tenant_id).list(
         params, category_id=category_id
     )
     return paginated(
@@ -164,9 +148,9 @@ async def list_products(
 async def get_product(
     product_id: UUID,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_READ)),
+    user: User = Depends(require_staff),
 ) -> ApiResponse[ProductRead]:
-    product = await ProductService(session, tenant_id_of(user)).get(product_id)
+    product = await ProductService(session, user.tenant_id).get(product_id)
     return ok(ProductRead.model_validate(product), message="Product retrieved")
 
 
@@ -179,9 +163,9 @@ async def update_product(
     product_id: UUID,
     data: ProductUpdate,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
+    user: User = Depends(require_admin),
 ) -> ApiResponse[ProductRead]:
-    product = await ProductService(session, tenant_id_of(user)).update(product_id, data)
+    product = await ProductService(session, user.tenant_id).update(product_id, data)
     return ok(ProductRead.model_validate(product), message="Product updated")
 
 
@@ -193,13 +177,10 @@ async def update_product(
 async def delete_product(
     product_id: UUID,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_DELETE)),
+    user: User = Depends(require_admin),
 ) -> Response:
-    await ProductService(session, tenant_id_of(user)).delete(product_id)
+    await ProductService(session, user.tenant_id).delete(product_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# ----------------------------------------------------------------- variants
 
 
 @router.post(
@@ -212,9 +193,9 @@ async def create_variant(
     product_id: UUID,
     data: VariantCreate,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_CREATE)),
+    user: User = Depends(require_admin),
 ) -> ApiResponse[VariantRead]:
-    variant = await VariantService(session, tenant_id_of(user)).create(product_id, data)
+    variant = await VariantService(session, user.tenant_id).create(product_id, data)
     return ok(VariantRead.model_validate(variant), message="Variant created")
 
 
@@ -227,9 +208,9 @@ async def list_variants(
     product_id: UUID,
     params: PageParams = Depends(page_params),
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_READ)),
+    user: User = Depends(require_staff),
 ) -> ApiResponse[list[VariantRead]]:
-    variants, total = await VariantService(session, tenant_id_of(user)).list_for_product(
+    variants, total = await VariantService(session, user.tenant_id).list_for_product(
         product_id, params
     )
     return paginated(
@@ -248,9 +229,9 @@ async def list_variants(
 async def get_variant(
     variant_id: UUID,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_READ)),
+    user: User = Depends(require_staff),
 ) -> ApiResponse[VariantRead]:
-    variant = await VariantService(session, tenant_id_of(user)).get(variant_id)
+    variant = await VariantService(session, user.tenant_id).get(variant_id)
     return ok(VariantRead.model_validate(variant), message="Variant retrieved")
 
 
@@ -263,9 +244,9 @@ async def update_variant(
     variant_id: UUID,
     data: VariantUpdate,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
+    user: User = Depends(require_admin),
 ) -> ApiResponse[VariantRead]:
-    variant = await VariantService(session, tenant_id_of(user)).update(variant_id, data)
+    variant = await VariantService(session, user.tenant_id).update(variant_id, data)
     return ok(VariantRead.model_validate(variant), message="Variant updated")
 
 
@@ -277,7 +258,7 @@ async def update_variant(
 async def delete_variant(
     variant_id: UUID,
     session: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission(Permission.CATALOGUE_DELETE)),
+    user: User = Depends(require_admin),
 ) -> Response:
-    await VariantService(session, tenant_id_of(user)).delete(variant_id)
+    await VariantService(session, user.tenant_id).delete(variant_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

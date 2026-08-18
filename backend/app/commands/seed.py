@@ -1,17 +1,15 @@
-"""Seed the local development database with a tenant and its admin user.
-
-Idempotent: running it repeatedly leaves exactly one tenant and one admin.
-"""
-
 from __future__ import annotations
 
 import asyncio
 
+from sqlalchemy import select
+
 from app.auth.constants import UserRole
+from app.auth.phone import normalize_phone
 from app.auth.security import hash_password
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal, dispose_engine
-from app.tenants.models import Tenant
+from app.tenants.models import Tenant, TenantDomain
 from app.tenants.repository import TenantRepository
 from app.users.repository import UserRepository
 
@@ -19,12 +17,17 @@ from app.users.repository import UserRepository
 async def seed() -> None:
     settings = get_settings()
 
+    if not settings.seed_admin_phone:
+        raise RuntimeError("SEED_ADMIN_PHONE is not configured")
     if not settings.seed_admin_email:
         raise RuntimeError("SEED_ADMIN_EMAIL is not configured")
     if not settings.seed_admin_password:
         raise RuntimeError("SEED_ADMIN_PASSWORD is not configured")
 
     slug = settings.seed_tenant_slug.strip().lower()
+    domain = settings.seed_tenant_domain.strip().lower()
+    email = settings.seed_admin_email.strip().lower()
+    phone = normalize_phone(settings.seed_admin_phone)
 
     async with AsyncSessionLocal() as session:
         tenants = TenantRepository(session)
@@ -39,14 +42,24 @@ async def seed() -> None:
         else:
             print(f"Tenant already exists: {tenant.name} ({tenant.slug})")
 
-        email = settings.seed_admin_email.strip().lower()
+        existing_domain = await session.scalar(
+            select(TenantDomain).where(TenantDomain.domain == domain)
+        )
+        if existing_domain is None:
+            session.add(TenantDomain(tenant_id=tenant.id, domain=domain))
+            await session.flush()
+            print(f"Registered domain: {domain}")
+        else:
+            print(f"Domain already registered: {domain}")
 
-        if await users.get_by_tenant_and_email(tenant_id=tenant.id, email=email) is None:
+        if await users.get_by_email(tenant_id=tenant.id, email=email) is None:
             await users.create(
                 tenant_id=tenant.id,
+                phone=phone,
                 email=email,
+                role=UserRole.ADMIN.value,
+                name="Seed Admin",
                 password_hash=await hash_password(settings.seed_admin_password),
-                role=UserRole.TENANT_ADMIN.value,
             )
             print(f"Created tenant admin: {email}")
         else:

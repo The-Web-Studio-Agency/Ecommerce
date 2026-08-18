@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import get_settings
+from app.core.database import get_db
+from app.core.exceptions import NotFoundError
+from app.tenants.models import Tenant
+from app.tenants.repository import TenantRepository
+
+
+def normalize_hostname(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    host = value.strip().lower()
+    if host.startswith("["):
+        return host.partition("]")[0] + "]"
+
+    return host.partition(":")[0].rstrip(".") or None
+
+
+def request_hostname(request: Request) -> str | None:
+    if get_settings().trust_forwarded_host:
+        forwarded = request.headers.get("x-forwarded-host")
+        if forwarded:
+            return normalize_hostname(forwarded.split(",")[0])
+
+    return normalize_hostname(request.headers.get("host"))
+
+
+async def resolve_tenant(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> Tenant:
+    hostname = request_hostname(request)
+    tenant = None
+    if hostname:
+        tenant = await TenantRepository(session).get_active_by_domain(hostname)
+
+    if tenant is None:
+        raise NotFoundError("Unknown storefront domain", error_code="UNKNOWN_STOREFRONT")
+
+    return tenant
+
+
+CurrentTenant = Annotated[Tenant, Depends(resolve_tenant)]

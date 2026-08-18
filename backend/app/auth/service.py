@@ -1,10 +1,3 @@
-"""Authentication business logic.
-
-The service owns the business transaction: repositories flush, the service
-commits. It raises `AppError` subclasses, never HTTP exceptions - translating
-those into the error envelope is the API layer's job.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -13,215 +6,326 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.constants import UserRole
-from app.auth.repository import RefreshTokenRepository
-from app.auth.schemas import (
-    AuthSession,
-    LoginRequest,
-    RegisterRequest,
-    TokenPair,
-    UserResponse,
+from app.auth.constants import (
+    OTP_EXPIRE_MINUTES,
+    OTP_MAX_ATTEMPTS,
+    STAFF_ROLES,
+    OtpPurpose,
+    UserRole,
 )
+from app.auth.models import OtpRequest
+from app.auth.phone import normalize_phone
+from app.auth.repository import (
+    AdminChallengeRepository,
+    OtpRepository,
+    RefreshTokenRepository,
+)
+from app.auth.schemas import TokenPair
 from app.auth.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
-    hash_password,
+    generate_otp,
+    hash_otp,
     hash_refresh_token,
     spend_dummy_verification,
+    verify_otp,
     verify_password,
 )
+from app.auth.sms import send_otp
 from app.core.config import get_settings
-from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
+from app.core.exceptions import AuthenticationError
 from app.core.logging import get_logger
 from app.tenants.models import Tenant
-from app.tenants.repository import TenantRepository
 from app.users.models import User
 from app.users.repository import UserRepository
 
 logger = get_logger("auth")
 
+INVALID_CREDENTIALS = "Invalid credentials"
+INVALID_OTP = "Invalid or expired OTP"
+INVALID_TOKEN = "Invalid authentication token"
+
 
 class AuthService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, tenant: Tenant) -> None:
         self.session = session
-        self.tenants = TenantRepository(session)
+        self.tenant = tenant
         self.users = UserRepository(session)
-        self.refresh_tokens = RefreshTokenRepository(session)
+        self.otps = OtpRepository(session)
+        self.challenges = AdminChallengeRepository(session)
+        self.tokens = RefreshTokenRepository(session)
 
-    # ------------------------------------------------------------- register
 
-    async def register(self, data: RegisterRequest) -> UserResponse:
-        tenant = await self.tenants.get_active_by_slug(data.tenant_slug.strip().lower())
-        if tenant is None:
-            raise NotFoundError("Tenant not found")
+    async def request_customer_otp(self, phone: str) -> None:
+        user = await self.users.get_by_phone(tenant_id=self.tenant.id, phone=phone)
 
-        email = data.email.strip().lower()
-
-        if await self.users.get_by_tenant_and_email(tenant_id=tenant.id, email=email) is not None:
-            raise ConflictError("An account with this email already exists")
-
-       
-        try:
-            user = await self.users.create(
-                tenant_id=tenant.id,
-                email=email,
-                password_hash=await hash_password(data.password),
-                role=UserRole.CUSTOMER.value,
-            )
-            await self.session.commit()
-        except IntegrityError as exc:
-            # Two concurrent registrations both pass the check above; the
-            # composite unique index is what actually settles it. Without this,
-            # the loser of the race gets a 500 instead of a 409.
-            await self.session.rollback()
-            raise ConflictError("An account with this email already exists") from exc
-
-        logger.info("auth.registered user_id=%s tenant_id=%s", user.id, tenant.id)
-        return UserResponse.model_validate(user)
-
-    # ---------------------------------------------------------------- login
-
-    async def login(self, data: LoginRequest) -> AuthSession:
-        tenant = await self.tenants.get_active_by_slug(data.tenant_slug.strip().lower())
-
-        
-        if tenant is None:
-            await spend_dummy_verification()
-            raise AuthenticationError("Invalid credentials")
-
-        user = await self.users.get_by_tenant_and_email(
-            tenant_id=tenant.id,
-            email=data.email.strip().lower(),
+        await self._issue_otp(
+            phone=phone,
+            purpose=OtpPurpose.CUSTOMER_LOGIN.value,
+            user_id=user.id if user else None,
         )
-        if user is None or not user.is_active:
-            await spend_dummy_verification()
-            raise AuthenticationError("Invalid credentials")
-
-        if not await verify_password(data.password, user.password_hash):
-            logger.info("auth.login_failed user_id=%s tenant_id=%s", user.id, tenant.id)
-            raise AuthenticationError("Invalid credentials")
-
-        session = await self._issue_session(user)
         await self.session.commit()
 
-        logger.info("auth.login user_id=%s tenant_id=%s", user.id, tenant.id)
-        return session
+        logger.info(
+            "auth.otp_requested tenant_id=%s purpose=%s existing_user=%s",
+            self.tenant.id,
+            OtpPurpose.CUSTOMER_LOGIN.value,
+            user is not None,
+        )
 
-    # -------------------------------------------------------------- refresh
+    async def verify_customer_otp(self, phone: str, otp: str) -> TokenPair:
+        record = await self.otps.get_latest(
+            tenant_id=self.tenant.id,
+            phone=phone,
+            purpose=OtpPurpose.CUSTOMER_LOGIN.value,
+        )
+        await self._consume_otp(record, otp)
 
-    async def refresh(self, refresh_token: str) -> AuthSession:
-        """Rotate a refresh token: the presented token is spent, a new pair issued.
+        user = await self.users.get_by_phone(tenant_id=self.tenant.id, phone=phone)
+        if user is None:
+            user = await self._create_customer(phone)
+            logger.info("auth.customer_created user_id=%s tenant_id=%s", user.id, self.tenant.id)
+        elif not user.is_active or user.role != UserRole.CUSTOMER.value:
+            logger.info("auth.login_rejected user_id=%s tenant_id=%s", user.id, self.tenant.id)
+            raise AuthenticationError(INVALID_CREDENTIALS)
 
-        Rotation is what makes a stolen refresh token detectable. Because each
-        token may be redeemed exactly once, a replay of an already-rotated
-        token means two parties hold it, and every session for that user is cut.
-        """
-        stored, user = await self._resolve_refresh_token(refresh_token)
+        user.is_verified = True
+        tokens = await self._issue_tokens(user)
+        await self.session.commit()
 
-        # Reuse: this token was already rotated (or explicitly logged out).
-        # Either the legitimate client replayed it or an attacker did, and we
-        # cannot tell which - so end every session and force a fresh login.
+        logger.info(
+            "auth.login user_id=%s tenant_id=%s role=%s", user.id, self.tenant.id, user.role
+        )
+        return tokens
+
+
+    async def admin_login(self, identifier: str, password: str) -> UUID | TokenPair:
+        user = await self._find_staff(identifier)
+
+        if user is None or user.password_hash is None or not user.is_active:
+            await spend_dummy_verification()
+            raise AuthenticationError(INVALID_CREDENTIALS)
+
+        if not await verify_password(password, user.password_hash):
+            logger.info("auth.login_failed user_id=%s tenant_id=%s", user.id, self.tenant.id)
+            raise AuthenticationError(INVALID_CREDENTIALS)
+
+        await self.challenges.expire_pending_for_user(
+            tenant_id=self.tenant.id, user_id=user.id
+        )
+
+        if user.role == UserRole.ADMIN.value:
+            user.is_verified = True
+            tokens = await self._issue_tokens(user)
+            await self.session.commit()
+
+            logger.info(
+                "auth.login user_id=%s tenant_id=%s role=%s",
+                user.id,
+                self.tenant.id,
+                user.role,
+            )
+            return tokens
+
+        record = await self._issue_otp(
+            phone=user.phone,
+            purpose=OtpPurpose.ADMIN_LOGIN.value,
+            user_id=user.id,
+        )
+        challenge = await self.challenges.create(
+            tenant_id=self.tenant.id,
+            user_id=user.id,
+            otp_request_id=record.id,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRE_MINUTES),
+        )
+        await self.session.commit()
+
+        logger.info(
+            "auth.admin_challenge_created user_id=%s tenant_id=%s challenge_id=%s",
+            user.id,
+            self.tenant.id,
+            challenge.id,
+        )
+        return challenge.id
+
+    async def verify_admin_otp(self, verification_id: UUID, otp: str) -> TokenPair:
+        challenge = await self.challenges.get_pending(
+            tenant_id=self.tenant.id, challenge_id=verification_id
+        )
+        if challenge is None:
+            raise AuthenticationError(INVALID_OTP)
+
+        record = await self.otps.get_by_id(
+            tenant_id=self.tenant.id, otp_id=challenge.otp_request_id
+        )
+        if record is None or record.purpose != OtpPurpose.ADMIN_LOGIN.value:
+            raise AuthenticationError(INVALID_OTP)
+
+        await self._consume_otp(record, otp)
+
+        user = await self.users.get_by_id(
+            tenant_id=self.tenant.id, user_id=challenge.user_id
+        )
+        if user is None or not user.is_active or user.role not in STAFF_ROLES:
+            await self.session.commit()
+            raise AuthenticationError(INVALID_CREDENTIALS)
+
+        await self.challenges.consume(challenge)
+        user.is_verified = True
+        tokens = await self._issue_tokens(user)
+        await self.session.commit()
+
+        logger.info(
+            "auth.login user_id=%s tenant_id=%s role=%s", user.id, self.tenant.id, user.role
+        )
+        return tokens
+
+
+    async def refresh_tokens(self, refresh_token: str) -> TokenPair:
+        payload = decode_token(refresh_token, expected_type="refresh")
+        if payload.tenant_id != str(self.tenant.id):
+            raise AuthenticationError(INVALID_TOKEN)
+
+        stored = await self.tokens.get_by_hash(
+            tenant_id=self.tenant.id,
+            token_hash=hash_refresh_token(refresh_token),
+        )
+        if stored is None or str(stored.user_id) != payload.user_id:
+            raise AuthenticationError(INVALID_TOKEN)
+
         if stored.revoked_at is not None:
-            revoked = await self.refresh_tokens.revoke_all_for_user(stored.user_id)
+            revoked = await self.tokens.revoke_all_for_user(stored.user_id)
             await self.session.commit()
             logger.warning(
-                "auth.refresh_reuse_detected user_id=%s sessions_revoked=%s",
+                "auth.refresh_reuse_detected user_id=%s tenant_id=%s sessions_revoked=%s",
                 stored.user_id,
+                self.tenant.id,
                 revoked,
             )
-            raise AuthenticationError("Invalid authentication token")
+            raise AuthenticationError(INVALID_TOKEN)
 
         if stored.expires_at <= datetime.now(timezone.utc):
-            raise AuthenticationError("Invalid authentication token")
+            raise AuthenticationError(INVALID_TOKEN)
 
-        await self.refresh_tokens.revoke(stored)
-        session = await self._issue_session(user)
+        user = await self.users.get_by_id(tenant_id=self.tenant.id, user_id=stored.user_id)
+        if user is None or not user.is_active:
+            logger.info(
+                "auth.refresh_rejected user_id=%s tenant_id=%s",
+                stored.user_id,
+                self.tenant.id,
+            )
+            raise AuthenticationError(INVALID_TOKEN)
+
+        await self.tokens.revoke(stored)
+        tokens = await self._issue_tokens(user)
         await self.session.commit()
 
-        logger.info("auth.refreshed user_id=%s", user.id)
-        return session
-
-    # --------------------------------------------------------------- logout
+        logger.info("auth.refreshed user_id=%s tenant_id=%s", user.id, self.tenant.id)
+        return tokens
 
     async def logout(self, refresh_token: str) -> None:
-        """Revoke the presented refresh token.
-
-        Deliberately silent about tokens that are unknown, expired or already
-        revoked: logout must not become an oracle for which tokens are valid,
-        and a client retrying a logout should not receive an error.
-        """
-        stored = await self.refresh_tokens.get_by_hash(hash_refresh_token(refresh_token))
+        stored = await self.tokens.get_by_hash(
+            tenant_id=self.tenant.id,
+            token_hash=hash_refresh_token(refresh_token),
+        )
         if stored is not None and stored.revoked_at is None:
-            await self.refresh_tokens.revoke(stored)
-            logger.info("auth.logout user_id=%s", stored.user_id)
+            await self.tokens.revoke(stored)
+            logger.info("auth.logout user_id=%s tenant_id=%s", stored.user_id, self.tenant.id)
 
         await self.session.commit()
 
-    # --------------------------------------------------------------- shared
 
-    async def _resolve_refresh_token(self, refresh_token: str) -> tuple:
-        """Validate a refresh token's signature, its row, and its principal."""
-        payload = decode_token(refresh_token, expected_type="refresh")
+    async def _find_staff(self, identifier: str) -> User | None:
+        value = identifier.strip()
 
+        if "@" in value:
+            user = await self.users.get_by_email(tenant_id=self.tenant.id, email=value.lower())
+        else:
+            try:
+                phone = normalize_phone(value)
+            except ValueError:
+                return None
+            user = await self.users.get_by_phone(tenant_id=self.tenant.id, phone=phone)
+
+        return user if user is not None and user.role in STAFF_ROLES else None
+
+    async def _create_customer(self, phone: str) -> User:
         try:
-            user_id = UUID(payload.subject)
-        except ValueError as exc:
-            raise AuthenticationError("Invalid authentication token") from exc
+            return await self.users.create(
+                tenant_id=self.tenant.id,
+                phone=phone,
+                role=UserRole.CUSTOMER.value,
+                is_verified=True,
+            )
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise AuthenticationError(INVALID_CREDENTIALS) from exc
 
-        stored = await self.refresh_tokens.get_by_hash(hash_refresh_token(refresh_token))
-        if stored is None or stored.user_id != user_id:
-            # A validly signed token with no row was issued before a revocation
-            # sweep, or never issued by us at all.
-            raise AuthenticationError("Invalid authentication token")
+    async def _issue_otp(
+        self, *, phone: str, purpose: str, user_id: UUID | None
+    ) -> OtpRequest:
+        await self.otps.expire_active(
+            tenant_id=self.tenant.id, phone=phone, purpose=purpose
+        )
 
-        loaded = await self.users.get_with_tenant(user_id)
-        if loaded is None:
-            raise AuthenticationError("Invalid authentication token")
+        otp = generate_otp()
+        record = await self.otps.create(
+            tenant_id=self.tenant.id,
+            user_id=user_id,
+            phone=phone,
+            purpose=purpose,
+            otp_hash=await hash_otp(otp),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRE_MINUTES),
+        )
 
-        user, tenant = loaded
-        if not self._is_usable(user, tenant):
-            logger.warning("auth.refresh_rejected user_id=%s", user_id)
-            raise AuthenticationError("Invalid authentication token")
+        await send_otp(phone, otp)
+        return record
 
-        return stored, user
+    async def _consume_otp(self, record: OtpRequest | None, otp: str) -> None:
+        now = datetime.now(timezone.utc)
 
-    @staticmethod
-    def _is_usable(user: User, tenant: Tenant | None) -> bool:
-        """A principal is usable only while both it and its tenant are active."""
-        if not user.is_active:
-            return False
-        # Platform users have no tenant; everyone else needs an active one.
-        return user.tenant_id is None or (tenant is not None and tenant.is_active)
+        if (
+            record is None
+            or record.verified_at is not None
+            or record.expires_at <= now
+            or record.attempts >= OTP_MAX_ATTEMPTS
+        ):
+            raise AuthenticationError(INVALID_OTP)
 
-    async def _issue_session(self, user: User) -> AuthSession:
-        """Mint an access/refresh pair and record the refresh token.
+        record.attempts += 1
 
-        Does not commit - the caller owns the transaction.
-        """
+        if not await verify_otp(otp, record.otp_hash):
+            await self.session.commit()
+            logger.info(
+                "auth.otp_failed tenant_id=%s otp_request_id=%s attempts=%s",
+                self.tenant.id,
+                record.id,
+                record.attempts,
+            )
+            raise AuthenticationError(INVALID_OTP)
+
+        record.verified_at = now
+        await self.session.flush()
+
+    async def _issue_tokens(self, user: User) -> TokenPair:
         settings = get_settings()
-        subject = str(user.id)
-        tenant_id = str(user.tenant_id) if user.tenant_id else None
 
         access_token = create_access_token(
-            subject=subject, role=user.role, tenant_id=tenant_id
+            user_id=user.id, tenant_id=user.tenant_id, role=user.role
         )
-        refresh_token = create_refresh_token(
-            subject=subject, role=user.role, tenant_id=tenant_id
-        )
+        refresh_token = create_refresh_token(user_id=user.id, tenant_id=user.tenant_id)
 
-        await self.refresh_tokens.add(
+        await self.tokens.add(
             user_id=user.id,
+            tenant_id=user.tenant_id,
             token_hash=hash_refresh_token(refresh_token),
             expires_at=datetime.now(timezone.utc)
             + timedelta(days=settings.refresh_token_expire_days),
         )
 
-        return AuthSession(
-            tokens=TokenPair(
-                access_token=access_token,
-                refresh_token=refresh_token,
-                expires_in=settings.access_token_expire_minutes * 60,
-            ),
-            user=UserResponse.model_validate(user),
+        return TokenPair(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=settings.access_token_expire_minutes * 60,
         )

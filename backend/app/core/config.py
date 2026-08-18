@@ -1,10 +1,3 @@
-"""Application configuration.
-
-All configuration comes from the environment (12-factor). Secrets are never
-hardcoded and never have production-safe defaults: a placeholder JWT secret in a
-production environment is a startup error, not a silent fallback.
-"""
-
 from __future__ import annotations
 
 from functools import lru_cache
@@ -29,76 +22,64 @@ DEV_PLACEHOLDER_SECRETS = frozenset(
 
 
 class Settings(BaseSettings):
-    """Typed application settings loaded from environment variables / .env."""
-
     model_config = SettingsConfigDict(
-        # backend/.env wins over the repository-root .env when both exist.
         env_file=(str(REPO_ROOT / ".env"), str(BACKEND_DIR / ".env")),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
 
-    # --- Runtime ---
     app_name: str = "TWS E-Commerce API"
     environment: str = "development"
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
 
-    # --- Datastores ---
     database_url: str
     test_database_url: str | None = None
     redis_url: str
 
-    # Per worker process. Keep (pool_size + max_overflow) * workers well below
-    # the Postgres max_connections limit, or put PgBouncer in front.
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_recycle_seconds: int = 1800
     db_echo: bool = False
-    # How long a request waits for a free pooled connection before failing.
-    # Without it a saturated pool turns into unbounded latency.
     db_pool_timeout_seconds: int = 10
-    # Server-side cap on any single statement. One pathological query would
-    # otherwise hold a pooled connection indefinitely.
     db_statement_timeout_seconds: int = 15
 
-    # --- Authentication ---
     jwt_secret: str
     jwt_refresh_secret: str
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 14
 
-    # --- HTTP ---
-    # Browser origins allowed to call the API. Defaults to none: a client origin
-    # is deployment configuration and must be granted explicitly.
-    # NoDecode: accept a plain comma-separated env value (see validator below)
-    # instead of requiring JSON in .env.
+    phone_default_country_code: str = "91"
+    phone_national_number_length: int = 10
+
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
-    # Interactive API docs. None means "on outside production"; set explicitly
-    # to publish or suppress the schema regardless of environment.
     docs_enabled: bool | None = None
 
-    # --- Rate limiting ---
-    # Two budgets guard login. The per-account limit stops one account being
-    # brute-forced; the per-IP limit stops one source spraying many accounts,
-    # which the per-account limit alone cannot see.
+    trust_forwarded_host: bool = False
+
     login_rate_limit_attempts: int = 10
     login_ip_rate_limit_attempts: int = 30
     login_rate_limit_window_seconds: int = 60
 
-    # --- Seed data ---
+    otp_request_rate_limit_attempts: int = 5
+    otp_verify_rate_limit_attempts: int = 10
+    otp_ip_rate_limit_attempts: int = 30
+    refresh_rate_limit_attempts: int = 30
+    otp_rate_limit_window_seconds: int = 300
+
     seed_tenant_name: str = "Zeen"
     seed_tenant_slug: str = "zeen"
+    seed_tenant_domain: str = "localhost"
+    seed_admin_phone: str | None = None
     seed_admin_email: str | None = None
     seed_admin_password: str | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: object) -> object:
-        """Accept either a JSON list or a comma-separated string."""
         if isinstance(value, str):
             stripped = value.strip()
             if stripped.startswith("["):
@@ -116,7 +97,6 @@ class Settings(BaseSettings):
 
     @property
     def api_docs_enabled(self) -> bool:
-        """Whether to publish /docs, /redoc and /openapi.json."""
         if self.docs_enabled is None:
             return not self.is_production
         return self.docs_enabled
@@ -137,8 +117,6 @@ class Settings(BaseSettings):
                     "Refusing to start in production with weak/placeholder secrets: "
                     + ", ".join(placeholders)
                 )
-            # A wildcard origin with credentials allowed lets any site drive the
-            # API as a logged-in user. Fail at startup rather than in the wild.
             if "*" in self.cors_origins:
                 raise ValueError("Refusing to start in production with CORS_ORIGINS='*'")
         if self.jwt_secret == self.jwt_refresh_secret:
@@ -148,10 +126,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return the process-wide settings singleton."""
     return Settings()
 
 
-#: Convenience alias. Prefer `get_settings()` in new code so tests can override
-#: the cache; this exists because several modules already import `settings`.
 settings = get_settings()

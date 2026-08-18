@@ -1,10 +1,3 @@
-"""FastAPI application factory, middleware and error handling.
-
-Error handling is centralised here so that every module returns the same error
-envelope, and so that no unexpected exception can leak a stack trace or an
-internal message to a client.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -34,8 +27,14 @@ logger = get_logger("api")
 API_DESCRIPTION = """
 Multi-tenant e-commerce SaaS platform API.
 
-**Tenancy.** Endpoints take the tenant from the authenticated user, never from a
-header, so a header cannot widen a caller's scope.
+**Tenancy.** The tenant comes from the hostname the request arrived on, which
+the caller cannot choose. A request to an unregistered domain is a 404; a token
+issued by one storefront cannot authenticate against another.
+
+**Authentication.** Customers sign in with a phone number and a one-time code.
+Admins sign in with a password. Staff verify a password first and then a
+one-time code. All successful logins end in a JWT access token plus a rotating
+refresh token.
 
 **Responses.** Every endpoint returns `{success, message, data}`;
 every error returns `{success, message, error:{code, details, request_id}}`.
@@ -43,7 +42,8 @@ every error returns `{success, message, error:{code, details, request_id}}`.
 
 TAGS_METADATA = [
     {"name": "Health", "description": "Liveness and readiness probes."},
-    {"name": "Auth", "description": "Authentication (JWT access/refresh)."},
+    {"name": "Auth", "description": "Customer authentication (phone + one-time code)."},
+    {"name": "Admin Auth", "description": "Admin and staff authentication."},
     {"name": "Catalogue", "description": "Categories, products and product variants."},
 ]
 
@@ -53,8 +53,6 @@ async def lifespan(app: FastAPI):
     configure_logging()
     logger.info("api.startup environment=%s", settings.environment)
     yield
-    # Release pooled connections deterministically instead of leaving them to be
-    # reclaimed when the process dies.
     await dispose_engine()
     await close_redis()
     logger.info("api.shutdown")
@@ -82,8 +80,6 @@ def _error_response(
 
 def create_app() -> FastAPI:
     configure_logging()
-    # The schema documents every endpoint and payload shape, so it is published
-    # outside production only unless DOCS_ENABLED says otherwise.
     docs = settings.api_docs_enabled
     app = FastAPI(
         title=settings.app_name,
@@ -107,15 +103,6 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def request_context(request: Request, call_next: Callable[[Request], Awaitable]):
-        """Attach a request id to logs and to the response, and time the request.
-
-        This one line per request is the API's access log: it carries request
-        rate, latency and error rate, correlated by request id. It replaces
-        uvicorn's own access log (silenced in `configure_logging`) rather than
-        adding to it, so each request is logged once.
-        """
-        # Sanitised: the inbound value is client-controlled and gets written to
-        # every log line for this request.
         request_id = sanitize_request_id(request.headers.get("X-Request-Id"))
         set_request_id(request_id)
         request.state.request_id = request_id
@@ -125,8 +112,6 @@ def create_app() -> FastAPI:
         duration_ms = (perf_counter() - started) * 1000
 
         response.headers["X-Request-Id"] = request_id
-        # Path only, never the query string: filters routinely carry data we do
-        # not want copied into logs.
         logger.info(
             "request method=%s path=%s status=%s duration_ms=%.1f",
             request.method,
@@ -136,12 +121,11 @@ def create_app() -> FastAPI:
         )
         return response
 
-    # ------------------------------------------------------------- handlers
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         request_id = getattr(request.state, "request_id", None)
-        if exc.status_code >= 500:  # pragma: no cover - defensive
+        if exc.status_code >= 500:
             logger.error("app_error %s: %s", exc.error_code, exc.message)
         else:
             logger.info("app_error %s: %s", exc.error_code, exc.message)
@@ -163,9 +147,6 @@ def create_app() -> FastAPI:
     async def handle_validation_error(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        # Only field name, message and type are echoed. The submitted value is
-        # never included, so a rejected password cannot end up in a log or an
-        # error body.
         details = [
             {
                 "field": ".".join(str(part) for part in error.get("loc", [])[1:]) or "body",
@@ -175,7 +156,7 @@ def create_app() -> FastAPI:
             for error in exc.errors()
         ]
         return _error_response(
-            status_code=422,  # constant name differs across Starlette versions
+            status_code=422,
             message="Request validation failed",
             code="VALIDATION_ERROR",
             details=details,
@@ -201,8 +182,6 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(IntegrityError)
     async def handle_integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
-        # A constraint we did not translate into a business rule. Log the detail
-        # server-side; tell the client only that the request conflicts.
         logger.error("db.integrity_error %s", exc.orig, exc_info=False)
         return _error_response(
             status_code=status.HTTP_409_CONFLICT,
@@ -231,27 +210,13 @@ def create_app() -> FastAPI:
             request_id=getattr(request.state, "request_id", None),
         )
 
-    # --------------------------------------------------------------- routes
 
     @app.get("/health/live", tags=["Health"], summary="Liveness probe")
     async def liveness() -> dict[str, str]:
-        """Liveness only - deliberately touches no dependency.
-
-        An orchestrator uses this to decide whether to RESTART the process, so
-        it must not fail because a downstream datastore is briefly unavailable.
-        Restarting the API does not fix a database outage.
-        """
         return {"status": "ok"}
 
     @app.get("/health/ready", tags=["Health"], summary="Readiness probe")
     async def readiness() -> JSONResponse:
-        """Readiness - whether this process should receive traffic.
-
-        Only PostgreSQL decides. Redis backs rate limiting, which degrades
-        gracefully on its own, so reporting unready when Redis blips would pull
-        every instance out of the load balancer over a dependency the API can
-        serve without. Its state is reported for operators, not acted upon.
-        """
         database_ok = True
         try:
             async with engine.connect() as connection:
@@ -264,10 +229,6 @@ def create_app() -> FastAPI:
         if not cache_ok:
             logger.warning("health.redis_degraded rate limiting is not being enforced")
 
-        # Connection-pool saturation is the failure mode that turns a slow query
-        # into a site-wide outage: once every connection is checked out, further
-        # requests queue for `pool_timeout` and then fail. Reported here because
-        # readiness is already scraped, so it needs no separate endpoint.
         pool = engine.pool
         return JSONResponse(
             status_code=status.HTTP_200_OK if database_ok else status.HTTP_503_SERVICE_UNAVAILABLE,

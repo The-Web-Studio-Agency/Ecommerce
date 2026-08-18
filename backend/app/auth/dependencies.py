@@ -1,32 +1,26 @@
-"""Authentication dependencies.
-
-`get_current_user` is the single place where a bearer token becomes a trusted
-identity. It re-checks state the token cannot express: a token stays
-cryptographically valid until it expires, so deactivating a user - or their
-whole tenant - only takes effect if it is verified per request.
-"""
-
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.constants import UserRole
 from app.auth.security import decode_token
 from app.core.database import get_db
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
+from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 from app.users.repository import UserRepository
 
-# HTTPBearer rather than OAuth2PasswordBearer: the login endpoint takes JSON,
-# not form encoding, so the OAuth2 password flow would document a request shape
-# this API does not actually accept.
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    tenant: CurrentTenant,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_db),
 ) -> User:
@@ -35,34 +29,35 @@ async def get_current_user(
 
     payload = decode_token(credentials.credentials, expected_type="access")
 
+    if payload.tenant_id != str(tenant.id):
+        raise AuthenticationError("Invalid authentication credentials")
+
     try:
-        user_id = UUID(payload.subject)
-    except (ValueError, AttributeError) as exc:
+        user_id = UUID(payload.user_id)
+    except ValueError as exc:
         raise AuthenticationError("Invalid authentication credentials") from exc
 
-    loaded = await UserRepository(session).get_with_tenant(user_id)
-    if loaded is None:
-        raise AuthenticationError("Invalid authentication credentials")
-
-    user, tenant = loaded
-    if not user.is_active:
-        raise AuthenticationError("Invalid authentication credentials")
-
-    # A user bound to a tenant is only authenticated while that tenant is active.
-    if user.tenant_id is not None and (tenant is None or not tenant.is_active):
+    user = await UserRepository(session).get_by_id(tenant_id=tenant.id, user_id=user_id)
+    if user is None or not user.is_active:
         raise AuthenticationError("Invalid authentication credentials")
 
     return user
 
 
-def tenant_id_of(user: User) -> UUID:
-    """The tenant a request operates in, for tenant-scoped modules.
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
-    A platform user has no tenant. Today none of them holds a tenant-scoped
-    permission, so this cannot trigger through a guarded route - but a
-    `TenantScopedRepository` built with None would silently match no rows
-    instead of failing, so the impossible case is made loud rather than quiet.
-    """
-    if user.tenant_id is None:
-        raise PermissionDeniedError("This operation requires a tenant-scoped account")
-    return user.tenant_id
+
+def _require_roles(*roles: UserRole) -> Callable[..., Coroutine[Any, Any, User]]:
+    allowed = frozenset(role.value for role in roles)
+
+    async def dependency(current_user: CurrentUser) -> User:
+        if current_user.role not in allowed:
+            raise PermissionDeniedError("Insufficient permissions")
+        return current_user
+
+    return dependency
+
+
+require_admin = _require_roles(UserRole.ADMIN)
+
+require_staff = _require_roles(UserRole.ADMIN, UserRole.STAFF)

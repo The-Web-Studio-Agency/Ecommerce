@@ -25,13 +25,9 @@ Price = Field(ge=0, max_digits=10, decimal_places=PRICE_SCALE)
 
 
 def _reject_blank(value: str) -> str:
-    """A name of only whitespace passes `min_length` but is not a name."""
     if not value.strip():
         raise ValueError("must not be blank")
     return value.strip()
-
-
-# --------------------------------------------------------------- categories
 
 
 class CategoryCreate(BaseModel):
@@ -63,9 +59,6 @@ class CategoryRead(BaseModel):
     slug: str
     description: str | None
     is_active: bool
-
-
-# ----------------------------------------------------------------- products
 
 
 class ProductCreate(BaseModel):
@@ -100,9 +93,6 @@ class ProductRead(BaseModel):
     slug: str
     description: str | None
     status: CatalogueStatus
-
-
-# ----------------------------------------------------------------- variants
 
 
 class VariantCreate(BaseModel):

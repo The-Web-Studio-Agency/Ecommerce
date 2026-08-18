@@ -1,10 +1,3 @@
-"""Catalogue behaviour: categories, products and variants through the API.
-
-Everything here goes over HTTP so the whole chain is exercised - request,
-authentication, permission, service, tenant-scoped repository, database - rather
-than calling services directly.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -40,9 +33,6 @@ async def make_variant(client, headers, product_id, **overrides) -> dict:
     return response.json()["data"]
 
 
-# ------------------------------------------------------------- categories
-
-
 async def test_create_and_retrieve_a_category(client, admin_headers):
     created = await make_category(client, admin_headers)
 
@@ -57,12 +47,6 @@ async def test_create_and_retrieve_a_category(client, admin_headers):
 
 @pytest.mark.parametrize("slug", [" dresses ", "Dresses", "summer dress"])
 async def test_a_slug_is_not_silently_rewritten(client, admin_headers, slug):
-    """A slug is a URL the client chose, so a near-miss is an error.
-
-    Contrast with SKU below, which IS normalised: SKUs arrive from spreadsheets
-    and operators in whatever case they were typed, and matching them
-    case-insensitively is what people expect.
-    """
     response = await client.post(
         CATEGORIES, json={"name": "Dresses", "slug": slug}, headers=admin_headers
     )
@@ -94,7 +78,6 @@ async def test_update_a_category(client, admin_headers):
     body = response.json()["data"]
     assert body["name"] == "Evening Dresses"
     assert body["is_active"] is False
-    # Untouched fields survive a partial update.
     assert body["slug"] == "dresses"
 
 
@@ -110,7 +93,6 @@ async def test_update_cannot_take_another_categorys_slug(client, admin_headers):
 
 
 async def test_a_category_keeps_its_own_slug_on_update(client, admin_headers):
-    """Re-sending the unchanged slug must not collide with itself."""
     created = await make_category(client, admin_headers)
 
     response = await client.patch(
@@ -134,7 +116,6 @@ async def test_delete_a_category(client, admin_headers):
 
 
 async def test_a_category_with_products_cannot_be_deleted(client, admin_headers):
-    """Deleting it would strand the products, so it is refused with a 409."""
     category = await make_category(client, admin_headers)
     await make_product(client, admin_headers, category["id"])
 
@@ -146,7 +127,6 @@ async def test_a_category_with_products_cannot_be_deleted(client, admin_headers)
 
 @pytest.mark.parametrize("payload", [{"name": ""}, {"name": "   "}, {"slug": "Bad Slug"}])
 async def test_invalid_category_updates_are_rejected(client, admin_headers, payload):
-    """The update schema validates as strictly as the create schema."""
     created = await make_category(client, admin_headers)
 
     response = await client.patch(
@@ -157,7 +137,6 @@ async def test_invalid_category_updates_are_rejected(client, admin_headers, payl
 
 
 async def test_an_empty_patch_changes_nothing(client, admin_headers):
-    """PATCH semantics: omitting a field leaves it alone."""
     created = await make_category(client, admin_headers)
 
     response = await client.patch(
@@ -185,8 +164,8 @@ async def test_unknown_category_is_a_404(client, admin_headers):
         {"name": "Fine", "slug": "Not A Slug"},
         {"name": "Fine", "slug": "-leading"},
         {"name": "Fine", "slug": "double--hyphen"},
-        {"name": "Fine"},  # slug missing
-        {"slug": "fine"},  # name missing
+        {"name": "Fine"},
+        {"slug": "fine"},
     ],
 )
 async def test_invalid_category_payloads_are_rejected(client, admin_headers, payload):
@@ -196,16 +175,12 @@ async def test_invalid_category_payloads_are_rejected(client, admin_headers, pay
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-# --------------------------------------------------------------- products
-
-
 async def test_create_and_retrieve_a_product(client, admin_headers):
     category = await make_category(client, admin_headers)
 
     created = await make_product(client, admin_headers, category["id"])
 
     assert created["category_id"] == category["id"]
-    # Backend-authoritative: a product is a draft until it is published.
     assert created["status"] == "DRAFT"
 
     response = await client.get(f"{PRODUCTS}/{created['id']}", headers=admin_headers)
@@ -304,7 +279,6 @@ async def test_products_can_be_filtered_by_category(client, admin_headers):
 
 
 async def test_deleting_a_product_removes_its_variants(client, admin_headers):
-    """A variant is part of its product, so it goes when the product goes."""
     category = await make_category(client, admin_headers)
     product = await make_product(client, admin_headers, category["id"])
     variant = await make_variant(client, admin_headers, product["id"])
@@ -315,9 +289,6 @@ async def test_deleting_a_product_removes_its_variants(client, admin_headers):
     assert (
         await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
     ).status_code == 404
-
-
-# --------------------------------------------------------------- variants
 
 
 async def test_create_and_retrieve_a_variant(client, admin_headers):
@@ -344,7 +315,6 @@ async def test_a_sku_is_uppercased_before_it_is_stored(client, admin_headers):
 
 
 async def test_sku_uniqueness_ignores_case(client, admin_headers):
-    """Normalisation is what makes the unique index case-insensitive."""
     category = await make_category(client, admin_headers)
     product = await make_product(client, admin_headers, category["id"])
     await make_variant(client, admin_headers, product["id"], sku="DRESS-S-BLK")
@@ -359,7 +329,6 @@ async def test_sku_uniqueness_ignores_case(client, admin_headers):
 
 
 async def test_a_sku_is_unique_across_the_whole_tenant(client, admin_headers):
-    """Not merely per product - a SKU identifies one sellable item."""
     category = await make_category(client, admin_headers)
     first = await make_product(client, admin_headers, category["id"])
     second = await make_product(client, admin_headers, category["id"], slug="other", name="Other")
@@ -400,7 +369,6 @@ async def test_a_negative_price_is_rejected(client, admin_headers, price):
 
 
 async def test_a_price_may_be_zero(client, admin_headers):
-    """Free is a legitimate price; owing the customer is not."""
     category = await make_category(client, admin_headers)
     product = await make_product(client, admin_headers, category["id"])
 
@@ -451,9 +419,6 @@ async def test_delete_a_variant(client, admin_headers):
     assert (
         await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
     ).status_code == 404
-
-
-# ------------------------------------------------------------- pagination
 
 
 async def test_categories_are_paginated(client, admin_headers):
@@ -511,7 +476,6 @@ async def test_the_page_size_ceiling_is_enforced(client, admin_headers):
 
 
 async def test_a_filtered_total_reflects_the_filter(client, admin_headers):
-    """The total must count the filtered set, not the whole table."""
     first = await make_category(client, admin_headers)
     second = await make_category(client, admin_headers, name="Skirts", slug="skirts")
     await make_product(client, admin_headers, first["id"])

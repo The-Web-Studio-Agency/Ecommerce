@@ -1,21 +1,9 @@
-"""Application exception hierarchy.
-
-Services raise these; the handlers in `app.main` convert them into the error
-envelope. Nothing below ever carries a stack trace or internal detail to the
-client.
-
-Add a subclass when a route needs a status code that is not here yet - not
-before.
-"""
-
 from __future__ import annotations
 
 from typing import Any
 
 
 class AppError(Exception):
-    """Base class for expected, client-reportable application errors."""
-
     status_code: int = 400
     error_code: str = "BAD_REQUEST"
     default_message: str = "Request could not be processed"
@@ -41,8 +29,6 @@ class NotFoundError(AppError):
 
 
 class ConflictError(AppError):
-    """Uniqueness or state conflict (duplicate email, slug...)."""
-
     status_code = 409
     error_code = "CONFLICT"
     default_message = "Resource conflict"
@@ -60,9 +46,13 @@ class PermissionDeniedError(AppError):
     default_message = "You do not have permission to perform this action"
 
 
-class RateLimitedError(AppError):
-    """The caller exceeded an endpoint's request budget."""
+class ServiceUnavailableError(AppError):
+    status_code = 503
+    error_code = "SERVICE_UNAVAILABLE"
+    default_message = "Service temporarily unavailable"
 
+
+class RateLimitedError(AppError):
     status_code = 429
     error_code = "RATE_LIMITED"
     default_message = "Too many requests. Please try again later."

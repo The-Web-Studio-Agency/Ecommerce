@@ -1,54 +1,54 @@
-"""Request/response schemas for authentication.
-
-Password bounds are deliberately asymmetric: registration enforces the policy
-(a minimum length), login only enforces the same MAXIMUM. The maxima must match
-- when login capped at 128 while registration allowed 256, any account created
-with a longer password could never authenticate again.
-"""
-
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 
-#: Argon2id has no input-length limit of its own, but an unbounded password is
-#: an unbounded amount of hashing work, so the request schema caps it.
+from app.auth.constants import OTP_LENGTH
+from app.auth.phone import normalize_phone
+
 MAX_PASSWORD_LENGTH = 256
 MIN_PASSWORD_LENGTH = 8
 
+NormalizedPhone = Annotated[
+    str,
+    Field(min_length=4, max_length=32),
+    AfterValidator(normalize_phone),
+]
 
-class LoginRequest(BaseModel):
-    tenant_slug: str = Field(min_length=1, max_length=100)
-    email: EmailStr
-    # No minimum: login validates credentials, it does not re-apply the policy.
+OtpCode = Annotated[str, Field(min_length=OTP_LENGTH, max_length=OTP_LENGTH, pattern=r"^\d+$")]
+
+
+class OtpRequestPayload(BaseModel):
+    phone: NormalizedPhone
+
+
+class OtpVerifyPayload(BaseModel):
+    phone: NormalizedPhone
+    otp: OtpCode
+
+
+class AdminLoginPayload(BaseModel):
+    identifier: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
 
 
-class RegisterRequest(BaseModel):
-    tenant_slug: str = Field(min_length=1, max_length=100)
-    email: EmailStr
-    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
+class AdminOtpVerifyPayload(BaseModel):
+    verification_id: UUID
+    otp: OtpCode
 
 
-class RefreshRequest(BaseModel):
+class AdminLoginChallenge(BaseModel):
+    verification_id: UUID
+
+
+class RefreshPayload(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
-class LogoutRequest(BaseModel):
-    # Distinct from RefreshRequest so the published OpenAPI schema names the
-    # operation the client is actually performing.
+class LogoutPayload(BaseModel):
     refresh_token: str = Field(min_length=1)
-
-
-class UserResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    email: EmailStr
-    role: str
-    tenant_id: UUID | None
-    is_active: bool
 
 
 class TokenPair(BaseModel):
@@ -58,8 +58,17 @@ class TokenPair(BaseModel):
     expires_in: int = Field(description="Access token lifetime in seconds")
 
 
-class AuthSession(BaseModel):
-    """Login/refresh result: tokens plus who and where you are."""
+AdminLoginResponse = AdminLoginChallenge | TokenPair
 
-    tokens: TokenPair
-    user: UserResponse
+
+class UserProfile(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    phone: str
+    email: EmailStr | None
+    name: str | None
+    role: str
+    status: str
+    is_verified: bool

@@ -1,186 +1,260 @@
-"""Tenant isolation: the boundary between two tenants sharing one database."""
-
 from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.auth.constants import UserRole
+from app.auth.constants import OtpPurpose, UserRole
+from app.auth.models import OtpRequest
 from app.auth.security import create_access_token
 from app.users.models import User
 from app.users.repository import UserRepository
-from tests.conftest import USER_PASSWORD, access_token_for, login
+from tests.conftest import (
+    ADMIN_PASSWORD,
+    headers_for,
+    request_otp,
+    sign_in_customer,
+    verify_otp,
+)
+
+SHARED_PHONE = "+919876500001"
 
 
-async def test_same_email_in_two_tenants_stays_separate(client, tenant, other_tenant, make_user):
-    """One address may exist in several tenants and they must not be confused."""
-    shared = "shared@example.com"
-    zeen_user = await make_user(tenant=tenant, email=shared, password=USER_PASSWORD)
-    acme_user = await make_user(tenant=other_tenant, email=shared, password="a-different-one")
-
-    assert zeen_user.id != acme_user.id
-
-    zeen_login = await login(client, slug="zeen", email=shared, password=USER_PASSWORD)
-    assert zeen_login.status_code == 200
-    assert zeen_login.json()["data"]["user"]["id"] == str(zeen_user.id)
-
-    # The other tenant's password must not authenticate against this tenant.
-    crossed = await login(client, slug="zeen", email=shared, password="a-different-one")
-    assert crossed.status_code == 401
-
-
-async def test_login_is_scoped_to_the_requested_tenant(client, tenant, other_tenant, make_user):
-    """An account in one tenant cannot be used to log into another."""
-    await make_user(tenant=tenant, email="only-zeen@example.com")
-
-    response = await login(
-        client, slug="acme", email="only-zeen@example.com", password=USER_PASSWORD
-    )
-
-    assert response.status_code == 401
-
-
-async def test_me_reports_the_callers_own_tenant(client, tenant, other_tenant, user):
-    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
-
-    response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
-
-    assert response.json()["data"]["tenant_id"] == str(tenant.id)
-
-
-async def test_header_cannot_override_the_authenticated_tenant(
-    client, tenant, other_tenant, user
+async def test_the_same_phone_may_exist_in_both_tenants(
+    client, other_client, session, tenant, other_tenant, sent_otps
 ):
-    """An authenticated caller's scope comes from their user row, never a header."""
-    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    zeen = await sign_in_customer(client, sent_otps, SHARED_PHONE)
+    acme = await sign_in_customer(other_client, sent_otps, SHARED_PHONE)
 
-    response = await client.get(
-        "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {token}", "X-Tenant-Slug": "acme"},
+    rows = (
+        (await session.execute(select(User).where(User.phone == SHARED_PHONE)))
+        .scalars()
+        .all()
     )
+    assert len(rows) == 2
+    assert {row.tenant_id for row in rows} == {tenant.id, other_tenant.id}
+    assert zeen["access_token"] != acme["access_token"]
 
-    assert response.status_code == 200
-    assert response.json()["data"]["tenant_id"] == str(tenant.id)
+
+async def test_a_lookup_needs_the_right_tenant(session, tenant, other_tenant, make_user):
+    theirs = await make_user(tenant=other_tenant, phone=SHARED_PHONE)
+    users = UserRepository(session)
+
+    assert (
+        await users.get_by_phone(tenant_id=other_tenant.id, phone=SHARED_PHONE)
+    ).id == theirs.id
+    assert await users.get_by_phone(tenant_id=tenant.id, phone=SHARED_PHONE) is None
 
 
-async def test_query_parameters_cannot_override_the_authenticated_tenant(
-    client, tenant, other_tenant, user
+async def test_a_lookup_by_id_is_tenant_scoped(session, tenant, other_tenant, make_user):
+    theirs = await make_user(tenant=other_tenant)
+    users = UserRepository(session)
+
+    assert await users.get_by_id(tenant_id=other_tenant.id, user_id=theirs.id) is not None
+    assert await users.get_by_id(tenant_id=tenant.id, user_id=theirs.id) is None
+
+
+async def test_a_token_from_one_tenant_is_useless_at_another(
+    client, other_client, tenant, other_tenant, user
 ):
-    """Scope comes from the user row, so an unexpected query param changes nothing."""
-    token = await access_token_for(client, slug="zeen", email=user.email, password=USER_PASSWORD)
+    headers = headers_for(user)
 
-    response = await client.get(
-        "/api/v1/auth/me",
-        params={"tenant_id": str(other_tenant.id), "tenant_slug": "acme"},
-        headers={"Authorization": f"Bearer {token}"},
+    assert (await client.get("/api/v1/auth/me", headers=headers)).status_code == 200
+    assert (await other_client.get("/api/v1/auth/me", headers=headers)).status_code == 401
+
+
+async def test_a_token_from_one_tenant_cannot_reach_another_tenants_data(
+    client, other_client, tenant, other_tenant, admin_headers, other_admin_headers
+):
+    created = await client.post(
+        "/api/v1/catalogue/categories",
+        json={"name": "Dresses", "slug": "dresses"},
+        headers=admin_headers,
     )
+    assert created.status_code == 201
 
-    assert response.status_code == 200
-    assert response.json()["data"]["tenant_id"] == str(tenant.id)
+    blocked = await other_client.get("/api/v1/catalogue/categories", headers=admin_headers)
+    assert blocked.status_code == 401
+
+    theirs = await other_client.get(
+        "/api/v1/catalogue/categories", headers=other_admin_headers
+    )
+    assert theirs.status_code == 200
+    assert theirs.json()["meta"]["total_items"] == 0
 
 
-async def test_a_forged_tenant_claim_does_not_move_the_user(client, tenant, other_tenant, user):
-    """The JWT's tenant claim is a claim, never the authority.
-
-    A token signed with the real secret but carrying another tenant's id must
-    still resolve to the tenant on the user's database row.
-    """
+async def test_a_forged_tenant_claim_is_refused(client, tenant, other_tenant, make_user):
+    intruder = await make_user(tenant=other_tenant)
     forged = create_access_token(
-        subject=str(user.id), role=user.role, tenant_id=str(other_tenant.id)
+        user_id=intruder.id, tenant_id=tenant.id, role=intruder.role
     )
 
     response = await client.get(
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {forged}"}
     )
 
+    assert response.status_code == 401
+
+
+async def test_a_header_cannot_move_the_caller(client, tenant, other_tenant, user):
+    response = await client.get(
+        "/api/v1/auth/me",
+        headers={**headers_for(user), "X-Tenant-Slug": "acme", "X-Tenant-Id": str(other_tenant.id)},
+    )
+
     assert response.status_code == 200
     assert response.json()["data"]["tenant_id"] == str(tenant.id)
 
 
-async def test_registration_body_cannot_place_a_user_in_another_tenant(
-    client, tenant, other_tenant
-):
-    """`tenant_id` in the body is ignored; only the named slug decides."""
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "tenant_slug": "zeen",
-            "email": "smuggler@example.com",
-            "password": "hunter2hunter2",
-            "tenant_id": str(other_tenant.id),
-        },
+async def test_query_parameters_cannot_move_the_caller(client, tenant, other_tenant, user):
+    response = await client.get(
+        "/api/v1/auth/me",
+        params={"tenant_id": str(other_tenant.id), "tenant_slug": "acme"},
+        headers=headers_for(user),
     )
 
-    assert response.status_code == 201
+    assert response.status_code == 200
     assert response.json()["data"]["tenant_id"] == str(tenant.id)
 
 
-async def test_a_platform_admin_is_not_reachable_through_tenant_login(
-    client, tenant, make_user
+async def test_codes_are_scoped_to_the_tenant_that_issued_them(
+    client, other_client, tenant, other_tenant, sent_otps
 ):
-    """Platform users sit above the tenant boundary.
+    await request_otp(client, SHARED_PHONE)
+    zeen_code = sent_otps[-1].otp
 
-    Login resolves a user by (tenant, email) and a platform admin has no
-    tenant, so it cannot authenticate one. There is no platform login route
-    yet - when platform operations are built, they will need one.
-    """
-    await make_user(
-        tenant=None, email="platform@tws.com", role=UserRole.PLATFORM_ADMIN.value
+    crossed = await verify_otp(other_client, SHARED_PHONE, zeen_code)
+    assert crossed.status_code == 401
+
+    assert (await verify_otp(client, SHARED_PHONE, zeen_code)).status_code == 200
+
+
+async def test_an_otp_row_belongs_to_one_tenant(client, session, tenant, sent_otps):
+    await request_otp(client, SHARED_PHONE)
+
+    record = await session.scalar(
+        select(OtpRequest).where(OtpRequest.purpose == OtpPurpose.CUSTOMER_LOGIN.value)
+    )
+    assert record.tenant_id == tenant.id
+
+
+async def test_a_refresh_token_cannot_be_rotated_at_another_storefront(
+    client, other_client, tenant, other_tenant, user, sent_otps
+):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+
+    crossed = await other_client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
+    assert crossed.status_code == 401
+
+    assert (
+        await client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        )
+    ).status_code == 200
+
+
+async def test_a_refresh_token_cannot_be_revoked_from_another_storefront(
+    client, other_client, tenant, other_tenant, user, sent_otps
+):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+
+    await other_client.post(
+        "/api/v1/auth/logout", json={"refresh_token": tokens["refresh_token"]}
     )
 
-    response = await login(
-        client, slug="zeen", email="platform@tws.com", password=USER_PASSWORD
-    )
+    assert (
+        await client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        )
+    ).status_code == 200
 
-    assert response.status_code == 401
 
-
-async def test_lookup_by_email_requires_the_right_tenant(
-    session, tenant, other_tenant, make_user
+async def test_suspending_one_tenant_does_not_affect_another(
+    client, other_client, session, tenant, other_tenant, sent_otps
 ):
-    """Every user query is keyed on (tenant, email), never email alone."""
-    await make_user(tenant=other_tenant, email="theirs@example.com")
-    users = UserRepository(session)
-
-    assert await users.get_by_tenant_and_email(
-        tenant_id=other_tenant.id, email="theirs@example.com"
-    ) is not None
-    assert await users.get_by_tenant_and_email(
-        tenant_id=tenant.id, email="theirs@example.com"
-    ) is None
-
-
-async def test_registration_binds_the_user_to_the_named_tenant(client, tenant, other_tenant):
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={"tenant_slug": "acme", "email": "new@example.com", "password": "a-good-password"},
-    )
-
-    assert response.status_code == 201
-    assert response.json()["data"]["tenant_id"] == str(other_tenant.id)
-
-
-async def test_deactivating_one_tenant_does_not_affect_another(
-    client, session, tenant, other_tenant, make_user
-):
-    await make_user(tenant=other_tenant, email="acme-user@example.com")
-
     tenant.is_active = False
     await session.commit()
 
-    blocked = await login(client, slug="zeen", email="user@zeen.com", password=USER_PASSWORD)
-    allowed = await login(
-        client, slug="acme", email="acme-user@example.com", password=USER_PASSWORD
-    )
+    blocked = await request_otp(client, SHARED_PHONE)
+    assert blocked.status_code == 404
+    assert blocked.json()["error"]["code"] == "UNKNOWN_STOREFRONT"
 
-    assert blocked.status_code == 401
-    assert allowed.status_code == 200
+    assert (await request_otp(other_client, "+919555000222")).status_code == 202
 
 
 async def test_users_from_both_tenants_coexist(session, tenant, other_tenant, make_user):
-    """Sanity check: isolation comes from the query scope, not from empty tables."""
-    await make_user(tenant=tenant, email="a@example.com")
-    await make_user(tenant=other_tenant, email="c@example.com")
+    await make_user(tenant=tenant)
+    await make_user(tenant=other_tenant, role=UserRole.ADMIN.value, email="a@acme.com")
 
     all_users = (await session.execute(select(User))).scalars().all()
 
     assert len(all_users) == 2
+    assert {u.tenant_id for u in all_users} == {tenant.id, other_tenant.id}
+
+
+async def test_the_domain_decides_which_tenant_a_new_customer_joins(
+    client, other_client, session, tenant, other_tenant, sent_otps
+):
+    await sign_in_customer(other_client, sent_otps, SHARED_PHONE)
+
+    created = await session.scalar(select(User).where(User.phone == SHARED_PHONE))
+    assert created.tenant_id == other_tenant.id
+
+
+async def test_a_staff_challenge_from_one_tenant_cannot_be_verified_at_another(
+    client, other_client, tenant, other_tenant, make_user, sent_otps
+):
+    await make_user(tenant=tenant, email="staff@zeen.com", role=UserRole.STAFF.value)
+
+    challenge = await client.post(
+        "/api/v1/admin/auth/login",
+        json={"identifier": "staff@zeen.com", "password": ADMIN_PASSWORD},
+    )
+    assert challenge.status_code == 202
+    verification_id = challenge.json()["data"]["verification_id"]
+    otp = sent_otps[-1].otp
+
+    crossed = await other_client.post(
+        "/api/v1/admin/auth/verify-otp",
+        json={"verification_id": verification_id, "otp": otp},
+    )
+    assert crossed.status_code == 401
+
+    intact = await client.post(
+        "/api/v1/admin/auth/verify-otp",
+        json={"verification_id": verification_id, "otp": otp},
+    )
+    assert intact.status_code == 200
+
+
+async def test_presenting_a_token_to_the_wrong_tenant_does_not_revoke_it(
+    client, other_client, tenant, other_tenant, user, sent_otps
+):
+    tokens = await sign_in_customer(client, sent_otps, user.phone)
+
+    for _ in range(3):
+        crossed = await other_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        )
+        assert crossed.status_code == 401
+
+    still_valid = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
+    assert still_valid.status_code == 200
+
+
+async def test_a_user_id_from_one_tenant_does_not_resolve_at_another(
+    client, other_client, tenant, other_tenant, make_user
+):
+    theirs = await make_user(tenant=other_tenant, email="admin@acme.com", role=UserRole.ADMIN.value)
+
+    forged = create_access_token(
+        user_id=theirs.id, tenant_id=tenant.id, role=theirs.role
+    )
+
+    response = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {forged}"}
+    )
+
+    assert response.status_code == 401

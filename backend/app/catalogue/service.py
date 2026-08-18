@@ -96,12 +96,6 @@ class CategoryService:
         return category
 
     async def delete(self, category_id: UUID) -> None:
-        """Delete a category, refusing while it still has products.
-
-        The database would refuse this too (the composite foreign key), but
-        checking here turns it into a specific 409 instead of the generic
-        "conflicts with existing data" the IntegrityError handler produces.
-        """
         category = await self.get(category_id)
         if await self.products.exists_in_category(category.id):
             raise ConflictError("Category still has products and cannot be deleted")
@@ -119,11 +113,6 @@ class ProductService:
         self.categories = CategoryRepository(session, tenant_id)
 
     async def _require_category(self, category_id: UUID) -> Category:
-        """Resolve a category within this tenant.
-
-        Tenant-scoped, so another tenant's category is indistinguishable from
-        one that does not exist - the client learns nothing either way.
-        """
         category = await self.categories.get(category_id)
         if category is None:
             raise NotFoundError("Category not found")
@@ -200,11 +189,6 @@ class ProductService:
         return product
 
     async def delete(self, product_id: UUID) -> None:
-        """Delete a product. Its variants go with it (ON DELETE CASCADE).
-
-        A variant is part of its product rather than a reference to it, so
-        there is nothing left to orphan and nothing to refuse.
-        """
         product = await self.get(product_id)
         await self.products.delete(product)
         await self.session.commit()
