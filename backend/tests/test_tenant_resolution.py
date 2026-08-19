@@ -4,11 +4,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.auth.constants import UserRole
 from app.auth.models import OtpRequest
 from app.core.config import get_settings
 from app.tenants.models import TenantDomain
 from app.tenants.repository import TenantRepository
 from app.tenants.resolver import normalize_hostname
+from app.users.models import User
 from tests.conftest import UNREGISTERED_DOMAIN, ZEEN_DOMAIN
 
 
@@ -88,6 +90,30 @@ async def test_a_port_in_the_host_header_still_resolves(client, tenant):
     response = await request_otp_on(client, f"{ZEEN_DOMAIN}:8000")
 
     assert response.status_code == 202
+
+
+async def test_localhost_user_creation_falls_back_to_the_first_active_tenant(
+    client, session, tenant
+):
+    response = await client.post(
+        "/api/v1/users/admin",
+        json={
+            "email": "local@admin.com",
+            "phone": "+919000000001",
+            "name": "Local Admin",
+            "password": "Passw0rd!",
+        },
+        headers={"Host": "localhost"},
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()["data"]
+    assert payload["email"] == "local@admin.com"
+    assert payload["role"] == UserRole.ADMIN.value
+
+    record = await session.scalar(select(User).where(User.email == "local@admin.com"))
+    assert record is not None
+    assert record.tenant_id == tenant.id
 
 
 async def test_host_matching_is_case_insensitive(client, tenant):

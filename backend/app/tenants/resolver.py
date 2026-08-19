@@ -48,3 +48,16 @@ async def resolve_tenant(
 
 
 CurrentTenant = Annotated[Tenant, Depends(resolve_tenant)]
+
+
+async def resolve_tenant_optional(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> Tenant | None:
+    try:
+        return await resolve_tenant(request, session)
+    except NotFoundError:
+        return None
+
+
+CurrentTenantOptional = Annotated[Tenant | None, Depends(resolve_tenant_optional)]
