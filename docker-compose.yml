@@ -46,12 +46,6 @@ services:
       REDIS_URL: redis://redis:6379/0
     ports:
       - "${API_PORT:-58000}:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
 
 volumes:
   postgres_data:
