@@ -29,6 +29,7 @@ def _reject_blank(value: str) -> str:
         raise ValueError("must not be blank")
     return value.strip()
 
+# ----Category Schemas--------------------------------------------
 
 class CategoryCreate(BaseModel):
     name: str = Name
@@ -59,6 +60,8 @@ class CategoryRead(BaseModel):
     slug: str
     description: str | None
     is_active: bool
+
+# -------------------------PRODUCT SCHEMAS--------------------------------------------
 
 
 class ProductCreate(BaseModel):
@@ -94,6 +97,8 @@ class ProductRead(BaseModel):
     description: str | None
     status: CatalogueStatus
 
+# ------------------------PRODUCT VARIANT SCHEMAS--------------------------------------------
+
 
 class VariantCreate(BaseModel):
     sku: str = Sku
@@ -125,3 +130,97 @@ class VariantRead(BaseModel):
     name: str
     price: Decimal
     status: CatalogueStatus
+
+# -----------------------PRODUCT IMAGE SCHEMAS--------------------------------------------   
+
+class ProductImageCreate(BaseModel):
+    url: str = Field(
+        min_length=1,
+        max_length=2048,
+    )
+
+    alt_text: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    sort_order: int = Field(
+        default=0,
+        ge=0,
+    )
+
+    is_primary: bool = False
+
+    _strip_url = field_validator("url")(_reject_blank)
+
+    _strip_alt_text = field_validator("alt_text")(
+        lambda v: v if v is None else v.strip()
+    )
+
+
+class ProductImageUpdate(BaseModel):
+    url: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=2048,
+    )
+
+    alt_text: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    sort_order: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    is_primary: bool | None = None
+
+    _strip_url = field_validator("url")(
+        lambda v: v if v is None else _reject_blank(v)
+    )
+
+    _strip_alt_text = field_validator("alt_text")(
+        lambda v: v if v is None else v.strip()
+    )
+
+
+class ProductImageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    product_id: UUID
+
+    url: str
+    alt_text: str | None
+
+    sort_order: int
+    is_primary: bool
+
+# ---------Storefront product schemas--------------------------------------------
+
+
+class ProductImageStorefrontRead(BaseModel):
+    id: UUID
+    url: str
+    alt_text: str | None
+    sort_order: int
+    is_primary: bool
+
+
+class ProductStorefrontRead(BaseModel):
+    id: UUID
+    category_id: UUID
+    name: str
+    slug: str
+    short_description: str | None
+    description: str | None
+    brand: str | None
+    is_featured: bool
+
+    seo_title: str | None
+    seo_description: str | None
+
+    images: list[ProductImageStorefrontRead] = []

@@ -16,14 +16,17 @@ from app.catalogue.schemas import (
     VariantCreate,
     VariantRead,
     VariantUpdate,
+    ProductImageCreate,
+    ProductImageRead,
+    ProductImageUpdate,
 )
-from app.catalogue.service import CategoryService, ProductService, VariantService
+from app.catalogue.service import CategoryService, ProductService, VariantService ,ProductImageService
 from app.core.database import get_db
 from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated
 from app.users.models import User
 
-router = APIRouter(prefix="/catalogue", tags=["Catalogue"])
+router = APIRouter(prefix="/catalogue", tags=["Admin-Catalogue_management"])
 
 
 @router.post(
@@ -262,3 +265,96 @@ async def delete_variant(
 ) -> Response:
     await VariantService(session, user.tenant_id).delete(variant_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/products/{product_id}/images",
+    response_model=ApiResponse[list[ProductImageRead]],
+    summary="List product images",
+)
+async def list_product_images(
+    product_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+) -> ApiResponse[list[ProductImageRead]]:
+    images = await ProductImageService(
+        session,
+        user.tenant_id,
+    ).list_for_product(product_id)
+
+    return ok(
+        [
+            ProductImageRead.model_validate(image)
+            for image in images
+        ],
+        message="Product images retrieved",
+    )
+
+@router.post(
+    "/products/{product_id}/images",
+    response_model=ApiResponse[ProductImageRead],
+    status_code=status.HTTP_201_CREATED,
+    summary="Add product image",
+)
+async def add_product_image(
+    product_id: UUID,
+    data: ProductImageCreate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[ProductImageRead]:
+    image = await ProductImageService(
+        session,
+        user.tenant_id,
+    ).add(
+        product_id,
+        data,
+    )
+
+    return ok(
+        ProductImageRead.model_validate(image),
+        message="Product image added",
+    )
+
+@router.patch(
+    "/images/{image_id}",
+    response_model=ApiResponse[ProductImageRead],
+    summary="Update product image",
+)
+async def update_product_image(
+    image_id: UUID,
+    data: ProductImageUpdate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[ProductImageRead]:
+    image = await ProductImageService(
+        session,
+        user.tenant_id,
+    ).update(
+        image_id,
+        data,
+    )
+
+    return ok(
+        ProductImageRead.model_validate(image),
+        message="Product image updated",
+    )
+
+
+@router.delete(
+    "/images/{image_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete product image",
+)
+async def delete_product_image(
+    image_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> Response:
+    await ProductImageService(
+        session,
+        user.tenant_id,
+    ).delete(image_id)
+
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT
+    )

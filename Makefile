@@ -22,7 +22,6 @@ dev:
 	@echo
 	@echo "API      http://localhost:$(API_PORT)"
 	@echo "Docs     http://localhost:$(API_PORT)/docs"
-	@echo "Health   http://localhost:$(API_PORT)/health/live"
 	@echo
 	@echo "Logs     $(COMPOSE) logs -f api"
 	@echo "Seed     $(COMPOSE) exec api python -m app.commands.seed"

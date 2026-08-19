@@ -38,13 +38,17 @@ class CategoryService:
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session
         self.tenant_id = tenant_id
+
         self.categories = CategoryRepository(session, tenant_id)
         self.products = ProductRepository(session, tenant_id)
 
     async def create(self, data: CategoryCreate) -> Category:
         slug = _normalise_slug(data.slug)
+
         if await self.categories.get_by_slug(slug) is not None:
-            raise ConflictError("A category with this slug already exists")
+            raise ConflictError(
+                "A category with this slug already exists"
+            )
 
         category = Category(
             name=data.name,
@@ -52,35 +56,73 @@ class CategoryService:
             description=data.description,
             is_active=data.is_active,
         )
+
         try:
             await self.categories.add(category)
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A category with this slug already exists") from exc
+            raise ConflictError(
+                "A category with this slug already exists"
+            ) from exc
 
-        logger.info("catalogue.category_created id=%s tenant_id=%s", category.id, self.tenant_id)
+        logger.info(
+            "catalogue.category_created id=%s tenant_id=%s",
+            category.id,
+            self.tenant_id,
+        )
+
         return category
 
     async def get(self, category_id: UUID) -> Category:
         category = await self.categories.get(category_id)
+
         if category is None:
             raise NotFoundError("Category not found")
+
         return category
 
-    async def list(self, params: PageParams) -> tuple[list[Category], int]:
-        rows, total = await self.categories.paginate(self.categories.list_select(), params)
+    async def list(
+        self,
+        params: PageParams,
+        *,
+        active_only: bool = False,
+    ) -> tuple[list[Category], int]:
+        """
+        List categories for the tenant.
+
+        active_only=True is intended for public/storefront usage.
+        """
+        stmt = self.categories.list_select(
+            active_only=active_only,
+        )
+
+        rows, total = await self.categories.paginate(
+            stmt,
+            params,
+        )
+
         return list(rows), total
 
-    async def update(self, category_id: UUID, data: CategoryUpdate) -> Category:
+    async def update(
+        self,
+        category_id: UUID,
+        data: CategoryUpdate,
+    ) -> Category:
         category = await self.get(category_id)
+
         changes = data.model_dump(exclude_unset=True)
 
-        if "slug" in changes:
+        if "slug" in changes and changes["slug"] is not None:
             slug = _normalise_slug(changes["slug"])
+
             existing = await self.categories.get_by_slug(slug)
+
             if existing is not None and existing.id != category.id:
-                raise ConflictError("A category with this slug already exists")
+                raise ConflictError(
+                    "A category with this slug already exists"
+                )
+
             changes["slug"] = slug
 
         for field, value in changes.items():
@@ -90,87 +132,152 @@ class CategoryService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A category with this slug already exists") from exc
+            raise ConflictError(
+                "A category with this slug already exists"
+            ) from exc
 
-        logger.info("catalogue.category_updated id=%s tenant_id=%s", category.id, self.tenant_id)
+        logger.info(
+            "catalogue.category_updated id=%s tenant_id=%s",
+            category.id,
+            self.tenant_id,
+        )
+
         return category
 
     async def delete(self, category_id: UUID) -> None:
         category = await self.get(category_id)
+
         if await self.products.exists_in_category(category.id):
-            raise ConflictError("Category still has products and cannot be deleted")
+            raise ConflictError(
+                "Category still has products and cannot be deleted"
+            )
 
         await self.categories.delete(category)
         await self.session.commit()
-        logger.info("catalogue.category_deleted id=%s tenant_id=%s", category_id, self.tenant_id)
+
+        logger.info(
+            "catalogue.category_deleted id=%s tenant_id=%s",
+            category_id,
+            self.tenant_id,
+        )
 
 
 class ProductService:
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session
         self.tenant_id = tenant_id
+
         self.products = ProductRepository(session, tenant_id)
         self.categories = CategoryRepository(session, tenant_id)
 
     async def _require_category(self, category_id: UUID) -> Category:
         category = await self.categories.get(category_id)
+
         if category is None:
             raise NotFoundError("Category not found")
+
         return category
 
     async def create(self, data: ProductCreate) -> Product:
         await self._require_category(data.category_id)
 
         slug = _normalise_slug(data.slug)
+
         if await self.products.get_by_slug(slug) is not None:
-            raise ConflictError("A product with this slug already exists")
+            raise ConflictError(
+                "A product with this slug already exists"
+            )
 
         product = Product(
-            category_id=data.category_id,
-            name=data.name,
-            slug=slug,
-            description=data.description,
-            status=data.status.value,
-        )
+        category_id=data.category_id,
+        name=data.name,
+        slug=slug,
+        short_description=data.short_description,
+        description=data.description,
+        brand=data.brand,
+        status=data.status.value,
+        is_featured=data.is_featured,
+        seo_title=data.seo_title,
+        seo_description=data.seo_description,
+    )
+
         try:
             await self.products.add(product)
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A product with this slug already exists") from exc
+            raise ConflictError(
+                "A product with this slug already exists"
+            ) from exc
 
-        logger.info("catalogue.product_created id=%s tenant_id=%s", product.id, self.tenant_id)
+        logger.info(
+            "catalogue.product_created id=%s tenant_id=%s",
+            product.id,
+            self.tenant_id,
+        )
+
         return product
 
     async def get(self, product_id: UUID) -> Product:
         product = await self.products.get(product_id)
+
         if product is None:
             raise NotFoundError("Product not found")
+
         return product
 
     async def list(
-        self, params: PageParams, *, category_id: UUID | None = None
+        self,
+        params: PageParams,
+        *,
+        category_id: UUID | None = None,
+        active_only: bool = False,
     ) -> tuple[list[Product], int]:
+        """
+        List products for the tenant.
+
+        active_only=True is intended for public/storefront usage.
+
+        Filtering happens at the database query level before
+        pagination, so pagination totals remain correct.
+        """
         if category_id is not None:
             await self._require_category(category_id)
 
-        rows, total = await self.products.paginate(
-            self.products.list_select(category_id=category_id), params
+        stmt = self.products.list_select(
+            category_id=category_id,
+            active_only=active_only,
         )
+
+        rows, total = await self.products.paginate(
+            stmt,
+            params,
+        )
+
         return list(rows), total
 
-    async def update(self, product_id: UUID, data: ProductUpdate) -> Product:
+    async def update(
+        self,
+        product_id: UUID,
+        data: ProductUpdate,
+    ) -> Product:
         product = await self.get(product_id)
+
         changes = data.model_dump(exclude_unset=True)
 
-        if "category_id" in changes:
+        if "category_id" in changes and changes["category_id"] is not None:
             await self._require_category(changes["category_id"])
 
-        if "slug" in changes:
+        if "slug" in changes and changes["slug"] is not None:
             slug = _normalise_slug(changes["slug"])
+
             existing = await self.products.get_by_slug(slug)
+
             if existing is not None and existing.id != product.id:
-                raise ConflictError("A product with this slug already exists")
+                raise ConflictError(
+                    "A product with this slug already exists"
+                )
+
             changes["slug"] = slug
 
         if "status" in changes and changes["status"] is not None:
@@ -183,37 +290,81 @@ class ProductService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A product with this slug already exists") from exc
+            raise ConflictError(
+                "A product with this slug already exists"
+            ) from exc
 
-        logger.info("catalogue.product_updated id=%s tenant_id=%s", product.id, self.tenant_id)
+        logger.info(
+            "catalogue.product_updated id=%s tenant_id=%s",
+            product.id,
+            self.tenant_id,
+        )
+
         return product
 
     async def delete(self, product_id: UUID) -> None:
+        """
+        Archive the product instead of physically deleting it.
+
+        Products may later be referenced by orders/order items.
+        Keeping the record preserves historical commerce data.
+        """
         product = await self.get(product_id)
-        await self.products.delete(product)
-        await self.session.commit()
-        logger.info("catalogue.product_deleted id=%s tenant_id=%s", product_id, self.tenant_id)
+
+        if product.status == "ARCHIVED":
+            return
+
+        product.status = "ARCHIVED"
+
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ConflictError(
+                "Unable to archive product"
+            ) from exc
+
+        logger.info(
+            "catalogue.product_archived id=%s tenant_id=%s",
+            product_id,
+            self.tenant_id,
+        )
 
 
 class VariantService:
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session
         self.tenant_id = tenant_id
+
         self.variants = VariantRepository(session, tenant_id)
         self.products = ProductRepository(session, tenant_id)
 
     async def _require_product(self, product_id: UUID) -> Product:
         product = await self.products.get(product_id)
+
         if product is None:
             raise NotFoundError("Product not found")
+
         return product
 
-    async def create(self, product_id: UUID, data: VariantCreate) -> ProductVariant:
-        await self._require_product(product_id)
+    async def create(
+        self,
+        product_id: UUID,
+        data: VariantCreate,
+    ) -> ProductVariant:
+        product = await self._require_product(product_id)
+
+        if product.status == "ARCHIVED":
+            raise ConflictError(
+                "Cannot add a variant to an archived product"
+            )
 
         sku = _normalise_sku(data.sku)
+
         if await self.variants.get_by_sku(sku) is not None:
-            raise ConflictError("A variant with this SKU already exists")
+            raise ConflictError(
+                "A variant with this SKU already exists"
+            )
 
         variant = ProductVariant(
             product_id=product_id,
@@ -222,38 +373,77 @@ class VariantService:
             price=data.price,
             status=data.status.value,
         )
+
         try:
             await self.variants.add(variant)
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A variant with this SKU already exists") from exc
+            raise ConflictError(
+                "A variant with this SKU already exists"
+            ) from exc
 
-        logger.info("catalogue.variant_created id=%s tenant_id=%s", variant.id, self.tenant_id)
+        logger.info(
+            "catalogue.variant_created id=%s tenant_id=%s",
+            variant.id,
+            self.tenant_id,
+        )
+
         return variant
 
     async def get(self, variant_id: UUID) -> ProductVariant:
         variant = await self.variants.get(variant_id)
+
         if variant is None:
             raise NotFoundError("Variant not found")
+
         return variant
 
     async def list_for_product(
-        self, product_id: UUID, params: PageParams
+        self,
+        product_id: UUID,
+        params: PageParams,
+        *,
+        active_only: bool = False,
     ) -> tuple[list[ProductVariant], int]:
+        """
+        List variants belonging to a product.
+
+        active_only=True is intended for public/storefront usage.
+        """
         await self._require_product(product_id)
-        rows, total = await self.variants.paginate(self.variants.list_select(product_id), params)
+
+        stmt = self.variants.list_select(
+            product_id,
+            active_only=active_only,
+        )
+
+        rows, total = await self.variants.paginate(
+            stmt,
+            params,
+        )
+
         return list(rows), total
 
-    async def update(self, variant_id: UUID, data: VariantUpdate) -> ProductVariant:
+    async def update(
+        self,
+        variant_id: UUID,
+        data: VariantUpdate,
+    ) -> ProductVariant:
         variant = await self.get(variant_id)
+
         changes = data.model_dump(exclude_unset=True)
 
-        if "sku" in changes:
+        if "sku" in changes and changes["sku"] is not None:
             sku = _normalise_sku(changes["sku"])
+
             existing = await self.variants.get_by_sku(sku)
+
             if existing is not None and existing.id != variant.id:
-                raise ConflictError("A variant with this SKU already exists")
+                raise ConflictError(
+                    "A variant with this SKU already exists"
+                )
+
             changes["sku"] = sku
 
         if "status" in changes and changes["status"] is not None:
@@ -266,13 +456,210 @@ class VariantService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A variant with this SKU already exists") from exc
+            raise ConflictError(
+                "A variant with this SKU already exists"
+            ) from exc
 
-        logger.info("catalogue.variant_updated id=%s tenant_id=%s", variant.id, self.tenant_id)
+        logger.info(
+            "catalogue.variant_updated id=%s tenant_id=%s",
+            variant.id,
+            self.tenant_id,
+        )
+
         return variant
 
     async def delete(self, variant_id: UUID) -> None:
+        """
+        Archive the variant instead of physically deleting it.
+
+        Variants may later be referenced by cart/order/order-item records.
+        """
         variant = await self.get(variant_id)
-        await self.variants.delete(variant)
+
+        if variant.status == "ARCHIVED":
+            return
+
+        variant.status = "ARCHIVED"
+
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ConflictError(
+                "Unable to archive variant"
+            ) from exc
+
+        logger.info(
+            "catalogue.variant_archived id=%s tenant_id=%s",
+            variant_id,
+            self.tenant_id,
+        )
+
+
+class ProductImageService:
+    def __init__(
+        self,
+        session: AsyncSession,
+        tenant_id: UUID,
+    ) -> None:
+        self.session = session
+        self.tenant_id = tenant_id
+
+        self.images = ProductImageRepository(
+            session,
+            tenant_id,
+        )
+
+        self.products = ProductRepository(
+            session,
+            tenant_id,
+        )
+
+    async def _require_product(
+        self,
+        product_id: UUID,
+    ) -> Product:
+        product = await self.products.get(product_id)
+
+        if product is None:
+            raise NotFoundError("Product not found")
+
+        return product
+
+    async def list_for_product(
+        self,
+        product_id: UUID,
+    ) -> list[ProductImage]:
+        await self._require_product(product_id)
+
+        result = await self.session.scalars(
+            self.images.list_select(product_id)
+        )
+
+        return list(result.all())
+
+    async def add(
+        self,
+        product_id: UUID,
+        data: ProductImageCreate,
+    ) -> ProductImage:
+        product = await self._require_product(product_id)
+
+        if product.status == "ARCHIVED":
+            raise ConflictError(
+                "Cannot add an image to an archived product"
+            )
+
+        if data.is_primary:
+            await self._remove_primary(product_id)
+
+        image = ProductImage(
+            product_id=product_id,
+            url=data.url.strip(),
+            alt_text=(
+                data.alt_text.strip()
+                if data.alt_text
+                else None
+            ),
+            sort_order=data.sort_order,
+            is_primary=data.is_primary,
+        )
+
+        try:
+            self.session.add(image)
+            await self.session.commit()
+            await self.session.refresh(image)
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ConflictError(
+                "Unable to add product image"
+            ) from exc
+
+        logger.info(
+            "catalogue.product_image_created "
+            "id=%s product_id=%s tenant_id=%s",
+            image.id,
+            product_id,
+            self.tenant_id,
+        )
+
+        return image
+
+    async def update(
+        self,
+        image_id: UUID,
+        data: ProductImageUpdate,
+    ) -> ProductImage:
+        image = await self.images.get(image_id)
+
+        if image is None:
+            raise NotFoundError("Product image not found")
+
+        changes = data.model_dump(
+            exclude_unset=True
+        )
+
+        if changes.get("is_primary") is True:
+            await self._remove_primary(
+                image.product_id,
+                exclude_id=image.id,
+            )
+
+        for field, value in changes.items():
+            if field in {"url", "alt_text"} and value is not None:
+                value = value.strip()
+
+            setattr(image, field, value)
+
+        try:
+            await self.session.commit()
+            await self.session.refresh(image)
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ConflictError(
+                "Unable to update product image"
+            ) from exc
+
+        logger.info(
+            "catalogue.product_image_updated "
+            "id=%s tenant_id=%s",
+            image.id,
+            self.tenant_id,
+        )
+
+        return image
+
+    async def delete(
+        self,
+        image_id: UUID,
+    ) -> None:
+        image = await self.images.get(image_id)
+
+        if image is None:
+            raise NotFoundError("Product image not found")
+
+        await self.images.delete(image)
         await self.session.commit()
-        logger.info("catalogue.variant_deleted id=%s tenant_id=%s", variant_id, self.tenant_id)
+
+        logger.info(
+            "catalogue.product_image_deleted "
+            "id=%s tenant_id=%s",
+            image_id,
+            self.tenant_id,
+        )
+
+    async def _remove_primary(
+        self,
+        product_id: UUID,
+        exclude_id: UUID | None = None,
+    ) -> None:
+        images = await self.session.scalars(
+            self.images.list_select(product_id)
+        )
+
+        for image in images:
+            if exclude_id is not None and image.id == exclude_id:
+                continue
+
+            if image.is_primary:
+                image.is_primary = False

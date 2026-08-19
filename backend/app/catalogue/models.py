@@ -65,18 +65,39 @@ class Product(Base, TimestampMixin):
     __tablename__ = "products"
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "slug", name="uq_products_tenant_slug"),
-        UniqueConstraint("tenant_id", "id", name="uq_products_tenant_id_id"),
+        UniqueConstraint(
+            "tenant_id",
+            "slug",
+            name="uq_products_tenant_slug",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "id",
+            name="uq_products_tenant_id_id",
+        ),
         ForeignKeyConstraint(
             ["tenant_id", "category_id"],
             ["categories.tenant_id", "categories.id"],
             name="fk_products_tenant_category_categories",
             ondelete="NO ACTION",
         ),
-        CheckConstraint("slug = lower(slug)", name="slug_is_lowercase"),
-        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
-        CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
-        Index("ix_products_tenant_id_category_id", "tenant_id", "category_id"),
+        CheckConstraint(
+            "slug = lower(slug)",
+            name="slug_is_lowercase",
+        ),
+        CheckConstraint(
+            "length(trim(name)) > 0",
+            name="name_not_blank",
+        ),
+        CheckConstraint(
+            f"status IN ({_STATUS_VALUES})",
+            name="status_valid",
+        ),
+        Index(
+            "ix_products_tenant_id_category_id",
+            "tenant_id",
+            "category_id",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -87,24 +108,63 @@ class Product(Base, TimestampMixin):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
+        ForeignKey(
+            "tenants.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
     )
 
-    category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
 
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
+    name: Mapped[str] = mapped_column(
+        String(MAX_NAME_LENGTH),
+        nullable=False,
+    )
 
-    slug: Mapped[str] = mapped_column(String(MAX_SLUG_LENGTH), nullable=False)
+    slug: Mapped[str] = mapped_column(
+        String(MAX_SLUG_LENGTH),
+        nullable=False,
+    )
+
+    short_description: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
 
     description: Mapped[str | None] = mapped_column(
-        String(MAX_DESCRIPTION_LENGTH), nullable=True
+        String(MAX_DESCRIPTION_LENGTH),
+        nullable=True,
+    )
+
+    brand: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True,
     )
 
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=CatalogueStatus.DRAFT.value,
+    )
+
+    is_featured: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    seo_title: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+
+    seo_description: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
     )
 
 
@@ -153,4 +213,71 @@ class ProductVariant(Base, TimestampMixin):
         String(20),
         nullable=False,
         default=CatalogueStatus.DRAFT.value,
+    )
+
+
+class ProductImage(Base, TimestampMixin):
+    __tablename__ = "product_images"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "product_id"],
+            ["products.tenant_id", "products.id"],
+            name="fk_product_images_tenant_product_products",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_product_images_tenant_id_product_id",
+            "tenant_id",
+            "product_id",
+        ),
+        CheckConstraint(
+            "length(trim(url)) > 0",
+            name="image_url_not_blank",
+        ),
+        CheckConstraint(
+            "sort_order >= 0",
+            name="image_sort_order_valid",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "tenants.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
+    url: Mapped[str] = mapped_column(
+        String(2048),
+        nullable=False,
+    )
+
+    alt_text: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    sort_order: Mapped[int] = mapped_column(
+        nullable=False,
+        default=0,
+    )
+
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
     )
