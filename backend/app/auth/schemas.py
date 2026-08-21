@@ -69,3 +69,12 @@ class UserProfile(BaseModel):
     role: str
     status: str
     is_verified: bool
+
+
+class TenantResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    slug: str
+    is_active: bool

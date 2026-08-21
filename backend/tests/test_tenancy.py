@@ -66,7 +66,7 @@ async def test_a_token_from_one_tenant_cannot_reach_another_tenants_data(
 ):
     created = await client.post(
         "/api/v1/catalogue/categories",
-        json={"name": "Dresses", "slug": "dresses"},
+        json={"name": "Dresses"},
         headers=admin_headers,
     )
     assert created.status_code == 201

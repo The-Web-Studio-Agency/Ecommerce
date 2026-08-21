@@ -7,9 +7,8 @@ from app.api.v1 import api_router
 from app.core.cache import close_redis
 from app.core.config import get_settings
 from app.core.database import dispose_engine
+from app.core.error_handlers import register_exception_handlers
 from app.core.logging import configure_logging
-# from app.core.exceptions import register_exception_handlers
-# from app.core.middleware import register_middleware
 
 settings = get_settings()
 
@@ -41,8 +40,7 @@ def create_app() -> FastAPI:
         expose_headers=["X-Request-Id"],
     )
 
-    # register_middleware(app)
-    # register_exception_handlers(app)
+    register_exception_handlers(app)
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
 

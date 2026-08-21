@@ -10,15 +10,15 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
+    and_,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.catalogue.constants import (
     MAX_DESCRIPTION_LENGTH,
     MAX_NAME_LENGTH,
     MAX_SKU_LENGTH,
-    MAX_SLUG_LENGTH,
     PRICE_PRECISION,
     PRICE_SCALE,
     CatalogueStatus,
@@ -32,9 +32,7 @@ class Category(Base, TimestampMixin):
     __tablename__ = "categories"
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "slug", name="uq_categories_tenant_slug"),
         UniqueConstraint("tenant_id", "id", name="uq_categories_tenant_id_id"),
-        CheckConstraint("slug = lower(slug)", name="slug_is_lowercase"),
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
     )
 
@@ -52,8 +50,6 @@ class Category(Base, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
 
-    slug: Mapped[str] = mapped_column(String(MAX_SLUG_LENGTH), nullable=False)
-
     description: Mapped[str | None] = mapped_column(
         String(MAX_DESCRIPTION_LENGTH), nullable=True
     )
@@ -67,11 +63,6 @@ class Product(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint(
             "tenant_id",
-            "slug",
-            name="uq_products_tenant_slug",
-        ),
-        UniqueConstraint(
-            "tenant_id",
             "id",
             name="uq_products_tenant_id_id",
         ),
@@ -80,10 +71,6 @@ class Product(Base, TimestampMixin):
             ["categories.tenant_id", "categories.id"],
             name="fk_products_tenant_category_categories",
             ondelete="NO ACTION",
-        ),
-        CheckConstraint(
-            "slug = lower(slug)",
-            name="slug_is_lowercase",
         ),
         CheckConstraint(
             "length(trim(name)) > 0",
@@ -125,11 +112,6 @@ class Product(Base, TimestampMixin):
         nullable=False,
     )
 
-    slug: Mapped[str] = mapped_column(
-        String(MAX_SLUG_LENGTH),
-        nullable=False,
-    )
-
     short_description: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
@@ -165,6 +147,20 @@ class Product(Base, TimestampMixin):
     seo_description: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
+    )
+
+    # Composite (tenant_id, product_id) foreign key plus a second tenant_id
+    # path to tenants, so the join has to be spelled out explicitly.
+    images: Mapped[list["ProductImage"]] = relationship(
+        "ProductImage",
+        primaryjoin=lambda: and_(
+            Product.id == ProductImage.product_id,
+            Product.tenant_id == ProductImage.tenant_id,
+        ),
+        foreign_keys=lambda: [ProductImage.product_id, ProductImage.tenant_id],
+        order_by=lambda: (ProductImage.sort_order, ProductImage.created_at),
+        lazy="selectin",
+        viewonly=True,
     )
 
 

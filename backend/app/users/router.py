@@ -1,107 +1,188 @@
 from __future__ import annotations
 
-from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.constants import UserRole
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.exceptions import NotFoundError, PermissionDeniedError
+from app.core.logging import get_logger
 from app.core.responses import ApiResponse, ok
-from app.tenants.resolver import resolve_tenant_optional
 from app.tenants.models import Tenant
 from app.tenants.repository import TenantRepository
+from app.tenants.resolver import CurrentTenantOptional
 from app.users.schemas import UserCreate, UserRead
 from app.users.service import UserService
 
+logger = get_logger("users")
+
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+def require_dev_environment() -> None:
+    """
+    Refuse to serve these routes outside development.
+
+    They create privileged accounts with no authentication, which is only
+    acceptable as local scaffolding. The guard is a dependency rather than an
+    `if` inside each handler so it cannot be forgotten on a new route.
+    """
+    settings = get_settings()
+    if settings.is_production:
+        raise PermissionDeniedError(
+            "User provisioning endpoints are disabled outside development",
+            error_code="DEV_ONLY_ENDPOINT",
+        )
+
+
+async def _resolve_target_tenant(
+    tenant: Tenant | None,
+    tenant_id: UUID | None,
+    session: AsyncSession,
+) -> Tenant:
+    """
+    Pick the tenant to provision into.
+
+    Preference order: the tenant the request domain resolved to, an explicitly
+    supplied tenant id, then the only active tenant if there is exactly one.
+    Guessing between several tenants would silently provision into the wrong
+    storefront, so that case is an error rather than a coin flip.
+    """
+    if tenant is not None:
+        return tenant
+
+    if tenant_id is not None:
+        found = await TenantRepository(session).get_active_by_id(tenant_id)
+        if found is None:
+            raise NotFoundError("Tenant not found", error_code="UNKNOWN_TENANT")
+        return found
+
+    candidates = (
+        await session.scalars(
+            select(Tenant).where(Tenant.is_active.is_(True)).order_by(Tenant.name).limit(2)
+        )
+    ).all()
+
+    if not candidates:
+        raise NotFoundError("No active tenant exists", error_code="UNKNOWN_TENANT")
+    if len(candidates) > 1:
+        raise NotFoundError(
+            "Several active tenants exist -- pass ?tenant_id= to choose one",
+            error_code="AMBIGUOUS_TENANT",
+        )
+
+    return candidates[0]
+
+
+async def _provision(
+    *,
+    role: UserRole,
+    data: UserCreate,
+    tenant: Tenant | None,
+    tenant_id: UUID | None,
+    session: AsyncSession,
+    response: Response,
+) -> ApiResponse[UserRead]:
+    target = await _resolve_target_tenant(tenant, tenant_id, session)
+
+    user, created = await UserService(session).create(
+        role=role,
+        tenant_id=target.id,
+        email=data.email,
+        phone=data.phone,
+        name=data.name,
+        password=data.password,
+    )
+
+    response.status_code = (
+        status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    )
+
+    if created:
+        logger.info(
+            "users.provisioned role=%s user_id=%s tenant_id=%s",
+            role.value,
+            user.id,
+            target.id,
+        )
+
+    return ok(
+        UserRead.model_validate(user),
+        message=f"{role.value.title()} {'created' if created else 'already exists'}",
+    )
 
 
 @router.post(
     "/admin",
     response_model=ApiResponse[UserRead],
     status_code=status.HTTP_201_CREATED,
-    summary="Create an admin user",
+    dependencies=[Depends(require_dev_environment)],
+    summary="Create an admin user (development only)",
 )
 async def create_admin(
     data: UserCreate,
-    tenant: Tenant | None = Depends(resolve_tenant_optional),
-    tenant_id: str | None = Query(None, description="Tenant id for local testing"),
+    response: Response,
+    tenant: CurrentTenantOptional = None,
+    tenant_id: UUID | None = Query(None, description="Target tenant id"),
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserRead]:
-    # Allow optional tenant_id for local testing (localhost). If tenant resolver
-    # did not produce a tenant, fall back to provided tenant_id or the first
-    # active tenant in the DB.
-    if tenant is None:
-        repo = TenantRepository(session)
-        if tenant_id:
-            tenant = await repo.get_active_by_id(tenant_id)
-        else:
-            # Pick the first active tenant available.
-            # This is safe for local development only.
-            from app.tenants.models import Tenant
-            from sqlalchemy import select
-
-            tenant = await session.scalar(select(Tenant).where(Tenant.is_active.is_(True)))
-
-    svc = UserService(session)
-    user_obj, created = await svc.create_admin(
-        tenant_id=tenant.id,
-        email=data.email,
-        phone=data.phone,
-        name=data.name,
-        password=data.password,
+    return await _provision(
+        role=UserRole.ADMIN,
+        data=data,
+        tenant=tenant,
+        tenant_id=tenant_id,
+        session=session,
+        response=response,
     )
-    user_data = {
-        "id": user_obj.id,
-        "tenant_id": user_obj.tenant_id,
-        "email": user_obj.email,
-        "phone": user_obj.phone,
-        "name": user_obj.name,
-        "role": user_obj.role,
-        "status": user_obj.status,
-        "is_verified": user_obj.is_verified,
-    }
-    return ok(UserRead.model_validate(user_data), message=("Admin created" if created else "Admin exists"))
 
 
 @router.post(
     "/staff",
     response_model=ApiResponse[UserRead],
     status_code=status.HTTP_201_CREATED,
-    summary="Create a staff user",
+    dependencies=[Depends(require_dev_environment)],
+    summary="Create a staff user (development only)",
 )
 async def create_staff(
     data: UserCreate,
-    tenant: Tenant | None = Depends(resolve_tenant_optional),
-    tenant_id: str | None = Query(None, description="Tenant id for local testing"),
+    response: Response,
+    tenant: CurrentTenantOptional = None,
+    tenant_id: UUID | None = Query(None, description="Target tenant id"),
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserRead]:
-    if tenant is None:
-        repo = TenantRepository(session)
-        if tenant_id:
-            tenant = await repo.get_active_by_id(tenant_id)
-        else:
-            from app.tenants.models import Tenant
-            from sqlalchemy import select
-
-            tenant = await session.scalar(select(Tenant).where(Tenant.is_active.is_(True)))
-
-    svc = UserService(session)
-    user_obj, created = await svc.create_staff(
-        tenant_id=tenant.id,
-        email=data.email,
-        phone=data.phone,
-        name=data.name,
-        password=data.password,
+    return await _provision(
+        role=UserRole.STAFF,
+        data=data,
+        tenant=tenant,
+        tenant_id=tenant_id,
+        session=session,
+        response=response,
     )
-    user_data = {
-        "id": user_obj.id,
-        "tenant_id": user_obj.tenant_id,
-        "email": user_obj.email,
-        "phone": user_obj.phone,
-        "name": user_obj.name,
-        "role": user_obj.role,
-        "status": user_obj.status,
-        "is_verified": user_obj.is_verified,
-    }
-    return ok(UserRead.model_validate(user_data), message=("Staff created" if created else "Staff exists"))
+
+
+@router.post(
+    "/customer",
+    response_model=ApiResponse[UserRead],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_dev_environment)],
+    summary="Create a customer user (development only)",
+)
+async def create_customer(
+    data: UserCreate,
+    response: Response,
+    tenant: CurrentTenantOptional = None,
+    tenant_id: UUID | None = Query(None, description="Target tenant id"),
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[UserRead]:
+    return await _provision(
+        role=UserRole.CUSTOMER,
+        data=data,
+        tenant=tenant,
+        tenant_id=tenant_id,
+        session=session,
+        response=response,
+    )

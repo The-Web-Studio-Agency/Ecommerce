@@ -7,6 +7,7 @@ from app.auth.security import create_access_token
 from tests.conftest import headers_for
 from tests.test_catalogue import (
     CATEGORIES,
+    IMAGE,
     PRODUCTS,
     VARIANTS,
     make_category,
@@ -97,14 +98,14 @@ async def test_a_tenant_cannot_read_update_or_delete_another_tenants_variant(
 async def test_a_list_only_ever_shows_the_callers_own_tenant(
     client, other_client, admin_headers, other_admin_headers
 ):
-    await make_category(client, admin_headers, name="Mine", slug="mine")
-    await make_category(other_client, other_admin_headers, name="Theirs", slug="theirs")
+    await make_category(client, admin_headers, name="Mine")
+    await make_category(other_client, other_admin_headers, name="Theirs")
 
     response = await client.get(CATEGORIES, headers=admin_headers)
 
     body = response.json()
     assert body["meta"]["total_items"] == 1
-    assert [c["slug"] for c in body["data"]] == ["mine"]
+    assert [c["name"] for c in body["data"]] == ["Mine"]
 
 
 async def test_a_product_cannot_be_created_in_another_tenants_category(
@@ -114,7 +115,7 @@ async def test_a_product_cannot_be_created_in_another_tenants_category(
 
     response = await other_client.post(
         PRODUCTS,
-        json={"category_id": category["id"], "name": "Smuggled", "slug": "smuggled"},
+        json={"category_id": category["id"], "name": "Smuggled", "images": [IMAGE]},
         headers=other_admin_headers,
     )
 
@@ -181,13 +182,13 @@ async def test_filtering_by_another_tenants_category_is_a_404(
     assert response.status_code == 404
 
 
-async def test_the_same_slug_may_exist_in_two_tenants(
+async def test_the_same_category_name_may_exist_in_two_tenants(
     client, other_client, admin_headers, other_admin_headers
 ):
     await make_category(client, admin_headers)
 
     response = await other_client.post(
-        CATEGORIES, json={"name": "Dresses", "slug": "dresses"}, headers=other_admin_headers
+        CATEGORIES, json={"name": "Dresses"}, headers=other_admin_headers
     )
 
     assert response.status_code == 201
@@ -201,10 +202,10 @@ async def test_the_same_sku_may_exist_in_two_tenants(
     await make_variant(client, admin_headers, own_product["id"], sku="SHARED-1")
 
     their = await make_category(
-        other_client, other_admin_headers, name="Theirs", slug="theirs"
+        other_client, other_admin_headers, name="Theirs"
     )
     their_product = await make_product(
-        other_client, other_admin_headers, their["id"], name="Theirs", slug="theirs-product"
+        other_client, other_admin_headers, their["id"], name="Theirs"
     )
 
     response = await other_client.post(
@@ -238,7 +239,7 @@ async def test_a_forged_tenant_claim_does_not_change_scope(
 async def test_tenant_id_in_the_body_is_ignored(client, admin_headers, other_tenant):
     response = await client.post(
         CATEGORIES,
-        json={"name": "Dresses", "slug": "dresses", "tenant_id": str(other_tenant.id)},
+        json={"name": "Dresses", "tenant_id": str(other_tenant.id)},
         headers=admin_headers,
     )
 
@@ -249,10 +250,10 @@ async def test_tenant_id_in_the_body_is_ignored(client, admin_headers, other_ten
 @pytest.fixture
 def write_payloads(unknown_id) -> list[tuple[str, str, dict | None]]:
     return [
-        ("post", CATEGORIES, {"name": "X", "slug": "x"}),
+        ("post", CATEGORIES, {"name": "X"}),
         ("patch", f"{CATEGORIES}/{unknown_id}", {"name": "X"}),
         ("delete", f"{CATEGORIES}/{unknown_id}", None),
-        ("post", PRODUCTS, {"category_id": unknown_id, "name": "X", "slug": "x"}),
+        ("post", PRODUCTS, {"category_id": unknown_id, "name": "X", "images": [IMAGE]}),
         ("patch", f"{PRODUCTS}/{unknown_id}", {"name": "X"}),
         ("delete", f"{PRODUCTS}/{unknown_id}", None),
         ("post", f"{PRODUCTS}/{unknown_id}/variants", {"sku": "X1", "name": "X", "price": "1.00"}),
@@ -295,7 +296,7 @@ async def test_a_forged_role_claim_grants_nothing(client, tenant, make_user):
 
     response = await client.post(
         CATEGORIES,
-        json={"name": "Escalated", "slug": "escalated"},
+        json={"name": "Escalated"},
         headers={"Authorization": f"Bearer {forged}"},
     )
 
@@ -316,5 +317,5 @@ async def test_a_deactivated_admin_loses_catalogue_access(client, session, tenan
 async def test_an_anonymous_caller_is_rejected(client, tenant):
     assert (await client.get(CATEGORIES)).status_code == 401
     assert (
-        await client.post(CATEGORIES, json={"name": "X", "slug": "x"})
+        await client.post(CATEGORIES, json={"name": "X"})
     ).status_code == 401

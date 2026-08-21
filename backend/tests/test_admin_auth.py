@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
 import pytest_asyncio
-from sqlalchemy import select
 
-from app.auth.constants import OTP_MAX_ATTEMPTS, OtpPurpose, UserRole, UserStatus
-from app.auth.models import AdminAuthChallenge, OtpRequest
+from app.auth.constants import UserRole
 from tests.conftest import admin_login, sign_in_admin, sign_in_staff
 
 VERIFY = "/api/v1/staff/auth/verify-otp"
@@ -131,7 +126,7 @@ async def test_an_admin_token_reaches_admin_endpoints(client, admin):
 
     response = await client.post(
         "/api/v1/catalogue/categories",
-        json={"name": "Dresses", "slug": "dresses"},
+        json={"name": "Dresses"},
         headers=headers,
     )
 

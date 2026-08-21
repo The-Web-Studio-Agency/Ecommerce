@@ -11,16 +11,21 @@ from app.catalogue.schemas import (
     CategoryRead,
     CategoryUpdate,
     ProductCreate,
+    ProductImageCreate,
+    ProductImageRead,
+    ProductImageUpdate,
     ProductRead,
     ProductUpdate,
     VariantCreate,
     VariantRead,
     VariantUpdate,
-    ProductImageCreate,
-    ProductImageRead,
-    ProductImageUpdate,
 )
-from app.catalogue.service import CategoryService, ProductService, VariantService ,ProductImageService
+from app.catalogue.service import (
+    CategoryService,
+    ProductImageService,
+    ProductService,
+    VariantService,
+)
 from app.core.database import get_db
 from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated

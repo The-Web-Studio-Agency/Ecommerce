@@ -7,8 +7,11 @@ PRODUCTS = "/api/v1/catalogue/products"
 VARIANTS = "/api/v1/catalogue/variants"
 
 
+IMAGE = {"url": "https://cdn.example.com/dress.jpg", "alt_text": "Front view"}
+
+
 async def make_category(client, headers, **overrides) -> dict:
-    payload = {"name": "Dresses", "slug": "dresses", "description": "Womenswear"}
+    payload = {"name": "Dresses", "description": "Womenswear"}
     payload.update(overrides)
     response = await client.post(CATEGORIES, json=payload, headers=headers)
     assert response.status_code == 201, response.text
@@ -16,7 +19,7 @@ async def make_category(client, headers, **overrides) -> dict:
 
 
 async def make_product(client, headers, category_id, **overrides) -> dict:
-    payload = {"category_id": category_id, "name": "Summer Dress", "slug": "summer-dress"}
+    payload = {"category_id": category_id, "name": "Summer Dress", "images": [IMAGE]}
     payload.update(overrides)
     response = await client.post(PRODUCTS, json=payload, headers=headers)
     assert response.status_code == 201, response.text
@@ -37,32 +40,11 @@ async def test_create_and_retrieve_a_category(client, admin_headers):
     created = await make_category(client, admin_headers)
 
     assert created["name"] == "Dresses"
-    assert created["slug"] == "dresses"
     assert created["is_active"] is True
 
     response = await client.get(f"{CATEGORIES}/{created['id']}", headers=admin_headers)
     assert response.status_code == 200
     assert response.json()["data"]["id"] == created["id"]
-
-
-@pytest.mark.parametrize("slug", [" dresses ", "Dresses", "summer dress"])
-async def test_a_slug_is_not_silently_rewritten(client, admin_headers, slug):
-    response = await client.post(
-        CATEGORIES, json={"name": "Dresses", "slug": slug}, headers=admin_headers
-    )
-
-    assert response.status_code == 422
-
-
-async def test_duplicate_category_slug_is_rejected(client, admin_headers):
-    await make_category(client, admin_headers)
-
-    response = await client.post(
-        CATEGORIES, json={"name": "Other", "slug": "dresses"}, headers=admin_headers
-    )
-
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "CONFLICT"
 
 
 async def test_update_a_category(client, admin_headers):
@@ -78,30 +60,6 @@ async def test_update_a_category(client, admin_headers):
     body = response.json()["data"]
     assert body["name"] == "Evening Dresses"
     assert body["is_active"] is False
-    assert body["slug"] == "dresses"
-
-
-async def test_update_cannot_take_another_categorys_slug(client, admin_headers):
-    first = await make_category(client, admin_headers)
-    second = await make_category(client, admin_headers, name="Skirts", slug="skirts")
-
-    response = await client.patch(
-        f"{CATEGORIES}/{second['id']}", json={"slug": first["slug"]}, headers=admin_headers
-    )
-
-    assert response.status_code == 409
-
-
-async def test_a_category_keeps_its_own_slug_on_update(client, admin_headers):
-    created = await make_category(client, admin_headers)
-
-    response = await client.patch(
-        f"{CATEGORIES}/{created['id']}",
-        json={"slug": created["slug"], "name": "Renamed"},
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
 
 
 async def test_delete_a_category(client, admin_headers):
@@ -125,7 +83,7 @@ async def test_a_category_with_products_cannot_be_deleted(client, admin_headers)
     assert "products" in response.json()["message"].lower()
 
 
-@pytest.mark.parametrize("payload", [{"name": ""}, {"name": "   "}, {"slug": "Bad Slug"}])
+@pytest.mark.parametrize("payload", [{"name": ""}, {"name": "   "}])
 async def test_invalid_category_updates_are_rejected(client, admin_headers, payload):
     created = await make_category(client, admin_headers)
 
@@ -159,13 +117,10 @@ async def test_unknown_category_is_a_404(client, admin_headers):
 @pytest.mark.parametrize(
     "payload",
     [
-        {"name": "", "slug": "ok"},
-        {"name": "   ", "slug": "ok"},
-        {"name": "Fine", "slug": "Not A Slug"},
-        {"name": "Fine", "slug": "-leading"},
-        {"name": "Fine", "slug": "double--hyphen"},
-        {"name": "Fine"},
-        {"slug": "fine"},
+        {"name": ""},
+        {"name": "   "},
+        {"name": "x" * 200},
+        {},
     ],
 )
 async def test_invalid_category_payloads_are_rejected(client, admin_headers, payload):
@@ -193,7 +148,7 @@ async def test_a_product_needs_an_existing_category(client, admin_headers):
         json={
             "category_id": "00000000-0000-0000-0000-000000000000",
             "name": "Orphan",
-            "slug": "orphan",
+            "images": [IMAGE],
         },
         headers=admin_headers,
     )
@@ -202,22 +157,9 @@ async def test_a_product_needs_an_existing_category(client, admin_headers):
     assert response.json()["message"] == "Category not found"
 
 
-async def test_duplicate_product_slug_is_rejected(client, admin_headers):
-    category = await make_category(client, admin_headers)
-    await make_product(client, admin_headers, category["id"])
-
-    response = await client.post(
-        PRODUCTS,
-        json={"category_id": category["id"], "name": "Another", "slug": "summer-dress"},
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 409
-
-
 async def test_update_a_product_status_and_category(client, admin_headers):
     category = await make_category(client, admin_headers)
-    other = await make_category(client, admin_headers, name="Skirts", slug="skirts")
+    other = await make_category(client, admin_headers, name="Skirts")
     product = await make_product(client, admin_headers, category["id"])
 
     response = await client.patch(
@@ -253,7 +195,7 @@ async def test_an_invalid_status_is_rejected(client, admin_headers):
         json={
             "category_id": category["id"],
             "name": "Bad",
-            "slug": "bad",
+            "images": [IMAGE],
             "status": "ON_FIRE",
         },
         headers=admin_headers,
@@ -264,9 +206,9 @@ async def test_an_invalid_status_is_rejected(client, admin_headers):
 
 async def test_products_can_be_filtered_by_category(client, admin_headers):
     first = await make_category(client, admin_headers)
-    second = await make_category(client, admin_headers, name="Skirts", slug="skirts")
+    second = await make_category(client, admin_headers, name="Skirts")
     await make_product(client, admin_headers, first["id"])
-    await make_product(client, admin_headers, second["id"], name="Midi", slug="midi-skirt")
+    await make_product(client, admin_headers, second["id"], name="Midi")
 
     response = await client.get(
         PRODUCTS, params={"category_id": second["id"]}, headers=admin_headers
@@ -275,20 +217,91 @@ async def test_products_can_be_filtered_by_category(client, admin_headers):
     assert response.status_code == 200
     body = response.json()
     assert body["meta"]["total_items"] == 1
-    assert body["data"][0]["slug"] == "midi-skirt"
+    assert body["data"][0]["name"] == "Midi"
 
 
-async def test_deleting_a_product_removes_its_variants(client, admin_headers):
+async def test_deleting_a_product_archives_it_and_its_variants(client, admin_headers):
+    """
+    Products and variants are archived rather than dropped, so order history
+    keeps resolving. Staff still see the rows; the storefront must not.
+    """
     category = await make_category(client, admin_headers)
-    product = await make_product(client, admin_headers, category["id"])
-    variant = await make_variant(client, admin_headers, product["id"])
+    product = await make_product(
+        client, admin_headers, category["id"], status="ACTIVE"
+    )
+    variant = await make_variant(
+        client, admin_headers, product["id"], status="ACTIVE"
+    )
 
     assert (
         await client.delete(f"{PRODUCTS}/{product['id']}", headers=admin_headers)
     ).status_code == 204
-    assert (
-        await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
-    ).status_code == 404
+
+    still_there = await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
+    assert still_there.status_code == 200
+    assert still_there.json()["data"]["status"] == "ARCHIVED"
+
+    hidden = await client.get(f"/api/v1/storefront/variants/{variant['id']}")
+    assert hidden.status_code == 404
+
+
+async def test_a_product_cannot_be_created_without_an_image(client, admin_headers):
+    category = await make_category(client, admin_headers)
+
+    missing = await client.post(
+        PRODUCTS,
+        json={"category_id": category["id"], "name": "No Artwork"},
+        headers=admin_headers,
+    )
+    assert missing.status_code == 422
+    assert missing.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    empty = await client.post(
+        PRODUCTS,
+        json={"category_id": category["id"], "name": "No Artwork", "images": []},
+        headers=admin_headers,
+    )
+    assert empty.status_code == 422
+
+
+async def test_product_images_are_stored_with_the_product(client, admin_headers):
+    category = await make_category(client, admin_headers)
+
+    created = await make_product(
+        client,
+        admin_headers,
+        category["id"],
+        images=[
+            {"url": "https://cdn.example.com/a.jpg", "sort_order": 0},
+            {"url": "https://cdn.example.com/b.jpg", "sort_order": 1},
+        ],
+    )
+
+    assert [image["url"] for image in created["images"]] == [
+        "https://cdn.example.com/a.jpg",
+        "https://cdn.example.com/b.jpg",
+    ]
+    # Nobody nominated a primary, so the first image becomes one.
+    assert [image["is_primary"] for image in created["images"]] == [True, False]
+
+
+async def test_only_one_image_may_be_marked_primary(client, admin_headers):
+    category = await make_category(client, admin_headers)
+
+    response = await client.post(
+        PRODUCTS,
+        json={
+            "category_id": category["id"],
+            "name": "Two Primaries",
+            "images": [
+                {"url": "https://cdn.example.com/a.jpg", "is_primary": True},
+                {"url": "https://cdn.example.com/b.jpg", "is_primary": True},
+            ],
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
 
 
 async def test_create_and_retrieve_a_variant(client, admin_headers):
@@ -331,7 +344,7 @@ async def test_sku_uniqueness_ignores_case(client, admin_headers):
 async def test_a_sku_is_unique_across_the_whole_tenant(client, admin_headers):
     category = await make_category(client, admin_headers)
     first = await make_product(client, admin_headers, category["id"])
-    second = await make_product(client, admin_headers, category["id"], slug="other", name="Other")
+    second = await make_product(client, admin_headers, category["id"], name="Other")
     await make_variant(client, admin_headers, first["id"])
 
     response = await client.post(
@@ -408,22 +421,30 @@ async def test_update_a_variant(client, admin_headers):
     assert body["sku"] == "DRESS-S-BLK"
 
 
-async def test_delete_a_variant(client, admin_headers):
+async def test_delete_a_variant_archives_it(client, admin_headers):
+    """Variants are archived, not dropped -- carts and orders reference them."""
     category = await make_category(client, admin_headers)
     product = await make_product(client, admin_headers, category["id"])
-    variant = await make_variant(client, admin_headers, product["id"])
+    variant = await make_variant(
+        client, admin_headers, product["id"], status="ACTIVE"
+    )
 
     assert (
         await client.delete(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
     ).status_code == 204
+
+    archived = await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
+    assert archived.status_code == 200
+    assert archived.json()["data"]["status"] == "ARCHIVED"
+
     assert (
-        await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
+        await client.get(f"/api/v1/storefront/variants/{variant['id']}")
     ).status_code == 404
 
 
 async def test_categories_are_paginated(client, admin_headers):
     for index in range(3):
-        await make_category(client, admin_headers, name=f"C{index}", slug=f"c{index}")
+        await make_category(client, admin_headers, name=f"C{index}")
 
     response = await client.get(
         CATEGORIES, params={"page": 2, "page_size": 2}, headers=admin_headers
@@ -443,7 +464,7 @@ async def test_categories_are_paginated(client, admin_headers):
 async def test_products_are_paginated(client, admin_headers):
     category = await make_category(client, admin_headers)
     for index in range(3):
-        await make_product(client, admin_headers, category["id"], name=f"P{index}", slug=f"p{index}")
+        await make_product(client, admin_headers, category["id"], name=f"P{index}")
 
     response = await client.get(
         PRODUCTS, params={"page": 1, "page_size": 2}, headers=admin_headers
@@ -477,9 +498,9 @@ async def test_the_page_size_ceiling_is_enforced(client, admin_headers):
 
 async def test_a_filtered_total_reflects_the_filter(client, admin_headers):
     first = await make_category(client, admin_headers)
-    second = await make_category(client, admin_headers, name="Skirts", slug="skirts")
+    second = await make_category(client, admin_headers, name="Skirts")
     await make_product(client, admin_headers, first["id"])
-    await make_product(client, admin_headers, second["id"], name="Midi", slug="midi")
+    await make_product(client, admin_headers, second["id"], name="Midi")
 
     response = await client.get(
         PRODUCTS, params={"category_id": first["id"]}, headers=admin_headers

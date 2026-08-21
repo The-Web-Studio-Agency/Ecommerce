@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import Select
+from sqlalchemy import Select, and_
 
+from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import (
     Category,
     Product,
@@ -11,7 +12,6 @@ from app.catalogue.models import (
     ProductVariant,
 )
 from app.core.repository import TenantScopedRepository
-
 
 
 class CategoryRepository(TenantScopedRepository[Category]):
@@ -28,9 +28,6 @@ class CategoryRepository(TenantScopedRepository[Category]):
             stmt = stmt.where(Category.is_active.is_(True))
 
         return stmt.order_by(Category.name)
-
-    async def get_by_slug(self, slug: str) -> Category | None:
-        return await self.find_one(Category.slug == slug)
 
 
 class ProductRepository(TenantScopedRepository[Product]):
@@ -50,14 +47,20 @@ class ProductRepository(TenantScopedRepository[Product]):
             )
 
         if active_only:
-            stmt = stmt.where(
-                Product.status == "ACTIVE"
+            # A product is only public when its category is public too,
+            # otherwise deactivating a category leaves its products listed.
+            stmt = stmt.join(
+                Category,
+                and_(
+                    Category.id == Product.category_id,
+                    Category.tenant_id == Product.tenant_id,
+                ),
+            ).where(
+                Product.status == CatalogueStatus.ACTIVE.value,
+                Category.is_active.is_(True),
             )
 
         return stmt.order_by(Product.name)
-
-    async def get_by_slug(self, slug: str) -> Product | None:
-        return await self.find_one(Product.slug == slug)
 
     async def exists_in_category(
         self,
@@ -85,7 +88,7 @@ class VariantRepository(TenantScopedRepository[ProductVariant]):
 
         if active_only:
             stmt = stmt.where(
-                ProductVariant.status == "ACTIVE"
+                ProductVariant.status == CatalogueStatus.ACTIVE.value
             )
 
         return stmt.order_by(ProductVariant.sku)

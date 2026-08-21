@@ -28,6 +28,9 @@ dev:
 
 test:
 	$(REQUIRE_VENV)
+	# Model/migration drift is invisible to the suite, which builds its schema
+	# with create_all -- so it is checked here rather than only in `make check`.
+	cd $(BACKEND) && $(VENV_BIN)/alembic check
 	cd $(BACKEND) && $(VENV_BIN)/pytest
 
 lint:

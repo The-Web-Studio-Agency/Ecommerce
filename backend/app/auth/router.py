@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser
@@ -11,6 +12,7 @@ from app.auth.schemas import (
     PasswordLoginPayload,
     RefreshPayload,
     StaffOtpVerifyPayload,
+    TenantResponse,
     TokenPair,
     UserProfile,
 )
@@ -247,3 +249,21 @@ async def logout(
 )
 async def get_me(current_user: CurrentUser) -> ApiResponse[UserProfile]:
     return ok(UserProfile.model_validate(current_user), message="Authenticated user")
+
+
+@router.get(
+    "/tenants",
+    response_model=ApiResponse[list[TenantResponse]],
+    summary="List all active tenants",
+)
+async def list_tenants(
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[list[TenantResponse]]:
+    result = await session.execute(
+        select(Tenant).where(Tenant.is_active.is_(True)).order_by(Tenant.name)
+    )
+    tenants = result.scalars().all()
+    return ok(
+        [TenantResponse.model_validate(t) for t in tenants],
+        message="List of active tenants",
+    )

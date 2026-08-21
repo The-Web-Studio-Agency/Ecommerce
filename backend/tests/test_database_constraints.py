@@ -315,16 +315,15 @@ async def test_deleting_a_tenant_cascades_to_its_domains(session, tenant):
     assert (await session.execute(select(TenantDomain))).scalars().all() == []
 
 
-def _category(tenant_id, slug: str = "dresses", name: str = "Dresses") -> Category:
-    return Category(tenant_id=tenant_id, name=name, slug=slug, is_active=True)
+def _category(tenant_id, name: str = "Dresses") -> Category:
+    return Category(tenant_id=tenant_id, name=name, is_active=True)
 
 
-def _product(tenant_id, category_id, slug: str = "dress", name: str = "Dress") -> Product:
+def _product(tenant_id, category_id, name: str = "Dress") -> Product:
     return Product(
         tenant_id=tenant_id,
         category_id=category_id,
         name=name,
-        slug=slug,
         status=CatalogueStatus.DRAFT.value,
     )
 
@@ -371,25 +370,6 @@ async def test_a_variant_cannot_reference_another_tenants_product(
     await session.rollback()
 
 
-async def test_a_category_slug_is_unique_within_a_tenant(session, tenant):
-    session.add(_category(tenant.id))
-    await session.commit()
-
-    session.add(_category(tenant.id))
-
-    with pytest.raises(IntegrityError):
-        await session.commit()
-    await session.rollback()
-
-
-async def test_the_same_category_slug_is_allowed_across_tenants(
-    session, tenant, other_tenant
-):
-    session.add_all([_category(tenant.id), _category(other_tenant.id)])
-
-    await session.commit()
-
-
 async def test_a_sku_is_unique_within_a_tenant(session, tenant):
     category = _category(tenant.id)
     session.add(category)
@@ -410,8 +390,8 @@ async def test_a_sku_is_unique_within_a_tenant(session, tenant):
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("slug", "Dresses"),
         ("name", "   "),
+        ("name", ""),
     ],
 )
 async def test_category_check_constraints_reject_bad_values(session, tenant, field, value):

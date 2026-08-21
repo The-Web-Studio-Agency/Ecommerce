@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalogue.models import Category, Product, ProductVariant
+from app.catalogue.constants import CatalogueStatus
+from app.catalogue.models import Category, Product, ProductImage, ProductVariant
 from app.catalogue.repository import (
     CategoryRepository,
+    ProductImageRepository,
     ProductRepository,
     VariantRepository,
 )
@@ -15,6 +18,8 @@ from app.catalogue.schemas import (
     CategoryCreate,
     CategoryUpdate,
     ProductCreate,
+    ProductImageCreate,
+    ProductImageUpdate,
     ProductUpdate,
     VariantCreate,
     VariantUpdate,
@@ -24,10 +29,6 @@ from app.core.logging import get_logger
 from app.core.pagination import PageParams
 
 logger = get_logger("catalogue")
-
-
-def _normalise_slug(slug: str) -> str:
-    return slug.strip().lower()
 
 
 def _normalise_sku(sku: str) -> str:
@@ -43,16 +44,8 @@ class CategoryService:
         self.products = ProductRepository(session, tenant_id)
 
     async def create(self, data: CategoryCreate) -> Category:
-        slug = _normalise_slug(data.slug)
-
-        if await self.categories.get_by_slug(slug) is not None:
-            raise ConflictError(
-                "A category with this slug already exists"
-            )
-
         category = Category(
             name=data.name,
-            slug=slug,
             description=data.description,
             is_active=data.is_active,
         )
@@ -62,9 +55,7 @@ class CategoryService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError(
-                "A category with this slug already exists"
-            ) from exc
+            raise ConflictError("Unable to create category") from exc
 
         logger.info(
             "catalogue.category_created id=%s tenant_id=%s",
@@ -113,18 +104,6 @@ class CategoryService:
 
         changes = data.model_dump(exclude_unset=True)
 
-        if "slug" in changes and changes["slug"] is not None:
-            slug = _normalise_slug(changes["slug"])
-
-            existing = await self.categories.get_by_slug(slug)
-
-            if existing is not None and existing.id != category.id:
-                raise ConflictError(
-                    "A category with this slug already exists"
-                )
-
-            changes["slug"] = slug
-
         for field, value in changes.items():
             setattr(category, field, value)
 
@@ -132,9 +111,7 @@ class CategoryService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError(
-                "A category with this slug already exists"
-            ) from exc
+            raise ConflictError("Unable to update category") from exc
 
         logger.info(
             "catalogue.category_updated id=%s tenant_id=%s",
@@ -169,6 +146,7 @@ class ProductService:
 
         self.products = ProductRepository(session, tenant_id)
         self.categories = CategoryRepository(session, tenant_id)
+        self.images = ProductImageRepository(session, tenant_id)
 
     async def _require_category(self, category_id: UUID) -> Category:
         category = await self.categories.get(category_id)
@@ -179,49 +157,83 @@ class ProductService:
         return category
 
     async def create(self, data: ProductCreate) -> Product:
+        """
+        Create a product together with its images in one transaction.
+
+        A product is not publishable without artwork, so the schema requires at
+        least one image and both rows are written atomically -- a product never
+        exists in an image-less state.
+        """
         await self._require_category(data.category_id)
 
-        slug = _normalise_slug(data.slug)
-
-        if await self.products.get_by_slug(slug) is not None:
-            raise ConflictError(
-                "A product with this slug already exists"
-            )
-
         product = Product(
-        category_id=data.category_id,
-        name=data.name,
-        slug=slug,
-        short_description=data.short_description,
-        description=data.description,
-        brand=data.brand,
-        status=data.status.value,
-        is_featured=data.is_featured,
-        seo_title=data.seo_title,
-        seo_description=data.seo_description,
-    )
+            category_id=data.category_id,
+            name=data.name,
+            short_description=data.short_description,
+            description=data.description,
+            brand=data.brand,
+            status=data.status.value,
+            is_featured=data.is_featured,
+            seo_title=data.seo_title,
+            seo_description=data.seo_description,
+        )
 
         try:
             await self.products.add(product)
+
+            # If the caller nominated no primary, the first image becomes one.
+            has_primary = any(image.is_primary for image in data.images)
+
+            for position, image in enumerate(data.images):
+                await self.images.add(
+                    ProductImage(
+                        product_id=product.id,
+                        url=image.url,
+                        alt_text=image.alt_text,
+                        sort_order=image.sort_order,
+                        is_primary=image.is_primary
+                        or (not has_primary and position == 0),
+                    )
+                )
+
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError(
-                "A product with this slug already exists"
-            ) from exc
+            raise ConflictError("Unable to create product") from exc
 
         logger.info(
-            "catalogue.product_created id=%s tenant_id=%s",
+            "catalogue.product_created id=%s tenant_id=%s images=%s",
             product.id,
             self.tenant_id,
+            len(data.images),
         )
 
-        return product
+        # Re-read so the selectin-loaded images collection is populated.
+        return await self.get(product.id)
 
     async def get(self, product_id: UUID) -> Product:
         product = await self.products.get(product_id)
 
         if product is None:
+            raise NotFoundError("Product not found")
+
+        return product
+
+    async def get_public(self, product_id: UUID) -> Product:
+        """
+        Fetch a product only when it is publicly visible.
+
+        Visibility means the product is ACTIVE *and* its category is active --
+        the same rule the storefront listing applies -- so a product cannot be
+        reached by id after its category is switched off.
+        """
+        product = await self.get(product_id)
+
+        if product.status != CatalogueStatus.ACTIVE.value:
+            raise NotFoundError("Product not found")
+
+        category = await self.categories.get(product.category_id)
+        if category is None or not category.is_active:
             raise NotFoundError("Product not found")
 
         return product
@@ -268,18 +280,6 @@ class ProductService:
         if "category_id" in changes and changes["category_id"] is not None:
             await self._require_category(changes["category_id"])
 
-        if "slug" in changes and changes["slug"] is not None:
-            slug = _normalise_slug(changes["slug"])
-
-            existing = await self.products.get_by_slug(slug)
-
-            if existing is not None and existing.id != product.id:
-                raise ConflictError(
-                    "A product with this slug already exists"
-                )
-
-            changes["slug"] = slug
-
         if "status" in changes and changes["status"] is not None:
             changes["status"] = changes["status"].value
 
@@ -290,9 +290,7 @@ class ProductService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError(
-                "A product with this slug already exists"
-            ) from exc
+            raise ConflictError("Unable to update product") from exc
 
         logger.info(
             "catalogue.product_updated id=%s tenant_id=%s",
@@ -304,17 +302,29 @@ class ProductService:
 
     async def delete(self, product_id: UUID) -> None:
         """
-        Archive the product instead of physically deleting it.
+        Archive the product and its variants instead of deleting them.
 
-        Products may later be referenced by orders/order items.
-        Keeping the record preserves historical commerce data.
+        Products may later be referenced by orders/order items, so the record
+        is kept to preserve historical commerce data. Variants are archived in
+        the same transaction -- otherwise they stay individually readable on
+        the storefront after their parent product is gone.
         """
         product = await self.get(product_id)
 
-        if product.status == "ARCHIVED":
+        if product.status == CatalogueStatus.ARCHIVED.value:
             return
 
         product.status = "ARCHIVED"
+
+        archived_variants = await self.session.execute(
+            update(ProductVariant)
+            .where(
+                ProductVariant.tenant_id == self.tenant_id,
+                ProductVariant.product_id == product_id,
+                ProductVariant.status != CatalogueStatus.ARCHIVED.value,
+            )
+            .values(status=CatalogueStatus.ARCHIVED.value)
+        )
 
         try:
             await self.session.commit()
@@ -325,9 +335,10 @@ class ProductService:
             ) from exc
 
         logger.info(
-            "catalogue.product_archived id=%s tenant_id=%s",
+            "catalogue.product_archived id=%s tenant_id=%s variants_archived=%s",
             product_id,
             self.tenant_id,
+            archived_variants.rowcount or 0,
         )
 
 
@@ -354,7 +365,7 @@ class VariantService:
     ) -> ProductVariant:
         product = await self._require_product(product_id)
 
-        if product.status == "ARCHIVED":
+        if product.status == CatalogueStatus.ARCHIVED.value:
             raise ConflictError(
                 "Cannot add a variant to an archived product"
             )
@@ -476,7 +487,7 @@ class VariantService:
         """
         variant = await self.get(variant_id)
 
-        if variant.status == "ARCHIVED":
+        if variant.status == CatalogueStatus.ARCHIVED.value:
             return
 
         variant.status = "ARCHIVED"
@@ -545,7 +556,7 @@ class ProductImageService:
     ) -> ProductImage:
         product = await self._require_product(product_id)
 
-        if product.status == "ARCHIVED":
+        if product.status == CatalogueStatus.ARCHIVED.value:
             raise ConflictError(
                 "Cannot add an image to an archived product"
             )
