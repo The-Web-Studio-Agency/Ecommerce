@@ -61,3 +61,5 @@ def _require_roles(*roles: UserRole) -> Callable[..., Coroutine[Any, Any, User]]
 require_admin = _require_roles(UserRole.ADMIN)
 
 require_staff = _require_roles(UserRole.ADMIN, UserRole.STAFF)
+
+require_customer = _require_roles(UserRole.CUSTOMER)

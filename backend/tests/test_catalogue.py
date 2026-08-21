@@ -40,7 +40,7 @@ async def test_create_and_retrieve_a_category(client, admin_headers):
     created = await make_category(client, admin_headers)
 
     assert created["name"] == "Dresses"
-    assert created["is_active"] is True
+    assert created["status"] == "ACTIVE"
 
     response = await client.get(f"{CATEGORIES}/{created['id']}", headers=admin_headers)
     assert response.status_code == 200
@@ -52,28 +52,37 @@ async def test_update_a_category(client, admin_headers):
 
     response = await client.patch(
         f"{CATEGORIES}/{created['id']}",
-        json={"name": "Evening Dresses", "is_active": False},
+        json={"name": "Evening Dresses", "status": "DRAFT"},
         headers=admin_headers,
     )
 
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["name"] == "Evening Dresses"
-    assert body["is_active"] is False
+    assert body["status"] == "DRAFT"
 
 
-async def test_delete_a_category(client, admin_headers):
+async def test_delete_a_category_archives_it(client, admin_headers):
+    """
+    Categories are archived, not dropped: archived products keep a foreign key
+    to their category, so the row has to survive.
+    """
     created = await make_category(client, admin_headers)
 
     assert (
         await client.delete(f"{CATEGORIES}/{created['id']}", headers=admin_headers)
     ).status_code == 204
+
+    archived = await client.get(f"{CATEGORIES}/{created['id']}", headers=admin_headers)
+    assert archived.status_code == 200
+    assert archived.json()["data"]["status"] == "ARCHIVED"
+
     assert (
-        await client.get(f"{CATEGORIES}/{created['id']}", headers=admin_headers)
+        await client.get(f"/api/v1/storefront/categories/{created['id']}")
     ).status_code == 404
 
 
-async def test_a_category_with_products_cannot_be_deleted(client, admin_headers):
+async def test_a_category_with_live_products_cannot_be_deleted(client, admin_headers):
     category = await make_category(client, admin_headers)
     await make_product(client, admin_headers, category["id"])
 
@@ -81,6 +90,19 @@ async def test_a_category_with_products_cannot_be_deleted(client, admin_headers)
 
     assert response.status_code == 409
     assert "products" in response.json()["message"].lower()
+
+
+async def test_a_category_whose_products_are_archived_can_be_deleted(
+    client, admin_headers
+):
+    """Archived products are soft-deleted, so they must not pin their category."""
+    category = await make_category(client, admin_headers)
+    product = await make_product(client, admin_headers, category["id"])
+
+    await client.delete(f"{PRODUCTS}/{product['id']}", headers=admin_headers)
+
+    response = await client.delete(f"{CATEGORIES}/{category['id']}", headers=admin_headers)
+    assert response.status_code == 204
 
 
 @pytest.mark.parametrize("payload", [{"name": ""}, {"name": "   "}])

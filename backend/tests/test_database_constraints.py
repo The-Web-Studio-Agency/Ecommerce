@@ -316,7 +316,7 @@ async def test_deleting_a_tenant_cascades_to_its_domains(session, tenant):
 
 
 def _category(tenant_id, name: str = "Dresses") -> Category:
-    return Category(tenant_id=tenant_id, name=name, is_active=True)
+    return Category(tenant_id=tenant_id, name=name, status=CatalogueStatus.ACTIVE.value)
 
 
 def _product(tenant_id, category_id, name: str = "Dress") -> Product:

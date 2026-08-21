@@ -1,31 +1,51 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     Numeric,
     String,
     UniqueConstraint,
     and_,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.catalogue.constants import (
+    MAX_ALT_TEXT_LENGTH,
+    MAX_BRAND_LENGTH,
     MAX_DESCRIPTION_LENGTH,
+    MAX_IMAGE_URL_LENGTH,
     MAX_NAME_LENGTH,
+    MAX_OPTION_NAME_LENGTH,
+    MAX_OPTION_VALUE_LENGTH,
+    MAX_SEO_DESCRIPTION_LENGTH,
+    MAX_SEO_TITLE_LENGTH,
+    MAX_SHORT_DESCRIPTION_LENGTH,
     MAX_SKU_LENGTH,
     PRICE_PRECISION,
     PRICE_SCALE,
     CatalogueStatus,
+    InventoryReason,
 )
 from app.models.base import Base, TimestampMixin
 
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CatalogueStatus)
+_REASON_VALUES = ", ".join(f"'{reason.value}'" for reason in InventoryReason)
+
+# Every child table carries tenant_id and joins to its parent on
+# (tenant_id, parent_id) rather than parent_id alone. The composite foreign key
+# makes it impossible for a row to point at a parent in another tenant, so
+# isolation is enforced by the database and not only by repository filters.
 
 
 class Category(Base, TimestampMixin):
@@ -34,6 +54,8 @@ class Category(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_categories_tenant_id_id"),
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
+        CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
+        Index("ix_categories_tenant_id_status", "tenant_id", "status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -54,37 +76,34 @@ class Category(Base, TimestampMixin):
         String(MAX_DESCRIPTION_LENGTH), nullable=True
     )
 
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Categories share the product lifecycle instead of a separate is_active
+    # flag. Archived products still reference their category, so a category is
+    # archived rather than deleted -- a hard delete would break that reference.
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=CatalogueStatus.ACTIVE.value,
+    )
 
 
 class Product(Base, TimestampMixin):
     __tablename__ = "products"
 
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id",
-            "id",
-            name="uq_products_tenant_id_id",
-        ),
+        UniqueConstraint("tenant_id", "id", name="uq_products_tenant_id_id"),
         ForeignKeyConstraint(
             ["tenant_id", "category_id"],
             ["categories.tenant_id", "categories.id"],
             name="fk_products_tenant_category_categories",
             ondelete="NO ACTION",
         ),
-        CheckConstraint(
-            "length(trim(name)) > 0",
-            name="name_not_blank",
-        ),
-        CheckConstraint(
-            f"status IN ({_STATUS_VALUES})",
-            name="status_valid",
-        ),
-        Index(
-            "ix_products_tenant_id_category_id",
-            "tenant_id",
-            "category_id",
-        ),
+        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
+        CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
+        Index("ix_products_tenant_id_category_id", "tenant_id", "category_id"),
+        # Serves the storefront listing, which always filters on status.
+        Index("ix_products_tenant_id_status", "tenant_id", "status"),
+        Index("ix_products_tenant_id_is_featured", "tenant_id", "is_featured"),
+        Index("ix_products_tenant_id_brand", "tenant_id", "brand"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -95,37 +114,23 @@ class Product(Base, TimestampMixin):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "tenants.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    category_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        nullable=False,
-    )
+    category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    name: Mapped[str] = mapped_column(
-        String(MAX_NAME_LENGTH),
-        nullable=False,
-    )
+    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
 
     short_description: Mapped[str | None] = mapped_column(
-        String(500),
-        nullable=True,
+        String(MAX_SHORT_DESCRIPTION_LENGTH), nullable=True
     )
 
     description: Mapped[str | None] = mapped_column(
-        String(MAX_DESCRIPTION_LENGTH),
-        nullable=True,
+        String(MAX_DESCRIPTION_LENGTH), nullable=True
     )
 
-    brand: Mapped[str | None] = mapped_column(
-        String(150),
-        nullable=True,
-    )
+    brand: Mapped[str | None] = mapped_column(String(MAX_BRAND_LENGTH), nullable=True)
 
     status: Mapped[str] = mapped_column(
         String(20),
@@ -133,24 +138,18 @@ class Product(Base, TimestampMixin):
         default=CatalogueStatus.DRAFT.value,
     )
 
-    is_featured: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-    )
+    is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     seo_title: Mapped[str | None] = mapped_column(
-        String(200),
-        nullable=True,
+        String(MAX_SEO_TITLE_LENGTH), nullable=True
     )
 
     seo_description: Mapped[str | None] = mapped_column(
-        String(500),
-        nullable=True,
+        String(MAX_SEO_DESCRIPTION_LENGTH), nullable=True
     )
 
-    # Composite (tenant_id, product_id) foreign key plus a second tenant_id
-    # path to tenants, so the join has to be spelled out explicitly.
+    # selectin loading: one extra query per page rather than one per product,
+    # which is what keeps the storefront listing off an N+1.
     images: Mapped[list["ProductImage"]] = relationship(
         "ProductImage",
         primaryjoin=lambda: and_(
@@ -163,11 +162,81 @@ class Product(Base, TimestampMixin):
         viewonly=True,
     )
 
+    options: Mapped[list["ProductOption"]] = relationship(
+        "ProductOption",
+        primaryjoin=lambda: and_(
+            Product.id == ProductOption.product_id,
+            Product.tenant_id == ProductOption.tenant_id,
+        ),
+        foreign_keys=lambda: [ProductOption.product_id, ProductOption.tenant_id],
+        order_by=lambda: (ProductOption.position, ProductOption.name),
+        lazy="selectin",
+        viewonly=True,
+    )
+
+    variants: Mapped[list["ProductVariant"]] = relationship(
+        "ProductVariant",
+        primaryjoin=lambda: and_(
+            Product.id == ProductVariant.product_id,
+            Product.tenant_id == ProductVariant.tenant_id,
+        ),
+        foreign_keys=lambda: [ProductVariant.product_id, ProductVariant.tenant_id],
+        order_by=lambda: ProductVariant.sku,
+        lazy="selectin",
+        viewonly=True,
+    )
+
+
+class ProductOption(Base, TimestampMixin):
+    """
+    A dimension a product varies along -- "Color", "Size".
+
+    Options belong to the product; the concrete values live on the variant link
+    (ProductVariantOption). Two tables rather than three keeps the MVP simple
+    while still answering "which colors exist" and "which SKU is Black / M".
+    """
+
+    __tablename__ = "product_options"
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_product_options_tenant_id_id"),
+        UniqueConstraint(
+            "tenant_id", "product_id", "name", name="uq_product_options_tenant_product_name"
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "product_id"],
+            ["products.tenant_id", "products.id"],
+            name="fk_product_options_tenant_product_products",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
+        CheckConstraint("position >= 0", name="position_not_negative"),
+        Index("ix_product_options_tenant_id_product_id", "tenant_id", "product_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    name: Mapped[str] = mapped_column(String(MAX_OPTION_NAME_LENGTH), nullable=False)
+
+    # Display order, so the storefront renders Color before Size consistently.
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
 
 class ProductVariant(Base, TimestampMixin):
     __tablename__ = "product_variants"
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_product_variants_tenant_id_id"),
         UniqueConstraint("tenant_id", "sku", name="uq_product_variants_tenant_sku"),
         ForeignKeyConstraint(
             ["tenant_id", "product_id"],
@@ -183,9 +252,7 @@ class ProductVariant(Base, TimestampMixin):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -198,17 +265,101 @@ class ProductVariant(Base, TimestampMixin):
 
     sku: Mapped[str] = mapped_column(String(MAX_SKU_LENGTH), nullable=False)
 
+    # Kept as a human label ("Small / Black") alongside structured options, so
+    # existing callers and admin listings do not need the option join.
     name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
 
     price: Mapped[Decimal] = mapped_column(
-        Numeric(PRICE_PRECISION, PRICE_SCALE),
-        nullable=False,
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
 
     status: Mapped[str] = mapped_column(
-        String(20),
+        String(20), nullable=False, default=CatalogueStatus.DRAFT.value
+    )
+
+    option_values: Mapped[list["ProductVariantOption"]] = relationship(
+        "ProductVariantOption",
+        primaryjoin=lambda: and_(
+            ProductVariant.id == ProductVariantOption.variant_id,
+            ProductVariant.tenant_id == ProductVariantOption.tenant_id,
+        ),
+        foreign_keys=lambda: [
+            ProductVariantOption.variant_id,
+            ProductVariantOption.tenant_id,
+        ],
+        lazy="selectin",
+        viewonly=True,
+    )
+
+    inventory: Mapped["InventoryItem | None"] = relationship(
+        "InventoryItem",
+        primaryjoin=lambda: and_(
+            ProductVariant.id == InventoryItem.variant_id,
+            ProductVariant.tenant_id == InventoryItem.tenant_id,
+        ),
+        foreign_keys=lambda: [InventoryItem.variant_id, InventoryItem.tenant_id],
+        lazy="selectin",
+        uselist=False,
+        viewonly=True,
+    )
+
+
+class ProductVariantOption(Base, TimestampMixin):
+    """One option value for one variant -- "Color = Black"."""
+
+    __tablename__ = "product_variant_options"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "variant_id",
+            "option_id",
+            name="uq_product_variant_options_tenant_variant_option",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "variant_id"],
+            ["product_variants.tenant_id", "product_variants.id"],
+            name="fk_product_variant_options_tenant_variant_product_variants",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "option_id"],
+            ["product_options.tenant_id", "product_options.id"],
+            name="fk_product_variant_options_tenant_option_product_options",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("length(trim(value)) > 0", name="value_not_blank"),
+        Index("ix_product_variant_options_tenant_id_option_id", "tenant_id", "option_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
-        default=CatalogueStatus.DRAFT.value,
+    )
+
+    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    option_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    value: Mapped[str] = mapped_column(String(MAX_OPTION_VALUE_LENGTH), nullable=False)
+
+    option: Mapped["ProductOption"] = relationship(
+        "ProductOption",
+        primaryjoin=lambda: and_(
+            ProductVariantOption.option_id == ProductOption.id,
+            ProductVariantOption.tenant_id == ProductOption.tenant_id,
+        ),
+        foreign_keys=lambda: [
+            ProductVariantOption.option_id,
+            ProductVariantOption.tenant_id,
+        ],
+        lazy="selectin",
+        viewonly=True,
     )
 
 
@@ -222,58 +373,145 @@ class ProductImage(Base, TimestampMixin):
             name="fk_product_images_tenant_product_products",
             ondelete="CASCADE",
         ),
+        Index("ix_product_images_tenant_id_product_id", "tenant_id", "product_id"),
+        CheckConstraint("length(trim(url)) > 0", name="image_url_not_blank"),
+        CheckConstraint("sort_order >= 0", name="image_sort_order_valid"),
+        # At most one primary image per product. Enforced here rather than in
+        # Python so two concurrent "make this primary" requests cannot both win.
         Index(
-            "ix_product_images_tenant_id_product_id",
+            "uq_product_images_one_primary_per_product",
             "tenant_id",
             "product_id",
-        ),
-        CheckConstraint(
-            "length(trim(url)) > 0",
-            name="image_url_not_blank",
-        ),
-        CheckConstraint(
-            "sort_order >= 0",
-            name="image_sort_order_valid",
+            unique=True,
+            postgresql_where=text("is_primary"),
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey(
-            "tenants.id",
-            ondelete="CASCADE",
-        ),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    product_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        nullable=False,
-    )
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    url: Mapped[str] = mapped_column(
-        String(2048),
-        nullable=False,
-    )
+    url: Mapped[str] = mapped_column(String(MAX_IMAGE_URL_LENGTH), nullable=False)
 
     alt_text: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,
+        String(MAX_ALT_TEXT_LENGTH), nullable=True
     )
 
-    sort_order: Mapped[int] = mapped_column(
-        nullable=False,
-        default=0,
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class InventoryItem(Base, TimestampMixin):
+    """
+    Stock for one variant.
+
+    A separate table rather than columns on ProductVariant: stock changes on
+    every order while the variant row is read constantly by the storefront, so
+    keeping them apart avoids locking a hot read row to reserve a unit.
+
+    `available_quantity` is what physically exists; `reserved_quantity` is the
+    part already promised to open orders. Sellable stock is the difference.
+    """
+
+    __tablename__ = "inventory_items"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "variant_id", name="uq_inventory_items_tenant_variant"
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "variant_id"],
+            ["product_variants.tenant_id", "product_variants.id"],
+            name="fk_inventory_items_tenant_variant_product_variants",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("available_quantity >= 0", name="available_not_negative"),
+        CheckConstraint("reserved_quantity >= 0", name="reserved_not_negative"),
+        # Cannot promise more than exists. This is the invariant that makes
+        # overselling a database error rather than a race nobody notices.
+        CheckConstraint(
+            "reserved_quantity <= available_quantity", name="reserved_within_available"
+        ),
+        CheckConstraint("low_stock_threshold >= 0", name="threshold_not_negative"),
     )
 
-    is_primary: Mapped[bool] = mapped_column(
-        Boolean,
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
-        default=False,
+    )
+
+    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    available_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    reserved_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class InventoryMovement(Base):
+    """
+    Append-only record of every stock change.
+
+    Kept so that a stock level can always be explained after the fact, which
+    matters once orders start moving stock automatically.
+    """
+
+    __tablename__ = "inventory_movements"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "variant_id"],
+            ["product_variants.tenant_id", "product_variants.id"],
+            name="fk_inventory_movements_tenant_variant_product_variants",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(f"reason IN ({_REASON_VALUES})", name="reason_valid"),
+        Index(
+            "ix_inventory_movements_tenant_id_variant_id_created_at",
+            "tenant_id",
+            "variant_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    # Signed change to available_quantity. Reservations move reserved_quantity
+    # instead and are recorded with a delta of 0.
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    reason: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    # Free-form pointer to whatever caused the movement (an order id, later on).
+    reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

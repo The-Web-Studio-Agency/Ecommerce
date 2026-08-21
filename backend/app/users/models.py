@@ -17,6 +17,9 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     __table_args__ = (
+        # Target for tenant-aware composite foreign keys from other modules
+        # (carts, and orders later), matching the catalogue tables.
+        UniqueConstraint("tenant_id", "id", name="uq_users_tenant_id_id"),
         UniqueConstraint("tenant_id", "phone", name="uq_users_tenant_phone"),
         UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
         CheckConstraint(f"role IN ({_ROLE_VALUES})", name="role_valid"),

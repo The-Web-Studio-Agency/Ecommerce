@@ -9,12 +9,13 @@ from app.auth.constants import UserRole
 from app.auth.phone import normalize_phone
 from app.auth.security import hash_password
 from app.catalogue.constants import CatalogueStatus
-from app.catalogue.models import Category, Product, ProductVariant
+from app.catalogue.models import Category, InventoryItem, Product, ProductVariant
 from app.catalogue.schemas import (
     CategoryCreate,
     ProductCreate,
     ProductImageCreate,
     VariantCreate,
+    VariantOptionValue,
 )
 from app.catalogue.service import CategoryService, ProductService, VariantService
 from app.core.config import get_settings
@@ -145,6 +146,16 @@ USERS: list[tuple[str, str, UserRole]] = [
     ("kabir.singh", "Kabir Singh", UserRole.CUSTOMER),
 ]
 
+# Colour/size pairs cycled across the demo variants so the storefront option
+# API has something to render.
+VARIANT_OPTIONS: list[tuple[str, str]] = [
+    ("Black", "S"),
+    ("Ivory", "M"),
+    ("Indigo", "L"),
+    ("Olive", "M"),
+    ("Rust", "S"),
+]
+
 DEMO_USER_PASSWORD = "demo-password-123"
 DEMO_EMAIL_DOMAIN = "example.com"
 
@@ -226,7 +237,7 @@ async def seed() -> None:
             if name in by_name:
                 continue
             by_name[name] = await categories_service.create(
-                CategoryCreate(name=name, description=description, is_active=True)
+                CategoryCreate(name=name, description=description, status=CatalogueStatus.ACTIVE)
             )
             created_categories += 1
         print(f"Categories: +{created_categories} (total {len(by_name)})")
@@ -290,18 +301,25 @@ async def seed() -> None:
         )
 
         created_variants = 0
-        for _category, name, _blurb, price, sku, _featured in PRODUCTS:
+        for index, (_category, name, _blurb, price, sku, _featured) in enumerate(PRODUCTS):
             full_sku = f"{sku}-STD"
             if full_sku in existing_skus:
                 continue
 
+            colour, size = VARIANT_OPTIONS[index % len(VARIANT_OPTIONS)]
             await variants_service.create(
                 existing_products[name].id,
                 VariantCreate(
                     sku=full_sku,
-                    name=f"{name} - Standard",
+                    name=f"{size} / {colour}",
                     price=Decimal(price),
                     status=CatalogueStatus.ACTIVE,
+                    options=[
+                        VariantOptionValue(name="Color", value=colour),
+                        VariantOptionValue(name="Size", value=size),
+                    ],
+                    initial_quantity=25,
+                    low_stock_threshold=5,
                 ),
             )
             created_variants += 1
@@ -326,6 +344,7 @@ async def seed() -> None:
         print(f"  categories       {await _count(session, Category):>3}")
         print(f"  products         {await _count(session, Product):>3}")
         print(f"  variants         {await _count(session, ProductVariant):>3}")
+        print(f"  inventory rows   {await _count(session, InventoryItem):>3}")
         print(f"  users            {await _count(session, User):>3}")
 
     await dispose_engine()

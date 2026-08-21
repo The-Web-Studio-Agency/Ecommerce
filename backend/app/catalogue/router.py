@@ -6,10 +6,17 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_staff
+from app.catalogue.constants import ProductSort
 from app.catalogue.schemas import (
     CategoryCreate,
     CategoryRead,
     CategoryUpdate,
+    ImageReorderPayload,
+    InventoryAdjust,
+    InventoryMovementRead,
+    InventorySet,
+    InventoryStatus,
+    InventoryThreshold,
     ProductCreate,
     ProductImageCreate,
     ProductImageRead,
@@ -20,8 +27,10 @@ from app.catalogue.schemas import (
     VariantRead,
     VariantUpdate,
 )
+from app.catalogue.serializers import admin_variant, inventory_status
 from app.catalogue.service import (
     CategoryService,
+    InventoryService,
     ProductImageService,
     ProductService,
     VariantService,
@@ -31,7 +40,11 @@ from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated
 from app.users.models import User
 
+# Authenticated management API. Writes require ADMIN, reads allow STAFF too.
 router = APIRouter(prefix="/catalogue", tags=["Admin-Catalogue_management"])
+
+
+# ------------------------------ CATEGORIES ----------------------------------
 
 
 @router.post(
@@ -100,7 +113,7 @@ async def update_category(
 @router.delete(
     "/categories/{category_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a category",
+    summary="Archive a category",
 )
 async def delete_category(
     category_id: UUID,
@@ -111,11 +124,14 @@ async def delete_category(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+# -------------------------------- PRODUCTS ----------------------------------
+
+
 @router.post(
     "/products",
     response_model=ApiResponse[ProductRead],
     status_code=status.HTTP_201_CREATED,
-    summary="Create a product",
+    summary="Create a product with at least one image",
 )
 async def create_product(
     data: ProductCreate,
@@ -133,12 +149,21 @@ async def create_product(
 )
 async def list_products(
     category_id: UUID | None = Query(default=None, description="Filter by category"),
+    search: str | None = Query(default=None, max_length=120),
+    brand: str | None = Query(default=None, max_length=150),
+    featured: bool | None = Query(default=None),
+    sort: ProductSort = Query(default=ProductSort.NAME_ASC),
     params: PageParams = Depends(page_params),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[ProductRead]]:
     products, total = await ProductService(session, user.tenant_id).list(
-        params, category_id=category_id
+        params,
+        category_id=category_id,
+        search=search,
+        brand=brand,
+        featured=featured,
+        sort=sort,
     )
     return paginated(
         [ProductRead.model_validate(p) for p in products],
@@ -180,7 +205,7 @@ async def update_product(
 @router.delete(
     "/products/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a product and its variants",
+    summary="Archive a product and its variants",
 )
 async def delete_product(
     product_id: UUID,
@@ -191,11 +216,14 @@ async def delete_product(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+# -------------------------------- VARIANTS ----------------------------------
+
+
 @router.post(
     "/products/{product_id}/variants",
     response_model=ApiResponse[VariantRead],
     status_code=status.HTTP_201_CREATED,
-    summary="Add a variant to a product",
+    summary="Add a variant with structured options and opening stock",
 )
 async def create_variant(
     product_id: UUID,
@@ -204,7 +232,7 @@ async def create_variant(
     user: User = Depends(require_admin),
 ) -> ApiResponse[VariantRead]:
     variant = await VariantService(session, user.tenant_id).create(product_id, data)
-    return ok(VariantRead.model_validate(variant), message="Variant created")
+    return ok(admin_variant(variant), message="Variant created")
 
 
 @router.get(
@@ -222,7 +250,7 @@ async def list_variants(
         product_id, params
     )
     return paginated(
-        [VariantRead.model_validate(v) for v in variants],
+        [admin_variant(v) for v in variants],
         total_items=total,
         params=params,
         message="Variants retrieved",
@@ -240,7 +268,7 @@ async def get_variant(
     user: User = Depends(require_staff),
 ) -> ApiResponse[VariantRead]:
     variant = await VariantService(session, user.tenant_id).get(variant_id)
-    return ok(VariantRead.model_validate(variant), message="Variant retrieved")
+    return ok(admin_variant(variant), message="Variant retrieved")
 
 
 @router.patch(
@@ -255,13 +283,13 @@ async def update_variant(
     user: User = Depends(require_admin),
 ) -> ApiResponse[VariantRead]:
     variant = await VariantService(session, user.tenant_id).update(variant_id, data)
-    return ok(VariantRead.model_validate(variant), message="Variant updated")
+    return ok(admin_variant(variant), message="Variant updated")
 
 
 @router.delete(
     "/variants/{variant_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a variant",
+    summary="Archive a variant",
 )
 async def delete_variant(
     variant_id: UUID,
@@ -272,34 +300,123 @@ async def delete_variant(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+# ------------------------------- INVENTORY ----------------------------------
+
+
+@router.get(
+    "/variants/{variant_id}/inventory",
+    response_model=ApiResponse[InventoryStatus],
+    summary="View stock for a variant",
+)
+async def get_inventory(
+    variant_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+) -> ApiResponse[InventoryStatus]:
+    item = await InventoryService(session, user.tenant_id).get(variant_id)
+    return ok(inventory_status(item), message="Inventory retrieved")
+
+
+@router.put(
+    "/variants/{variant_id}/inventory",
+    response_model=ApiResponse[InventoryStatus],
+    summary="Set stock to an absolute quantity",
+)
+async def set_inventory(
+    variant_id: UUID,
+    data: InventorySet,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[InventoryStatus]:
+    item = await InventoryService(session, user.tenant_id).set_available(
+        variant_id, data.available_quantity, data.note
+    )
+    return ok(inventory_status(item), message="Inventory updated")
+
+
+@router.post(
+    "/variants/{variant_id}/inventory/adjust",
+    response_model=ApiResponse[InventoryStatus],
+    summary="Increase or decrease stock by a delta",
+)
+async def adjust_inventory(
+    variant_id: UUID,
+    data: InventoryAdjust,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[InventoryStatus]:
+    item = await InventoryService(session, user.tenant_id).adjust(
+        variant_id, data.delta, data.reason, data.reference, data.note
+    )
+    return ok(inventory_status(item), message="Inventory adjusted")
+
+
+@router.put(
+    "/variants/{variant_id}/inventory/threshold",
+    response_model=ApiResponse[InventoryStatus],
+    summary="Configure the low-stock threshold",
+)
+async def set_inventory_threshold(
+    variant_id: UUID,
+    data: InventoryThreshold,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[InventoryStatus]:
+    item = await InventoryService(session, user.tenant_id).set_threshold(
+        variant_id, data.low_stock_threshold
+    )
+    return ok(inventory_status(item), message="Threshold updated")
+
+
+@router.get(
+    "/variants/{variant_id}/inventory/movements",
+    response_model=ApiResponse[list[InventoryMovementRead]],
+    summary="Stock movement history for a variant",
+)
+async def list_inventory_movements(
+    variant_id: UUID,
+    params: PageParams = Depends(page_params),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+) -> ApiResponse[list[InventoryMovementRead]]:
+    movements, total = await InventoryService(session, user.tenant_id).movements(
+        variant_id, params
+    )
+    return paginated(
+        [InventoryMovementRead.model_validate(m) for m in movements],
+        total_items=total,
+        params=params,
+        message="Movements retrieved",
+    )
+
+
+# --------------------------------- IMAGES -----------------------------------
+
+
 @router.get(
     "/products/{product_id}/images",
     response_model=ApiResponse[list[ProductImageRead]],
-    summary="List product images",
+    summary="List product images in sort order",
 )
 async def list_product_images(
     product_id: UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[ProductImageRead]]:
-    images = await ProductImageService(
-        session,
-        user.tenant_id,
-    ).list_for_product(product_id)
-
+    images = await ProductImageService(session, user.tenant_id).list_for_product(
+        product_id
+    )
     return ok(
-        [
-            ProductImageRead.model_validate(image)
-            for image in images
-        ],
+        [ProductImageRead.model_validate(image) for image in images],
         message="Product images retrieved",
     )
+
 
 @router.post(
     "/products/{product_id}/images",
     response_model=ApiResponse[ProductImageRead],
     status_code=status.HTTP_201_CREATED,
-    summary="Add product image",
+    summary="Add a product image",
 )
 async def add_product_image(
     product_id: UUID,
@@ -307,23 +424,32 @@ async def add_product_image(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> ApiResponse[ProductImageRead]:
-    image = await ProductImageService(
-        session,
-        user.tenant_id,
-    ).add(
-        product_id,
-        data,
+    image = await ProductImageService(session, user.tenant_id).add(product_id, data)
+    return ok(ProductImageRead.model_validate(image), message="Product image added")
+
+
+@router.put(
+    "/products/{product_id}/images/order",
+    response_model=ApiResponse[list[ProductImageRead]],
+    summary="Reorder product images",
+)
+async def reorder_product_images(
+    product_id: UUID,
+    data: ImageReorderPayload,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[list[ProductImageRead]]:
+    images = await ProductImageService(session, user.tenant_id).reorder(product_id, data)
+    return ok(
+        [ProductImageRead.model_validate(image) for image in images],
+        message="Product images reordered",
     )
 
-    return ok(
-        ProductImageRead.model_validate(image),
-        message="Product image added",
-    )
 
 @router.patch(
     "/images/{image_id}",
     response_model=ApiResponse[ProductImageRead],
-    summary="Update product image",
+    summary="Update a product image",
 )
 async def update_product_image(
     image_id: UUID,
@@ -331,35 +457,33 @@ async def update_product_image(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> ApiResponse[ProductImageRead]:
-    image = await ProductImageService(
-        session,
-        user.tenant_id,
-    ).update(
-        image_id,
-        data,
-    )
+    image = await ProductImageService(session, user.tenant_id).update(image_id, data)
+    return ok(ProductImageRead.model_validate(image), message="Product image updated")
 
-    return ok(
-        ProductImageRead.model_validate(image),
-        message="Product image updated",
-    )
+
+@router.post(
+    "/images/{image_id}/primary",
+    response_model=ApiResponse[ProductImageRead],
+    summary="Make this the product's primary image",
+)
+async def set_primary_image(
+    image_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[ProductImageRead]:
+    image = await ProductImageService(session, user.tenant_id).set_primary(image_id)
+    return ok(ProductImageRead.model_validate(image), message="Primary image set")
 
 
 @router.delete(
     "/images/{image_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete product image",
+    summary="Delete a product image (never the last one)",
 )
 async def delete_product_image(
     image_id: UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Response:
-    await ProductImageService(
-        session,
-        user.tenant_id,
-    ).delete(image_id)
-
-    return Response(
-        status_code=status.HTTP_204_NO_CONTENT
-    )
+    await ProductImageService(session, user.tenant_id).delete(image_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

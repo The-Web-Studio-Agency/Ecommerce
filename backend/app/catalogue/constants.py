@@ -2,9 +2,42 @@ from enum import Enum
 
 
 class CatalogueStatus(str, Enum):
+    """
+    Lifecycle shared by categories, products and variants.
+
+    ARCHIVED is a soft delete: rows are kept because orders will reference them,
+    so historical data stays resolvable long after something leaves the catalogue.
+    """
+
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
+
+
+class ProductSort(str, Enum):
+    """
+    Sort orders the storefront may ask for.
+
+    An enum rather than a free-text column name: the value is mapped to an
+    ORDER BY clause in the repository, so a request can never reach the query.
+    """
+
+    NEWEST = "newest"
+    NAME_ASC = "name_asc"
+    NAME_DESC = "name_desc"
+    PRICE_LOW = "price_low"
+    PRICE_HIGH = "price_high"
+
+
+class InventoryReason(str, Enum):
+    """Why a stock level changed. Every movement records one."""
+
+    INITIAL = "INITIAL"
+    ADJUSTMENT = "ADJUSTMENT"
+    RESTOCK = "RESTOCK"
+    RESERVATION = "RESERVATION"
+    RELEASE = "RELEASE"
+    FULFILLMENT = "FULFILLMENT"
 
 
 MAX_SKU_LENGTH = 64
@@ -24,3 +57,12 @@ MAX_SEO_DESCRIPTION_LENGTH = 500
 
 MAX_IMAGE_URL_LENGTH = 2048
 MAX_ALT_TEXT_LENGTH = 255
+
+MAX_OPTION_NAME_LENGTH = 60
+MAX_OPTION_VALUE_LENGTH = 100
+
+# A product is not sellable without artwork, so creation requires at least one
+# image and deletion refuses to take the last one.
+MIN_PRODUCT_IMAGES = 1
+
+MAX_OPTIONS_PER_PRODUCT = 3
