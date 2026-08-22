@@ -25,6 +25,7 @@ out/
 
 # OS
 .DS_Store
+__MACOSX/
 
 # Logs
 *.log
