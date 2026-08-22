@@ -16,8 +16,11 @@ from tests.conftest import (
     sign_in_customer,
     verify_otp,
 )
+from tests.helpers import load_data
 
-PHONE = "+919812345678"
+DATA = load_data(__file__)
+
+PHONE = DATA["customer"]["phone"]
 
 
 def auth_header(tokens: dict) -> dict[str, str]:

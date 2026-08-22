@@ -14,8 +14,9 @@ from tests.conftest import (
     sign_in_customer,
     verify_otp,
 )
+from tests.helpers import load_data
 
-SHARED_PHONE = "+919876500001"
+SHARED_PHONE = load_data(__file__)["shared_phone"]
 
 
 async def test_the_same_phone_may_exist_in_both_tenants(

@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.models.registry import Base
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
+from tests.helpers import shared_data
 
 settings = get_settings()
 
@@ -24,11 +25,13 @@ TEST_DATABASE_URL = settings.test_database_url or (
     settings.database_url.rsplit("/", 1)[0] + "/tws_ecommerce_test"
 )
 
-ZEEN_DOMAIN = "zeen.test"
-ACME_DOMAIN = "acme.test"
-UNREGISTERED_DOMAIN = "nobody.test"
+_SHARED = shared_data()
 
-ADMIN_PASSWORD = "correct-horse-battery"
+ZEEN_DOMAIN = _SHARED["domains"]["zeen"]
+ACME_DOMAIN = _SHARED["domains"]["acme"]
+UNREGISTERED_DOMAIN = _SHARED["domains"]["unregistered"]
+
+ADMIN_PASSWORD = _SHARED["passwords"]["admin"]
 
 
 def _admin_url(url: str) -> str:

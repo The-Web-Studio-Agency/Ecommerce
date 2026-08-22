@@ -14,8 +14,10 @@ from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import Category, Product, ProductVariant
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
+from tests.conftest import ZEEN_DOMAIN
+from tests.helpers import load_data
 
-PHONE = "+919876543210"
+PHONE = load_data(__file__)["phone"]
 
 
 def _user(
@@ -285,7 +287,7 @@ async def test_attempts_cannot_go_negative(session, tenant):
 
 
 async def test_a_domain_serves_only_one_tenant(session, tenant, other_tenant):
-    session.add(TenantDomain(tenant_id=other_tenant.id, domain="zeen.test"))
+    session.add(TenantDomain(tenant_id=other_tenant.id, domain=ZEEN_DOMAIN))
 
     with pytest.raises(IntegrityError):
         await session.commit()

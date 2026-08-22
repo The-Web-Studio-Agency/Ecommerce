@@ -11,7 +11,7 @@ from app.tenants.models import TenantDomain
 from app.tenants.repository import TenantRepository
 from app.tenants.resolver import normalize_hostname
 from app.users.models import User
-from tests.conftest import UNREGISTERED_DOMAIN, ZEEN_DOMAIN
+from tests.conftest import ACME_DOMAIN, UNREGISTERED_DOMAIN, ZEEN_DOMAIN
 
 
 @pytest.mark.parametrize(
@@ -134,7 +134,7 @@ async def test_the_forwarded_host_is_ignored_by_default(client, tenant, other_te
     response = await client.post(
         "/api/v1/auth/otp/request",
         json={"phone": "+919777000222"},
-        headers={"Host": ZEEN_DOMAIN, "X-Forwarded-Host": "acme.test"},
+        headers={"Host": ZEEN_DOMAIN, "X-Forwarded-Host": ACME_DOMAIN},
     )
 
     assert response.status_code == 202
@@ -148,7 +148,7 @@ async def test_the_forwarded_host_is_used_when_the_proxy_is_trusted(
     response = await client.post(
         "/api/v1/auth/otp/request",
         json={"phone": "+919777000333"},
-        headers={"Host": "internal.lb", "X-Forwarded-Host": "acme.test"},
+        headers={"Host": "internal.lb", "X-Forwarded-Host": ACME_DOMAIN},
     )
 
     assert response.status_code == 202
@@ -164,7 +164,7 @@ async def test_only_the_first_forwarded_host_is_read(
     response = await client.post(
         "/api/v1/auth/otp/request",
         json={"phone": "+919777000444"},
-        headers={"Host": "internal.lb", "X-Forwarded-Host": f"{ZEEN_DOMAIN}, acme.test"},
+        headers={"Host": "internal.lb", "X-Forwarded-Host": f"{ZEEN_DOMAIN}, {ACME_DOMAIN}"},
     )
 
     assert response.status_code == 202

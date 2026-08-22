@@ -3,14 +3,17 @@ from __future__ import annotations
 import pytest_asyncio
 
 from app.auth.constants import UserRole
-from tests.conftest import admin_login, sign_in_admin, sign_in_staff
+from tests.conftest import ADMIN_PASSWORD, admin_login, sign_in_admin, sign_in_staff
+from tests.helpers import load_data
 
-VERIFY = "/api/v1/staff/auth/verify-otp"
+DATA = load_data(__file__)
 
-ADMIN_PHONE = "+919800000001"
-ADMIN_EMAIL = "admin@zeen.com"
-STAFF_PHONE = "+919800000002"
-STAFF_EMAIL = "staff@zeen.com"
+VERIFY = DATA["routes"]["staff_verify"]
+
+ADMIN_PHONE = DATA["admin"]["phone"]
+ADMIN_EMAIL = DATA["admin"]["email"]
+STAFF_PHONE = DATA["staff"]["phone"]
+STAFF_EMAIL = DATA["staff"]["email"]
 
 
 @pytest_asyncio.fixture(loop_scope="session")
@@ -73,7 +76,7 @@ async def test_admin_login_token_authenticates_immediately(client, admin, sent_o
 async def test_staff_password_login_returns_tokens(client, staff, sent_otps):
     response = await client.post(
         "/api/v1/staff/auth/login",
-        json={"identifier": STAFF_EMAIL, "password": "correct-horse-battery"},
+        json={"identifier": STAFF_EMAIL, "password": ADMIN_PASSWORD},
     )
 
     assert response.status_code == 200
@@ -88,19 +91,19 @@ async def test_staff_login_works_by_phone_or_email(client, staff, sent_otps):
     assert (
         await client.post(
             "/api/v1/staff/auth/login",
-            json={"identifier": STAFF_EMAIL, "password": "correct-horse-battery"},
+            json={"identifier": STAFF_EMAIL, "password": ADMIN_PASSWORD},
         )
     ).status_code == 200
     assert (
         await client.post(
             "/api/v1/staff/auth/login",
-            json={"identifier": STAFF_PHONE, "password": "correct-horse-battery"},
+            json={"identifier": STAFF_PHONE, "password": ADMIN_PASSWORD},
         )
     ).status_code == 200
     assert (
         await client.post(
             "/api/v1/staff/auth/login",
-            json={"identifier": "09800000002", "password": "correct-horse-battery"},
+            json={"identifier": "09800000002", "password": ADMIN_PASSWORD},
         )
     ).status_code == 200
 
@@ -109,7 +112,7 @@ async def test_staff_token_authenticates_immediately(client, staff, sent_otps):
     body = (
         await client.post(
             "/api/v1/staff/auth/login",
-            json={"identifier": STAFF_EMAIL, "password": "correct-horse-battery"},
+            json={"identifier": STAFF_EMAIL, "password": ADMIN_PASSWORD},
         )
     ).json()["data"]
 

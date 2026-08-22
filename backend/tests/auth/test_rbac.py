@@ -15,9 +15,12 @@ from app.core.database import get_db
 from app.main import create_app
 from app.users.models import User
 from tests.conftest import ZEEN_DOMAIN, headers_for
+from tests.helpers import load_data
 
-ADMIN_ONLY = "/rbac/admin-only"
-STAFF_OR_ABOVE = "/rbac/staff-or-above"
+DATA = load_data(__file__)
+
+ADMIN_ONLY = DATA["routes"]["rbac_admin_only"]
+STAFF_OR_ABOVE = DATA["routes"]["rbac_staff_or_above"]
 
 
 @pytest_asyncio.fixture(loop_scope="session")

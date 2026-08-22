@@ -1,12 +1,15 @@
 """
-Builders and fixture data shared across test packages.
+Loaders for the JSON test data that sits beside each test package.
 
-These live here rather than in a test module so that, say, the cart tests can
-create a product without importing from the catalogue test suite.
+Every package keeps its own `data.json` next to its tests -- catalogue data in
+tests/catalogue/, auth data in tests/auth/ -- so the fixtures live with the
+tests that use them and there are no sample payloads hard-coded in Python.
 
-The default payloads come from tests/data/*.json, so adjusting the sample data
-does not mean editing Python. Every builder deep-copies what it loads, so a
-test passing overrides can never mutate the shared defaults for the next test.
+    DATA = load_data(__file__)          # reads data.json beside this module
+    payload = sample(DATA, "category", name="Skirts")
+
+`sample` always returns a deep copy, so a test that applies overrides can never
+mutate the shared defaults for the next test.
 """
 
 from __future__ import annotations
@@ -17,57 +20,59 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
-
-CATEGORIES = "/api/v1/catalogue/categories"
-PRODUCTS = "/api/v1/catalogue/products"
-VARIANTS = "/api/v1/catalogue/variants"
+DATA_FILE = "data.json"
 
 
 @lru_cache
-def _load(name: str) -> dict[str, Any]:
-    """Read a JSON fixture file once and cache it."""
-    return json.loads((DATA_DIR / f"{name}.json").read_text())
+def _read(path: str) -> dict[str, Any]:
+    return json.loads(Path(path).read_text())
 
 
-def sample(file: str, key: str, /, **overrides: Any) -> dict[str, Any]:
+def load_data(module_file: str) -> dict[str, Any]:
+    """The data.json living in the same directory as the calling test module."""
+    return _read(str(Path(module_file).resolve().parent / DATA_FILE))
+
+
+def shared_data() -> dict[str, Any]:
+    """Data used across packages, from tests/data.json."""
+    return _read(str(Path(__file__).resolve().parent / DATA_FILE))
+
+
+def sample(source: dict[str, Any], key: str, /, **overrides: Any) -> dict[str, Any]:
     """
-    A fresh copy of one payload from a JSON fixture, with overrides applied.
+    A fresh copy of one payload, with overrides applied.
 
-    Copied rather than shared, so `sample("catalogue", "product", name="X")`
-    never leaks that name into the next test.
-
-    `file` and `key` are positional-only so that "name" and "key" stay usable
-    as payload override keys.
+    `source` and `key` are positional-only so that "name", "key" and friends
+    stay usable as payload override keys.
     """
-    payload = copy.deepcopy(_load(file)[key])
+    payload = copy.deepcopy(source[key])
     payload.update(overrides)
     return payload
 
 
-# Read straight from the JSON so a test can drop it into an images list.
-IMAGE = _load("catalogue")["image"]
+async def run_concurrently(engine, times: int, work) -> list[Any]:
+    """
+    Run `work(session, index)` `times` over at once, each on its own session.
 
+    Keeps the async_sessionmaker/gather plumbing out of the tests. Returns what
+    each call returned, or the exception it raised, so a test can simply count
+    how many succeeded.
+    """
+    import asyncio
 
-async def make_category(client, headers, **overrides) -> dict:
-    payload = sample("catalogue", "category", **overrides)
-    response = await client.post(CATEGORIES, json=payload, headers=headers)
-    assert response.status_code == 201, response.text
-    return response.json()["data"]
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
-async def make_product(client, headers, category_id, **overrides) -> dict:
-    payload = sample("catalogue", "product", category_id=category_id, **overrides)
-    payload.setdefault("images", [copy.deepcopy(IMAGE)])
-    response = await client.post(PRODUCTS, json=payload, headers=headers)
-    assert response.status_code == 201, response.text
-    return response.json()["data"]
+    async def one(index: int) -> Any:
+        async with factory() as session:
+            return await work(session, index)
 
-
-async def make_variant(client, headers, product_id, **overrides) -> dict:
-    payload = sample("catalogue", "variant", **overrides)
-    response = await client.post(
-        f"{PRODUCTS}/{product_id}/variants", json=payload, headers=headers
+    return await asyncio.gather(
+        *(one(index) for index in range(times)), return_exceptions=True
     )
-    assert response.status_code == 201, response.text
-    return response.json()["data"]
+
+
+def succeeded(results: list[Any]) -> list[Any]:
+    """The results that did not raise."""
+    return [r for r in results if not isinstance(r, BaseException)]
