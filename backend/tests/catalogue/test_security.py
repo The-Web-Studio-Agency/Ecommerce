@@ -5,7 +5,7 @@ import pytest
 from app.auth.constants import UserRole, UserStatus
 from app.auth.security import create_access_token
 from tests.conftest import headers_for
-from tests.test_catalogue import (
+from tests.helpers import (
     CATEGORIES,
     IMAGE,
     PRODUCTS,

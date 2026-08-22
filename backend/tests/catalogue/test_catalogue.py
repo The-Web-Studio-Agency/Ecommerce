@@ -2,38 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-CATEGORIES = "/api/v1/catalogue/categories"
-PRODUCTS = "/api/v1/catalogue/products"
-VARIANTS = "/api/v1/catalogue/variants"
-
-
-IMAGE = {"url": "https://cdn.example.com/dress.jpg", "alt_text": "Front view"}
-
-
-async def make_category(client, headers, **overrides) -> dict:
-    payload = {"name": "Dresses", "description": "Womenswear"}
-    payload.update(overrides)
-    response = await client.post(CATEGORIES, json=payload, headers=headers)
-    assert response.status_code == 201, response.text
-    return response.json()["data"]
-
-
-async def make_product(client, headers, category_id, **overrides) -> dict:
-    payload = {"category_id": category_id, "name": "Summer Dress", "images": [IMAGE]}
-    payload.update(overrides)
-    response = await client.post(PRODUCTS, json=payload, headers=headers)
-    assert response.status_code == 201, response.text
-    return response.json()["data"]
-
-
-async def make_variant(client, headers, product_id, **overrides) -> dict:
-    payload = {"sku": "DRESS-S-BLK", "name": "Small / Black", "price": "49.99"}
-    payload.update(overrides)
-    response = await client.post(
-        f"{PRODUCTS}/{product_id}/variants", json=payload, headers=headers
-    )
-    assert response.status_code == 201, response.text
-    return response.json()["data"]
+from tests.helpers import (
+    CATEGORIES,
+    IMAGE,
+    PRODUCTS,
+    VARIANTS,
+    make_category,
+    make_product,
+    make_variant,
+)
 
 
 async def test_create_and_retrieve_a_category(client, admin_headers):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.test_catalogue import CATEGORIES, PRODUCTS, make_category, make_product
+from tests.helpers import CATEGORIES, PRODUCTS, make_category, make_product
 
 STOREFRONT = "/api/v1/storefront"
 

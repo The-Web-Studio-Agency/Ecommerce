@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.catalogue.service import InventoryService
 from app.core.exceptions import ConflictError
-from tests.test_catalogue import PRODUCTS, make_category, make_product
+from tests.helpers import PRODUCTS, make_category, make_product
 
 INVENTORY = "/api/v1/catalogue/variants/{variant_id}/inventory"
 

@@ -13,7 +13,7 @@ from app.cart.service import CartService
 from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
 from tests.conftest import headers_for
-from tests.test_catalogue import PRODUCTS, make_category, make_product
+from tests.helpers import PRODUCTS, make_category, make_product
 
 CART = "/api/v1/cart"
 

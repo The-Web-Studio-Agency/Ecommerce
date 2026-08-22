@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.catalogue.models import ProductImage
 from app.catalogue.service import ProductImageService
 from app.core.exceptions import ConflictError
-from tests.test_catalogue import IMAGE, PRODUCTS, make_category, make_product
+from tests.helpers import IMAGE, PRODUCTS, make_category, make_product
 
 IMAGES = "/api/v1/catalogue/images"
 
