@@ -1,10 +1,3 @@
-"""The pagination convention, fixed before the first list endpoint uses it.
-
-No route paginates yet. These tests pin the contract - the page window maths and
-the `meta` block - so that catalogue and every list after it inherit a shape that
-is already agreed rather than inventing one each.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -27,10 +20,10 @@ def test_the_page_window_translates_to_offset_and_limit(page, page_size, offset)
 @pytest.mark.parametrize(
     ("total_items", "page_size", "expected"),
     [
-        (0, 20, 0),  # nothing to page through
+        (0, 20, 0),
         (1, 20, 1),
-        (20, 20, 1),  # exactly full
-        (21, 20, 2),  # one over
+        (20, 20, 1),
+        (21, 20, 2),
         (4, 3, 2),
     ],
 )
@@ -39,7 +32,6 @@ def test_total_pages_counts_the_partial_page(total_items, page_size, expected):
 
 
 def test_paginated_reports_the_whole_result_set_not_the_page():
-    """`total_items` is what tells a client there is a page 2."""
     response = paginated(
         ["a", "b"], total_items=7, params=PageParams(page=1, page_size=2), message="Listed"
     )
@@ -54,10 +46,8 @@ def test_paginated_reports_the_whole_result_set_not_the_page():
 
 
 def test_non_list_responses_carry_no_meta():
-    """`meta` is for pages; a single resource must not grow a null page block."""
     assert ok({"id": 1}).meta is None
 
 
 def test_the_page_size_ceiling_is_defined():
-    """An uncapped page_size is a cheap way to make the database do too much."""
     assert MAX_PAGE_SIZE == 100

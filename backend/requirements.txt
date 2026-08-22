@@ -1,26 +1,16 @@
-# Direct runtime dependencies only. Transitive packages are resolved by pip;
-# pin them with a lockfile (pip-compile / uv) before deploying to production.
-
-# --- Web framework ---
 fastapi==0.141.1
 uvicorn[standard]==0.52.2
 
-# --- Database ---
 SQLAlchemy==2.0.52
 asyncpg==0.31.0
 alembic==1.19.1
 
-# --- Configuration & validation ---
 pydantic==2.13.4
 pydantic-settings==2.15.0
 python-dotenv==1.2.2
 email-validator==2.3.0
 
-# --- Authentication ---
-# pwdlib[argon2] provides Argon2id hashing; PyJWT replaces python-jose, which is
-# unmaintained and pulls in `ecdsa` (documented as not constant-time).
 pwdlib[argon2]==0.3.1
 PyJWT==2.10.1
 
-# --- Cache / rate limiting ---
 redis==8.1.0

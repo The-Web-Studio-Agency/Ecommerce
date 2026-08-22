@@ -7,30 +7,22 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
-
-# The registry is what populates Base.metadata. Without it autogenerate sees an
-# empty schema and proposes dropping every table.
 from app.models.registry import Base
 
 config = context.config
 
-# Use the database URL from .env
 config.set_main_option(
     "sqlalchemy.url",
     settings.database_url,
 )
 
-# Configure Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Alembic needs all SQLAlchemy models registered here
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in offline mode."""
-
     url = config.get_main_option("sqlalchemy.url")
 
     context.configure(
@@ -47,8 +39,6 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    """Run migrations using an active database connection."""
-
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -59,8 +49,6 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """Create an async engine and run migrations."""
-
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
@@ -74,8 +62,6 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in online mode."""
-
     asyncio.run(run_async_migrations())
 
 

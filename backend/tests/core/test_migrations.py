@@ -1,5 +1,3 @@
-"""Guards on the import graph and the Alembic setup."""
-
 from __future__ import annotations
 
 import subprocess
@@ -9,11 +7,14 @@ from pathlib import Path
 import app.models.registry as registry
 from app.models.base import Base
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
+# tests/core/test_migrations.py -> tests/core -> tests -> backend
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 EXPECTED_TABLES = {
     "tenants",
+    "tenant_domains",
     "users",
+    "otp_requests",
     "refresh_tokens",
     "categories",
     "products",
@@ -31,12 +32,6 @@ def _import_in_fresh_interpreter(module: str) -> subprocess.CompletedProcess:
 
 
 def test_the_app_imports_the_way_uvicorn_imports_it():
-    """Regression: a circular import that pytest's ordering hid.
-
-    Under pytest, conftest imports several modules before `app.main`, which can
-    mask an import cycle. Uvicorn imports `app.main` first in a clean
-    interpreter, so the container failed to boot while the suite stayed green.
-    """
     result = _import_in_fresh_interpreter("app.main")
 
     assert result.returncode == 0, result.stderr
@@ -49,13 +44,6 @@ def test_the_registry_imports_standalone():
 
 
 def test_every_model_is_registered_on_the_metadata():
-    """A model missing from the registry is invisible to Alembic.
-
-    `Base.metadata` is populated as a side effect of importing the model
-    modules. If one is dropped from the registry - a linter removing an
-    "unused" import is the usual way - autogenerate stops seeing its table and
-    happily emits a migration that DROPS it.
-    """
     registered = set(Base.metadata.tables)
 
     assert registered >= EXPECTED_TABLES, (
@@ -65,13 +53,23 @@ def test_every_model_is_registered_on_the_metadata():
 
 
 def test_registry_exports_every_model():
-    for name in ("Base", "Tenant", "User", "RefreshToken", "Category", "Product", "ProductVariant"):
+    expected = (
+        "Base",
+        "Tenant",
+        "TenantDomain",
+        "User",
+        "OtpRequest",
+        "RefreshToken",
+        "Category",
+        "Product",
+        "ProductVariant",
+    )
+    for name in expected:
         assert name in registry.__all__
         assert hasattr(registry, name)
 
 
 def test_constraints_follow_the_naming_convention():
-    """Deterministic names keep migrations reviewable and errors mappable."""
     users = Base.metadata.tables["users"]
 
     assert users.primary_key.name == "pk_users"

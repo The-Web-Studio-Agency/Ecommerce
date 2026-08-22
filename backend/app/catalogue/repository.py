@@ -1,57 +1,330 @@
-"""Catalogue data access. Queries only - no business rules, no commits.
-
-All three extend `TenantScopedRepository`, so every read below already starts
-from a tenant-filtered SELECT and every write is stamped with the tenant. None
-of these methods mentions `tenant_id`: that is the point of the base class.
-"""
-
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Select
+from sqlalchemy import Select, and_, exists, func, or_, select, update
 
-from app.catalogue.models import Category, Product, ProductVariant
+from app.catalogue.constants import CatalogueStatus, ProductSort
+from app.catalogue.models import (
+    Category,
+    InventoryItem,
+    Product,
+    ProductImage,
+    ProductOption,
+    ProductVariant,
+    ProductVariantOption,
+)
 from app.core.repository import TenantScopedRepository
+
+
+def _escape_like(term: str) -> str:
+    """Neutralise LIKE wildcards so a search term cannot widen its own match."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class CategoryRepository(TenantScopedRepository[Category]):
     model = Category
 
-    def list_select(self) -> Select[tuple[Category]]:
-        return self.base_select().order_by(Category.name)
+    def list_select(self, *, active_only: bool = False) -> Select[tuple[Category]]:
+        stmt = self.base_select()
 
-    async def get_by_slug(self, slug: str) -> Category | None:
-        return await self.find_one(Category.slug == slug)
+        if active_only:
+            stmt = stmt.where(Category.status == CatalogueStatus.ACTIVE.value)
+        else:
+            # Admin listings hide archived categories by default; they are the
+            # soft-deleted ones and would otherwise clutter every picker.
+            stmt = stmt.where(Category.status != CatalogueStatus.ARCHIVED.value)
+
+        return stmt.order_by(Category.name)
 
 
 class ProductRepository(TenantScopedRepository[Product]):
     model = Product
 
-    def list_select(self, *, category_id: UUID | None = None) -> Select[tuple[Product]]:
-        stmt = self.base_select().order_by(Product.name)
+    def _live_price_subquery(self):
+        """
+        Cheapest sellable variant price for the product row being scanned.
+
+        Used for price sorting. Correlated so it stays a single query rather
+        than a lookup per product.
+        """
+        return (
+            select(func.min(ProductVariant.price))
+            .where(
+                ProductVariant.tenant_id == Product.tenant_id,
+                ProductVariant.product_id == Product.id,
+                ProductVariant.status == CatalogueStatus.ACTIVE.value,
+            )
+            .correlate(Product)
+            .scalar_subquery()
+        )
+
+    def list_select(
+        self,
+        *,
+        category_id: UUID | None = None,
+        search: str | None = None,
+        brand: str | None = None,
+        featured: bool | None = None,
+        min_price: Decimal | None = None,
+        max_price: Decimal | None = None,
+        sort: ProductSort = ProductSort.NAME_ASC,
+        active_only: bool = False,
+    ) -> Select[tuple[Product]]:
+        stmt = self.base_select()
+
+        if active_only:
+            # A product is public only when its category is public too,
+            # otherwise archiving a category would leave its products listed.
+            stmt = stmt.join(
+                Category,
+                and_(
+                    Category.id == Product.category_id,
+                    Category.tenant_id == Product.tenant_id,
+                ),
+            ).where(
+                Product.status == CatalogueStatus.ACTIVE.value,
+                Category.status == CatalogueStatus.ACTIVE.value,
+            )
+        else:
+            stmt = stmt.where(Product.status != CatalogueStatus.ARCHIVED.value)
+
         if category_id is not None:
             stmt = stmt.where(Product.category_id == category_id)
-        return stmt
 
-    async def get_by_slug(self, slug: str) -> Product | None:
-        return await self.find_one(Product.slug == slug)
+        if search:
+            pattern = f"%{_escape_like(search.strip())}%"
+            stmt = stmt.where(
+                or_(
+                    Product.name.ilike(pattern, escape="\\"),
+                    Product.brand.ilike(pattern, escape="\\"),
+                )
+            )
 
-    async def exists_in_category(self, category_id: UUID) -> bool:
-        """Whether a category still has products, so deleting it is refused."""
-        product = await self.find_one(Product.category_id == category_id)
-        return product is not None
+        if brand:
+            stmt = stmt.where(Product.brand == brand.strip())
+
+        if featured is not None:
+            stmt = stmt.where(Product.is_featured.is_(featured))
+
+        if min_price is not None or max_price is not None:
+            # "Has a sellable variant inside the range" -- an EXISTS rather than
+            # comparing against one aggregate, so a product with a cheap and an
+            # expensive variant matches either bound.
+            conditions = [
+                ProductVariant.tenant_id == Product.tenant_id,
+                ProductVariant.product_id == Product.id,
+                ProductVariant.status == CatalogueStatus.ACTIVE.value,
+            ]
+            if min_price is not None:
+                conditions.append(ProductVariant.price >= min_price)
+            if max_price is not None:
+                conditions.append(ProductVariant.price <= max_price)
+            stmt = stmt.where(exists().where(and_(*conditions)))
+
+        return stmt.order_by(*self._order_by(sort))
+
+    def _order_by(self, sort: ProductSort):
+        price = self._live_price_subquery()
+        clauses = {
+            # id breaks ties so pagination stays stable across pages.
+            ProductSort.NEWEST: (Product.created_at.desc(), Product.id),
+            ProductSort.NAME_ASC: (Product.name.asc(), Product.id),
+            ProductSort.NAME_DESC: (Product.name.desc(), Product.id),
+            ProductSort.PRICE_LOW: (price.asc().nulls_last(), Product.id),
+            ProductSort.PRICE_HIGH: (price.desc().nulls_last(), Product.id),
+        }
+        return clauses[sort]
+
+    async def has_products_in_category(
+        self, category_id: UUID, *, include_archived: bool = False
+    ) -> bool:
+        """
+        Whether the category still holds products that matter.
+
+        Archived products are excluded by default: they are soft-deleted, so
+        counting them would mean a category could never be retired once it had
+        ever held anything.
+        """
+        conditions = [Product.category_id == category_id]
+        if not include_archived:
+            conditions.append(Product.status != CatalogueStatus.ARCHIVED.value)
+
+        return await self.find_one(*conditions) is not None
+
+    async def lock(self, product_id: UUID) -> UUID | None:
+        """
+        Take a row lock on the product.
+
+        Mutating a product's image set is serialised through this lock, so two
+        concurrent deletes cannot each see two images and each remove one.
+        """
+        return await self.session.scalar(
+            select(Product.id)
+            .where(Product.tenant_id == self.tenant_id, Product.id == product_id)
+            .with_for_update()
+        )
 
 
 class VariantRepository(TenantScopedRepository[ProductVariant]):
     model = ProductVariant
 
-    def list_select(self, product_id: UUID) -> Select[tuple[ProductVariant]]:
-        return (
-            self.base_select()
-            .where(ProductVariant.product_id == product_id)
-            .order_by(ProductVariant.sku)
-        )
+    def list_select(
+        self, product_id: UUID, *, active_only: bool = False
+    ) -> Select[tuple[ProductVariant]]:
+        stmt = self.base_select().where(ProductVariant.product_id == product_id)
+
+        if active_only:
+            stmt = stmt.where(ProductVariant.status == CatalogueStatus.ACTIVE.value)
+
+        return stmt.order_by(ProductVariant.sku)
 
     async def get_by_sku(self, sku: str) -> ProductVariant | None:
         return await self.find_one(ProductVariant.sku == sku)
+
+
+class ProductOptionRepository(TenantScopedRepository[ProductOption]):
+    model = ProductOption
+
+    def list_select(self, product_id: UUID) -> Select[tuple[ProductOption]]:
+        return (
+            self.base_select()
+            .where(ProductOption.product_id == product_id)
+            .order_by(ProductOption.position, ProductOption.name)
+        )
+
+    async def get_by_name(self, product_id: UUID, name: str) -> ProductOption | None:
+        return await self.find_one(
+            ProductOption.product_id == product_id, ProductOption.name == name
+        )
+
+
+class VariantOptionRepository(TenantScopedRepository[ProductVariantOption]):
+    model = ProductVariantOption
+
+    async def clear_for_variant(self, variant_id: UUID) -> None:
+        await self.session.execute(
+            ProductVariantOption.__table__.delete().where(
+                ProductVariantOption.tenant_id == self.tenant_id,
+                ProductVariantOption.variant_id == variant_id,
+            )
+        )
+        await self.session.flush()
+
+
+class ProductImageRepository(TenantScopedRepository[ProductImage]):
+    model = ProductImage
+
+    def list_select(self, product_id: UUID) -> Select[tuple[ProductImage]]:
+        return (
+            self.base_select()
+            .where(ProductImage.product_id == product_id)
+            .order_by(ProductImage.sort_order, ProductImage.created_at)
+        )
+
+    async def count_for_product(self, product_id: UUID) -> int:
+        total = await self.session.scalar(
+            select(func.count())
+            .select_from(ProductImage)
+            .where(
+                ProductImage.tenant_id == self.tenant_id,
+                ProductImage.product_id == product_id,
+            )
+        )
+        return int(total or 0)
+
+    async def clear_primary(
+        self, product_id: UUID, *, exclude_id: UUID | None = None
+    ) -> None:
+        """
+        Demote the product's current primary image.
+
+        A single UPDATE rather than loading the set and flipping flags in
+        Python: it touches only the row that needs it, and the partial unique
+        index catches anything that slips past a race.
+        """
+        conditions = [
+            ProductImage.tenant_id == self.tenant_id,
+            ProductImage.product_id == product_id,
+            ProductImage.is_primary.is_(True),
+        ]
+        if exclude_id is not None:
+            conditions.append(ProductImage.id != exclude_id)
+
+        await self.session.execute(
+            update(ProductImage).where(*conditions).values(is_primary=False)
+        )
+        await self.session.flush()
+
+
+class InventoryRepository(TenantScopedRepository[InventoryItem]):
+    """
+    Stock changes are expressed as conditional UPDATEs.
+
+    Every mutation is a single statement whose WHERE clause carries the
+    precondition, so PostgreSQL evaluates it under the row lock the UPDATE
+    already takes. A rowcount of 0 means the precondition failed -- there is no
+    read-then-write window for a concurrent order to slip into.
+    """
+
+    model = InventoryItem
+
+    async def get_for_variant(self, variant_id: UUID) -> InventoryItem | None:
+        return await self.find_one(InventoryItem.variant_id == variant_id)
+
+    async def _apply(self, variant_id: UUID, *conditions, **values) -> bool:
+        result = await self.session.execute(
+            update(InventoryItem)
+            .where(
+                InventoryItem.tenant_id == self.tenant_id,
+                InventoryItem.variant_id == variant_id,
+                *conditions,
+            )
+            .values(**values)
+        )
+        await self.session.flush()
+        return (result.rowcount or 0) == 1
+
+    async def set_available(self, variant_id: UUID, quantity: int) -> bool:
+        # Refuses to drop stock below what is already promised to open orders.
+        return await self._apply(
+            variant_id,
+            InventoryItem.reserved_quantity <= quantity,
+            available_quantity=quantity,
+        )
+
+    async def adjust_available(self, variant_id: UUID, delta: int) -> bool:
+        return await self._apply(
+            variant_id,
+            InventoryItem.available_quantity + delta >= InventoryItem.reserved_quantity,
+            InventoryItem.available_quantity + delta >= 0,
+            available_quantity=InventoryItem.available_quantity + delta,
+        )
+
+    async def reserve(self, variant_id: UUID, quantity: int) -> bool:
+        return await self._apply(
+            variant_id,
+            InventoryItem.available_quantity - InventoryItem.reserved_quantity >= quantity,
+            reserved_quantity=InventoryItem.reserved_quantity + quantity,
+        )
+
+    async def release(self, variant_id: UUID, quantity: int) -> bool:
+        return await self._apply(
+            variant_id,
+            InventoryItem.reserved_quantity >= quantity,
+            reserved_quantity=InventoryItem.reserved_quantity - quantity,
+        )
+
+    async def fulfil(self, variant_id: UUID, quantity: int) -> bool:
+        """Ship reserved stock: it leaves the shelf and the reservation ends."""
+        return await self._apply(
+            variant_id,
+            InventoryItem.reserved_quantity >= quantity,
+            InventoryItem.available_quantity >= quantity,
+            available_quantity=InventoryItem.available_quantity - quantity,
+            reserved_quantity=InventoryItem.reserved_quantity - quantity,
+        )
+
+    async def set_threshold(self, variant_id: UUID, threshold: int) -> bool:
+        return await self._apply(variant_id, low_stock_threshold=threshold)

@@ -2,15 +2,11 @@ from enum import Enum
 
 
 class CatalogueStatus(str, Enum):
-    """Publication state of a product or one of its variants.
+    """
+    Lifecycle shared by categories, products and variants.
 
-    Shared by both because they answer the same question - may this be sold? -
-    and a variant needs to be withheld or retired independently of its product
-    (one size sells out permanently while the rest stay on sale).
-
-    ARCHIVED rather than deletion is what retires something that must remain
-    referenceable; DRAFT is the state a product is built up in before it is
-    published.
+    ARCHIVED is a soft delete: rows are kept because orders will reference them,
+    so historical data stays resolvable long after something leaves the catalogue.
     """
 
     DRAFT = "DRAFT"
@@ -18,14 +14,55 @@ class CatalogueStatus(str, Enum):
     ARCHIVED = "ARCHIVED"
 
 
-#: Longest a slug or SKU may be. Kept here so the model constraint, the request
-#: schema and the migration cannot drift apart.
-MAX_SLUG_LENGTH = 100
+class ProductSort(str, Enum):
+    """
+    Sort orders the storefront may ask for.
+
+    An enum rather than a free-text column name: the value is mapped to an
+    ORDER BY clause in the repository, so a request can never reach the query.
+    """
+
+    NEWEST = "newest"
+    NAME_ASC = "name_asc"
+    NAME_DESC = "name_desc"
+    PRICE_LOW = "price_low"
+    PRICE_HIGH = "price_high"
+
+
+class InventoryReason(str, Enum):
+    """Why a stock level changed. Every movement records one."""
+
+    INITIAL = "INITIAL"
+    ADJUSTMENT = "ADJUSTMENT"
+    RESTOCK = "RESTOCK"
+    RESERVATION = "RESERVATION"
+    RELEASE = "RELEASE"
+    FULFILLMENT = "FULFILLMENT"
+
+
 MAX_SKU_LENGTH = 64
 MAX_NAME_LENGTH = 150
 MAX_DESCRIPTION_LENGTH = 2000
 
-#: Money is NUMERIC(12, 2): 10 digits before the decimal point is more headroom
-#: than any single item price needs, and two after is the minor unit.
 PRICE_PRECISION = 12
 PRICE_SCALE = 2
+
+MAX_BRAND_LENGTH = 150
+
+MAX_SHORT_DESCRIPTION_LENGTH = 500
+
+MAX_SEO_TITLE_LENGTH = 200
+
+MAX_SEO_DESCRIPTION_LENGTH = 500
+
+MAX_IMAGE_URL_LENGTH = 2048
+MAX_ALT_TEXT_LENGTH = 255
+
+MAX_OPTION_NAME_LENGTH = 60
+MAX_OPTION_VALUE_LENGTH = 100
+
+# A product is not sellable without artwork, so creation requires at least one
+# image and deletion refuses to take the last one.
+MIN_PRODUCT_IMAGES = 1
+
+MAX_OPTIONS_PER_PRODUCT = 3

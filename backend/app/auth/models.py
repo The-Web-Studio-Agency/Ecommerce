@@ -1,21 +1,116 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.auth.constants import OtpPurpose
 from app.models.base import Base
+
+_PURPOSE_VALUES = ", ".join(f"'{purpose.value}'" for purpose in OtpPurpose)
+
+
+class OtpRequest(Base):
+    __tablename__ = "otp_requests"
+
+    __table_args__ = (
+        CheckConstraint(f"purpose IN ({_PURPOSE_VALUES})", name="purpose_valid"),
+        CheckConstraint("attempts >= 0", name="attempts_not_negative"),
+        Index("ix_otp_requests_tenant_id_phone_purpose", "tenant_id", "phone", "purpose"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    phone: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    purpose: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    otp_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class AdminAuthChallenge(Base):
+    __tablename__ = "admin_auth_challenges"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    otp_request_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("otp_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class RefreshToken(Base):
-    """A single issued refresh token.
-
-    Only the SHA-256 of the token is stored, so a database leak does not hand
-    an attacker usable credentials. The row exists so a token can be revoked -
-    a bare JWT cannot be, which is the whole reason this table is here.
-    """
-
     __tablename__ = "refresh_tokens"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -28,8 +123,13 @@ class RefreshToken(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        # Revoking every session for one user is a lookup by user_id.
         index=True,
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     token_hash: Mapped[str] = mapped_column(
@@ -44,11 +144,6 @@ class RefreshToken(Base):
     )
 
     revoked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

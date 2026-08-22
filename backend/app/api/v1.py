@@ -1,18 +1,26 @@
-"""API v1 router aggregation.
-
-Every versioned route is mounted here and the whole tree is included once, under
-`settings.api_v1_prefix`. Feature routers therefore declare only their own
-prefix (`/auth`), so introducing a v2 is a routing change in one file rather
-than an edit to every router.
-"""
-
 from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.auth.router import admin_router as auth_admin_router
 from app.auth.router import router as auth_router
+from app.auth.router import staff_router as auth_staff_router
+from app.cart.router import router as cart_router
 from app.catalogue.router import router as catalogue_router
+from app.catalogue.storefront import router as storefront_router
+from app.users.router import router as users_router
 
 api_router = APIRouter()
+
+#authentication
 api_router.include_router(auth_router)
+api_router.include_router(auth_admin_router)
+api_router.include_router(auth_staff_router)
+api_router.include_router(users_router)
+
+#catalogue
 api_router.include_router(catalogue_router)
+api_router.include_router(storefront_router)
+
+#cart
+api_router.include_router(cart_router)
