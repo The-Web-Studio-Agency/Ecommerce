@@ -19,7 +19,7 @@ from tests.catalogue.factories import (
     make_variant,
 )
 
-UNKNOWN_ID = "0000"
+UNKNOWN_ID = "00000000-0000-0000-0000-000000000000"
 
 
 # ------------------------------- categories ---------------------------------
