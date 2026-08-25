@@ -667,6 +667,10 @@ class InventoryService:
     precondition is checked by PostgreSQL under the row lock rather than in a
     read-then-write window a concurrent order could slip into. A refused update
     surfaces as a ConflictError.
+
+    `reserve`, `release` and `fulfil` take `commit=False` so checkout can call
+    them inside its own transaction: the stock change is flushed but not
+    committed, and rolls back with the rest if a later step fails.
     """
 
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
@@ -702,6 +706,13 @@ class InventoryService:
                 note=note,
             )
         )
+
+    async def _save(self, commit: bool) -> None:
+        """Commit on our own, or leave the change to the caller's transaction."""
+        if commit:
+            await self.session.commit()
+        else:
+            await self.session.flush()
 
     async def get(self, variant_id: UUID) -> InventoryItem:
         return await self._require_item(variant_id)
@@ -761,7 +772,12 @@ class InventoryService:
         return await self._require_item(variant_id)
 
     async def reserve(
-        self, variant_id: UUID, quantity: int, reference: str | None = None
+        self,
+        variant_id: UUID,
+        quantity: int,
+        reference: str | None = None,
+        *,
+        commit: bool = True,
     ) -> InventoryItem:
         """Hold stock for an order that has not shipped yet."""
         await self._require_item(variant_id)
@@ -772,11 +788,16 @@ class InventoryService:
             )
 
         self._record(variant_id, 0, InventoryReason.RESERVATION, reference)
-        await self.session.commit()
+        await self._save(commit)
         return await self._require_item(variant_id)
 
     async def release(
-        self, variant_id: UUID, quantity: int, reference: str | None = None
+        self,
+        variant_id: UUID,
+        quantity: int,
+        reference: str | None = None,
+        *,
+        commit: bool = True,
     ) -> InventoryItem:
         """Give reserved stock back, e.g. when an order is cancelled."""
         await self._require_item(variant_id)
@@ -785,11 +806,16 @@ class InventoryService:
             raise ConflictError("Cannot release more stock than is reserved")
 
         self._record(variant_id, 0, InventoryReason.RELEASE, reference)
-        await self.session.commit()
+        await self._save(commit)
         return await self._require_item(variant_id)
 
     async def fulfil(
-        self, variant_id: UUID, quantity: int, reference: str | None = None
+        self,
+        variant_id: UUID,
+        quantity: int,
+        reference: str | None = None,
+        *,
+        commit: bool = True,
     ) -> InventoryItem:
         """Ship reserved stock: it leaves the shelf and the reservation ends."""
         await self._require_item(variant_id)
@@ -798,7 +824,7 @@ class InventoryService:
             raise ConflictError("Cannot fulfil more stock than is reserved")
 
         self._record(variant_id, -quantity, InventoryReason.FULFILLMENT, reference)
-        await self.session.commit()
+        await self._save(commit)
         return await self._require_item(variant_id)
 
     async def movements(

@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
@@ -8,7 +8,8 @@ from app.core.cache import close_redis
 from app.core.config import get_settings
 from app.core.database import dispose_engine
 from app.core.error_handlers import register_exception_handlers
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, set_request_id
+from app.core.request_context import sanitize_request_id
 
 settings = get_settings()
 
@@ -39,6 +40,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-Id"],
     )
+
+    @app.middleware("http")
+    async def add_request_id(request: Request, call_next):
+        """Give every request an id that logs, handlers and the client all share."""
+        request_id = sanitize_request_id(request.headers.get("X-Request-Id"))
+        set_request_id(request_id)
+        request.state.request_id = request_id
+
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        return response
 
     register_exception_handlers(app)
 

@@ -34,6 +34,32 @@ UNREGISTERED_DOMAIN = _SHARED["domains"]["unregistered"]
 ADMIN_PASSWORD = _SHARED["passwords"]["admin"]
 
 
+# --------------------------------------------------------------------------
+# Readable test names
+#
+# Test names in this suite are written as sentences, so the run reports them
+# as sentences: `test_a_forged_tenant_claim_is_refused` prints as "a forged
+# tenant claim is refused". Only the reported name changes -- the real node id
+# still selects a test on the command line, and `--lf` still works, so
+# `pytest tests/auth/test_auth.py::test_a_forged_tenant_claim_is_refused`
+# behaves exactly as it did before.
+# --------------------------------------------------------------------------
+
+
+def _readable(name: str) -> str:
+    """test_a_code_expires[5] -> "a code expires[5]"."""
+    base, bracket, params = name.partition("[")
+    words = base.removeprefix("test_").replace("_", " ")
+    return f"{words}{bracket}{params}"
+
+
+def pytest_collection_modifyitems(items) -> None:
+    for item in items:
+        module, separator, name = item._nodeid.rpartition("::")
+        if separator:
+            item._nodeid = f"{module}{separator}{_readable(name)}"
+
+
 def _admin_url(url: str) -> str:
     parts = urlsplit(url)
     return urlunsplit(parts._replace(path="/postgres"))
