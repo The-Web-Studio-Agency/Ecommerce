@@ -1,5 +1,5 @@
 {
-    "routes": { "cart": "/api/v1/wishlist" },
+    "routes": { "wishlist": "/api/v1/wishlist" },
     "customers": {
       "owner": "+919811110001",
       "intruder": "+919811110002",

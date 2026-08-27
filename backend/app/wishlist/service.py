@@ -18,7 +18,7 @@ VARIANT_NOT_FOUND="Product variant not found"
 VARIANT_UNAVAILABLE="Product variant is not available"
 PRODUCT_UNAVAILABLE="Product is not available"
 ITEM_NOT_FOUND="Wishlist item not found"
-WISHLIST_ITEM_EXISTS="Wishlist item exits"
+WISHLIST_ITEM_EXISTS="Item already in wishlist"
 
 class WishListService():
         def __init__(self,session:AsyncSession,tenant_id:UUID,customer_id:UUID)->None:

@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from sqlalchemy import and_,delete,select # type: ignore
+from sqlalchemy import and_,delete,select
+from sqlalchemy.ext.asyncio import AsyncSession # type: ignore
 
 from app.catalogue.models import Product,ProductImage,ProductVariant
 from app.wishlist.models import Wishlist,WishlistItem
@@ -8,15 +9,51 @@ from app.wishlist.models import Wishlist,WishlistItem
 
 class WishlistRepository:
         model=Wishlist
-        async def get_by_customer(self,customer_id:UUID)->Wishlist|None:
-            return await self.find_one(Wishlist.customer_id==customer_id)
-        async def create(self,wishlist:Wishlist)->Wishlist:
+        def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
+            self.session = session
+            self.tenant_id = tenant_id
+        async def find_one(self, *criterion) -> Wishlist | None:
+            stmt = select(self.model).where(
+                self.model.tenant_id == self.tenant_id, 
+                *criterion
+            )
+            result = await self.session.execute(stmt)
+            return result.scalars().first()
+
+        async def get_by_customer(self, customer_id: UUID) -> Wishlist | None:
+            return await self.find_one(Wishlist.customer_id == customer_id)
+
+        async def create(self, wishlist: Wishlist) -> Wishlist:
             self.session.add(wishlist)
             await self.session.flush()
             return wishlist
+        
 
 class WishlistItemRepository:
         model=WishlistItem
+        def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
+            self.session = session
+            self.tenant_id = tenant_id
+        async def find_one(self, *criterion) -> WishlistItem | None:
+            stmt = select(self.model).where(
+                self.model.tenant_id == self.tenant_id, 
+                *criterion
+            )
+            result = await self.session.execute(stmt)
+            return result.scalars().first()
+        async def find(self, *criterion) -> list[WishlistItem]:
+            stmt = select(self.model).where(
+                self.model.tenant_id == self.tenant_id, 
+                *criterion
+            )
+            result = await self.session.execute(stmt)
+            return list(result.scalars().all())
+
+        async def add(self, item: WishlistItem) -> WishlistItem:
+            item.tenant_id = self.tenant_id
+            self.session.add(item)
+            await self.session.flush()
+            return item
         async def get_items(self,wishlist_id:UUID)->list[WishlistItem]:
             return await self.find(WishlistItem.wishlist_id==wishlist_id)       
         async def get(self,wishlist_id:UUID,variant_id:UUID)->WishlistItem|None:
@@ -32,6 +69,9 @@ class WishlistItemRepository:
             result=await self.session.execute(query)
             await self.session.flush()
             return result.rowcount or 0
+        async def delete(self, item: WishlistItem) -> None:
+            await self.session.delete(item)
+            await self.session.flush()
         async def list_with_catalogue(self,wishlist_id:UUID)->list[tuple[WishlistItem,ProductVariant,Product]]:
             stmt=(select(WishlistItem,ProductVariant,Product)
             .join(ProductVariant,and_(ProductVariant.id==WishlistItem.variant_id,ProductVariant.tenant_id == WishlistItem.tenant_id))
