@@ -12,10 +12,19 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from app.catalogue.service import InventoryService
 from app.payments.repository import PaymentRepository
 from tests.conftest import headers_for
-from tests.payments.conftest import ADMIN_ORDERS, ADMIN_PAYMENTS, CUSTOMERS, PAYMENTS
+from tests.payments.conftest import (
+    ADMIN_ORDERS,
+    ADMIN_PAYMENTS,
+    CUSTOMERS,
+    ORDERS,
+    PAYMENTS,
+)
 
 
 async def _set_status(client, admin_headers, order_id, value):
@@ -58,8 +67,6 @@ async def test_checkout_creates_the_payment(client, admin_headers, order):
 
 async def test_the_order_carries_its_payment(client, customer_auth, order):
     """A customer never needs a second call, or a payment id from anywhere."""
-    from tests.payments.conftest import ORDERS
-
     response = await client.get(f"{ORDERS}/{order['id']}", headers=customer_auth)
 
     assert response.status_code == 200, response.text
@@ -74,8 +81,6 @@ async def test_the_payment_id_from_an_order_reaches_the_payment_endpoint(
     client, customer_auth, order
 ):
     """The id the order hands over is the one GET /payments/{id} accepts."""
-    from tests.payments.conftest import ORDERS
-
     read = await client.get(f"{ORDERS}/{order['id']}", headers=customer_auth)
     payment_id = read.json()["data"]["payment"]["id"]
 
@@ -128,8 +133,6 @@ async def test_the_currency_comes_from_the_tenant(client, customer_auth, payment
 
 
 async def test_an_order_reports_the_tenants_currency(client, customer_auth, order):
-    from tests.payments.conftest import ORDERS
-
     read = await client.get(f"{ORDERS}/{order['id']}", headers=customer_auth)
     listed = await client.get(ORDERS, headers=customer_auth)
 
@@ -148,14 +151,12 @@ async def test_a_tenant_carries_its_own_currency(session, tenant, other_tenant):
 
 
 async def test_a_currency_must_be_an_iso_code(session, other_tenant):
-    from sqlalchemy.exc import IntegrityError
-
+    """The check constraint holds it to three upper-case letters."""
     other_tenant.currency = "inr"
-    try:
+
+    with pytest.raises(IntegrityError):
         await session.commit()
-        raise AssertionError("a lower-case currency should not be storable")
-    except IntegrityError:
-        await session.rollback()
+    await session.rollback()
 
 
 # ------------------------------ COLLECTING ----------------------------------

@@ -78,11 +78,13 @@ class Order(Base, TimestampMixin):
         ),
         CheckConstraint("subtotal >= 0", name="subtotal_not_negative"),
         CheckConstraint("shipping_amount >= 0", name="shipping_not_negative"),
+        CheckConstraint("tax_amount >= 0", name="tax_not_negative"),
         # The total is never stored independently of its parts, so a bug that
         # miscalculates one of them is a database error rather than a wrong
         # number on an invoice.
         CheckConstraint(
-            "total_amount = subtotal + shipping_amount", name="total_is_subtotal_plus_shipping"
+            "total_amount = subtotal + shipping_amount + tax_amount",
+            name="total_is_subtotal_plus_shipping_plus_tax",
         ),
         Index("ix_orders_tenant_id_customer_id", "tenant_id", "customer_id"),
         Index("ix_orders_tenant_id_status", "tenant_id", "status"),
@@ -120,6 +122,13 @@ class Order(Base, TimestampMixin):
     )
 
     shipping_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
+    )
+
+    # What the tenant's tax rate worked out to at the moment of purchase. It
+    # is stored, not recalculated, so changing the rate tomorrow cannot rewrite
+    # what this customer was charged today.
+    tax_amount: Mapped[Decimal] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
 

@@ -14,6 +14,7 @@ from app.orders.router import checkout_router
 from app.orders.router import router as orders_router
 from app.payments.router import admin_router as payments_admin_router
 from app.payments.router import router as payments_router
+from app.pricing.router import shipping_router, tax_router
 from app.users.router import router as users_router
 
 api_router = APIRouter()
@@ -40,3 +41,7 @@ api_router.include_router(orders_admin_router)
 #payments
 api_router.include_router(payments_router)
 api_router.include_router(payments_admin_router)
+
+#shipping and tax
+api_router.include_router(shipping_router)
+api_router.include_router(tax_router)

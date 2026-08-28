@@ -32,6 +32,7 @@ class CheckoutPreview(BaseModel):
     items: list[CheckoutItem]
     subtotal: Decimal
     shipping_amount: Decimal
+    tax_amount: Decimal
     total_amount: Decimal
 
 
@@ -78,6 +79,7 @@ class OrderRead(BaseModel):
     items: list[OrderItemRead]
     subtotal: Decimal
     shipping_amount: Decimal
+    tax_amount: Decimal
     total_amount: Decimal
     # From the tenant, not the order: a storefront prices in one currency.
     currency: str

@@ -35,10 +35,6 @@ ALLOWED_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.CANCELLED: frozenset(),
 }
 
-# Shipping is free for the MVP. One constant so there is a single obvious place
-# to hook a real calculation in later.
-SHIPPING_AMOUNT = "0.00"
-
 MAX_ORDER_NUMBER_LENGTH = 32
 ORDER_NUMBER_PREFIX = "ORD-"
 

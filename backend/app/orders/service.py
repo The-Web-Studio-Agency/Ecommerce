@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
@@ -16,11 +15,11 @@ from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.logging import get_logger
+from app.core.money import ZERO, money
 from app.core.pagination import PageParams
 from app.orders.constants import (
     ALLOWED_TRANSITIONS,
     ORDER_NUMBER_PREFIX,
-    SHIPPING_AMOUNT,
     OrderStatus,
     PaymentStatus,
 )
@@ -31,6 +30,7 @@ from app.payments.constants import PaymentProvider
 from app.payments.constants import PaymentStatus as CashStatus
 from app.payments.models import Payment
 from app.payments.repository import PaymentRepository
+from app.pricing.service import ShippingService, TaxService
 
 logger = get_logger("orders")
 
@@ -72,12 +72,14 @@ class CheckoutService:
         self.orders = OrderRepository(session, tenant_id)
         self.inventory = InventoryService(session, tenant_id)
         self.payments = PaymentRepository(session, tenant_id)
+        self.shipping = ShippingService(session, tenant_id)
+        self.tax = TaxService(session, tenant_id)
 
     async def preview(self) -> CheckoutPreview:
         """Price the cart without touching stock or creating anything."""
         cart = await self._require_active_cart()
         items = await self._priced_items(cart)
-        return self._summary(items)
+        return await self._summary(items)
 
     async def place_order(self, address_id: UUID) -> Order:
         """
@@ -93,7 +95,7 @@ class CheckoutService:
         cart = await self._require_active_cart()
         address = await self._require_address(address_id)
         items = await self._priced_items(cart)
-        summary = self._summary(items)
+        summary = await self._summary(items)
 
         try:
             order_number = await self._next_order_number()
@@ -116,6 +118,7 @@ class CheckoutService:
                 payment_status=PaymentStatus.PENDING.value,
                 subtotal=summary.subtotal,
                 shipping_amount=summary.shipping_amount,
+                tax_amount=summary.tax_amount,
                 total_amount=summary.total_amount,
                 delivery_name=address.full_name,
                 delivery_phone=address.phone,
@@ -241,15 +244,25 @@ class CheckoutService:
 
         return items
 
-    def _summary(self, items: list[CheckoutItem]) -> CheckoutPreview:
-        subtotal = sum((item.subtotal for item in items), Decimal("0.00"))
-        shipping = Decimal(SHIPPING_AMOUNT)
+    async def _summary(self, items: list[CheckoutItem]) -> CheckoutPreview:
+        """
+        What the basket costs, in the order the amounts depend on each other.
+
+        The goods first, then delivery -- which may be free once the goods are
+        expensive enough -- then tax on both, then the total. Every figure is
+        read from the tenant's own settings; nothing here comes from the
+        request.
+        """
+        subtotal = money(sum((item.subtotal for item in items), ZERO))
+        shipping = await self.shipping.calculate(subtotal)
+        tax = await self.tax.calculate(subtotal, shipping)
 
         return CheckoutPreview(
             items=items,
             subtotal=subtotal,
             shipping_amount=shipping,
-            total_amount=subtotal + shipping,
+            tax_amount=tax,
+            total_amount=subtotal + shipping + tax,
         )
 
     async def _next_order_number(self) -> str:

@@ -35,6 +35,7 @@ def order_read(order: Order, currency: str) -> OrderRead:
         items=[OrderItemRead.model_validate(item) for item in order.items],
         subtotal=order.subtotal,
         shipping_amount=order.shipping_amount,
+        tax_amount=order.tax_amount,
         total_amount=order.total_amount,
         currency=currency,
         payment=payment_read(order.payment, currency) if order.payment else None,
