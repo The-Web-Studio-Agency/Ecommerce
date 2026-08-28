@@ -37,6 +37,7 @@ from app.orders.constants import (
     OrderStatus,
     PaymentStatus,
 )
+from app.payments.models import Payment
 
 _ORDER_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in OrderStatus)
 _PAYMENT_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in PaymentStatus)
@@ -150,6 +151,22 @@ class Order(Base, TimestampMixin):
 
     delivery_country: Mapped[str] = mapped_column(
         String(MAX_CITY_LENGTH), nullable=False
+    )
+
+    # What is owed on this order and whether it has been collected. One
+    # payment per order -- checkout writes it, and the status changes settle
+    # it. Loaded the same way as the items, so reading an order never costs a
+    # second round trip.
+    payment: Mapped["Payment | None"] = relationship(
+        "Payment",
+        primaryjoin=lambda: and_(
+            Order.id == Payment.order_id,
+            Order.tenant_id == Payment.tenant_id,
+        ),
+        foreign_keys=lambda: [Payment.order_id, Payment.tenant_id],
+        uselist=False,
+        lazy="selectin",
+        viewonly=True,
     )
 
     # selectin loading: one extra query per page of orders rather than one per

@@ -13,7 +13,7 @@ class OrderStatus(str, Enum):
 
 
 class PaymentStatus(str, Enum):
-    """Where the money is. Payment gateway integration comes later."""
+    """Where the money is. Cash on delivery, so it lands on delivery."""
 
     PENDING = "PENDING"
     PAID = "PAID"

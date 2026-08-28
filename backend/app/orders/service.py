@@ -27,12 +27,20 @@ from app.orders.constants import (
 from app.orders.models import ORDER_NUMBER_SEQUENCE, Order, OrderItem
 from app.orders.repository import OrderRepository
 from app.orders.schemas import CheckoutItem, CheckoutPreview
+from app.payments.constants import PaymentProvider
+from app.payments.constants import PaymentStatus as CashStatus
+from app.payments.models import Payment
+from app.payments.repository import PaymentRepository
 
 logger = get_logger("orders")
 
 ORDER_NOT_FOUND = "Order not found"
 ADDRESS_NOT_FOUND = "Address not found"
 CART_EMPTY = "Your cart is empty"
+
+# How far a customer may cancel on their own. Past this the order is being
+# picked and packed, so cancelling becomes a conversation with the shop.
+CUSTOMER_CANCELLABLE_STATUSES = frozenset({OrderStatus.PENDING, OrderStatus.CONFIRMED})
 
 
 class CheckoutService:
@@ -43,7 +51,11 @@ class CheckoutService:
 
     * `preview` validates the cart and prices it, changing nothing.
     * `place_order` does the same validation, then reserves stock, writes the
-      order and marks the cart converted -- all in one transaction.
+      order and its payment, and marks the cart converted -- all in one
+      transaction.
+
+    Cash on delivery is the only way to pay, so there is nothing to choose:
+    every order gets its payment here, and no order can exist without one.
 
     Prices are always read from the catalogue. The only thing the client sends
     is which address to deliver to.
@@ -59,6 +71,7 @@ class CheckoutService:
         self.addresses = AddressRepository(session, tenant_id)
         self.orders = OrderRepository(session, tenant_id)
         self.inventory = InventoryService(session, tenant_id)
+        self.payments = PaymentRepository(session, tenant_id)
 
     async def preview(self) -> CheckoutPreview:
         """Price the cart without touching stock or creating anything."""
@@ -73,6 +86,9 @@ class CheckoutService:
         One transaction from start to finish: if reserving stock for the third
         line fails, the first two reservations and the half-written order roll
         back with it, so a failed checkout leaves nothing behind.
+
+        The order starts PENDING and its payment starts PENDING too -- the shop
+        confirms the order, and the cash arrives when the courier does.
         """
         cart = await self._require_active_cart()
         address = await self._require_address(address_id)
@@ -95,7 +111,8 @@ class CheckoutService:
                 customer_id=self.customer_id,
                 order_number=order_number,
                 status=OrderStatus.PENDING.value,
-                # Payment integration comes later; every order starts unpaid.
+                # Everything is cash on delivery, so an order is unpaid until
+                # the courier hands it over. See OrderService._collect_cash.
                 payment_status=PaymentStatus.PENDING.value,
                 subtotal=summary.subtotal,
                 shipping_amount=summary.shipping_amount,
@@ -127,6 +144,19 @@ class CheckoutService:
                         subtotal=item.subtotal,
                     )
                 )
+
+            # Cash on delivery, so nothing is collected yet. The row exists
+            # from the start so that "what is owed on this order" is never a
+            # question the database cannot answer.
+            self.session.add(
+                Payment(
+                    tenant_id=self.tenant_id,
+                    order_id=order.id,
+                    amount=summary.total_amount,
+                    status=CashStatus.PENDING.value,
+                    provider=PaymentProvider.COD.value,
+                )
+            )
 
             # The cart is kept, not deleted -- its items stay readable for
             # support and debugging. A converted cart can never be checked out
@@ -241,6 +271,7 @@ class OrderService:
         self.tenant_id = tenant_id
         self.orders = OrderRepository(session, tenant_id)
         self.inventory = InventoryService(session, tenant_id)
+        self.payments = PaymentRepository(session, tenant_id)
 
     async def get(self, order_id: UUID) -> Order:
         """Admin lookup: any order in this tenant."""
@@ -281,7 +312,7 @@ class OrderService:
 
     async def update_status(self, order_id: UUID, new_status: OrderStatus) -> Order:
         """
-        Move an order to its next status, adjusting stock to match.
+        Move an order to its next status, adjusting stock and cash to match.
 
         Three of the transitions mean something for inventory:
 
@@ -289,7 +320,15 @@ class OrderService:
         * shipping it means the stock physically leaves -- `fulfil`
         * cancelling it hands the stock back -- `release`
 
-        Everything else only changes the status column.
+        Two of them mean something for the money, because everything is paid
+        for in cash on delivery:
+
+        * delivering it is when the cash is actually handed over -- the
+          payment becomes PAID
+        * cancelling it means the cash never will be -- the payment ends FAILED
+
+        Everything else only changes the status column. All of it commits
+        together, so stock, cash and status can never disagree.
         """
         order = await self.get(order_id)
         current = OrderStatus(order.status)
@@ -305,8 +344,11 @@ class OrderService:
         try:
             if new_status is OrderStatus.SHIPPED:
                 await self._fulfil_stock(order)
+            elif new_status is OrderStatus.DELIVERED:
+                await self._collect_cash(order)
             elif new_status is OrderStatus.CANCELLED:
                 await self._release_stock(order)
+                await self._abandon_payment(order)
 
             order.status = new_status.value
             await self.session.commit()
@@ -323,8 +365,30 @@ class OrderService:
         )
         return await self.get(order.id)
 
-    async def cancel(self, order_id: UUID) -> Order:
-        """Cancel an order and give its reserved stock back."""
+    async def cancel_for_customer(self, customer_id: UUID, order_id: UUID) -> Order:
+        """
+        Let a customer call off their own order.
+
+        Only while the shop has not started packing it. Once an order is
+        PROCESSING somebody is already picking stock off a shelf, so from
+        there it is the shop's decision -- an admin can still cancel it.
+
+        The cancellation itself goes through `update_status`, so the stock
+        comes back and the unpaid COD payment is written off exactly as it
+        would be for an admin.
+        """
+        order = await self.get_for_customer(customer_id, order_id)
+        current = OrderStatus(order.status)
+
+        if current is OrderStatus.CANCELLED:
+            return order
+
+        if current not in CUSTOMER_CANCELLABLE_STATUSES:
+            raise ConflictError(
+                f"An order that is {current.value} can no longer be cancelled online. "
+                "Please contact the store."
+            )
+
         return await self.update_status(order_id, OrderStatus.CANCELLED)
 
     async def _release_stock(self, order: Order) -> None:
@@ -338,3 +402,26 @@ class OrderService:
             await self.inventory.fulfil(
                 item.variant_id, item.quantity, reference=order.order_number, commit=False
             )
+
+    async def _collect_cash(self, order: Order) -> None:
+        """
+        The courier handed the goods over and took the money.
+
+        Nothing is committed here -- `update_status` owns the transaction, so
+        the order is never recorded as delivered without the cash, or paid
+        without being delivered.
+        """
+        payment = await self.payments.get_by_status(order.id, CashStatus.PENDING)
+        if payment is None:
+            return
+
+        payment.status = CashStatus.PAID.value
+        order.payment_status = PaymentStatus.PAID.value
+
+    async def _abandon_payment(self, order: Order) -> None:
+        """A cancelled order is never delivered, so its cash never arrives."""
+        payment = await self.payments.get_by_status(order.id, CashStatus.PENDING)
+        if payment is None:
+            return
+
+        payment.status = CashStatus.FAILED.value

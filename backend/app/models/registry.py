@@ -13,6 +13,7 @@ from app.catalogue.models import (
 )
 from app.models.base import Base
 from app.orders.models import Order, OrderItem
+from app.payments.models import Payment
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
 
@@ -28,6 +29,7 @@ __all__ = [
     "Order",
     "OrderItem",
     "OtpRequest",
+    "Payment",
     "Product",
     "ProductImage",
     "ProductOption",
