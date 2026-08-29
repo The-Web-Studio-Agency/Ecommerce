@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.orders.constants import OrderStatus, PaymentStatus
+from app.payments.schemas import PaymentRead
 
 
 class CheckoutItem(BaseModel):
@@ -31,6 +32,7 @@ class CheckoutPreview(BaseModel):
     items: list[CheckoutItem]
     subtotal: Decimal
     shipping_amount: Decimal
+    tax_amount: Decimal
     total_amount: Decimal
 
 
@@ -77,7 +79,13 @@ class OrderRead(BaseModel):
     items: list[OrderItemRead]
     subtotal: Decimal
     shipping_amount: Decimal
+    tax_amount: Decimal
     total_amount: Decimal
+    # From the tenant, not the order: a storefront prices in one currency.
+    currency: str
+    # Optional only for orders placed before payments existed -- checkout has
+    # written one for every order since.
+    payment: PaymentRead | None
     delivery_address: DeliveryAddressRead
     created_at: datetime
 
@@ -85,13 +93,12 @@ class OrderRead(BaseModel):
 class OrderSummaryRead(BaseModel):
     """A row in a list of orders -- no items, so listing stays cheap to read."""
 
-    model_config = ConfigDict(from_attributes=True)
-
     id: UUID
     order_number: str
     status: OrderStatus
     payment_status: PaymentStatus
     total_amount: Decimal
+    currency: str
     created_at: datetime
 
 

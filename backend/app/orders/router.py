@@ -17,8 +17,9 @@ from app.orders.schemas import (
     OrderStatusUpdate,
     OrderSummaryRead,
 )
-from app.orders.serializers import order_read
+from app.orders.serializers import order_read, order_summary_read
 from app.orders.service import CheckoutService, OrderService
+from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 
 # Customer-facing checkout. Both the tenant and the customer come from the
@@ -56,13 +57,14 @@ async def preview_checkout(
 )
 async def place_order(
     data: CheckoutCreate,
+    tenant: CurrentTenant,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[OrderRead]:
     order = await CheckoutService(session, user.tenant_id, user.id).place_order(
         data.address_id
     )
-    return ok(order_read(order), message="Order placed")
+    return ok(order_read(order, tenant.currency), message="Order placed")
 
 
 # --------------------------- CUSTOMER ORDERS --------------------------------
@@ -74,6 +76,7 @@ async def place_order(
     summary="List your orders",
 )
 async def list_my_orders(
+    tenant: CurrentTenant,
     params: PageParams = Depends(page_params),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
@@ -82,11 +85,28 @@ async def list_my_orders(
         params, customer_id=user.id
     )
     return paginated(
-        [OrderSummaryRead.model_validate(order) for order in orders],
+        [order_summary_read(order, tenant.currency) for order in orders],
         total_items=total,
         params=params,
         message="Orders retrieved",
     )
+
+
+@router.post(
+    "/{order_id}/cancel",
+    response_model=ApiResponse[OrderRead],
+    summary="Cancel one of your orders",
+)
+async def cancel_my_order(
+    order_id: UUID,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_customer),
+) -> ApiResponse[OrderRead]:
+    order = await OrderService(session, user.tenant_id).cancel_for_customer(
+        user.id, order_id
+    )
+    return ok(order_read(order, tenant.currency), message="Order cancelled")
 
 
 @router.get(
@@ -96,13 +116,14 @@ async def list_my_orders(
 )
 async def get_my_order(
     order_id: UUID,
+    tenant: CurrentTenant,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[OrderRead]:
     order = await OrderService(session, user.tenant_id).get_for_customer(
         user.id, order_id
     )
-    return ok(order_read(order), message="Order retrieved")
+    return ok(order_read(order, tenant.currency), message="Order retrieved")
 
 
 # ----------------------------- ADMIN ORDERS ---------------------------------
@@ -114,6 +135,7 @@ async def get_my_order(
     summary="List orders",
 )
 async def list_orders(
+    tenant: CurrentTenant,
     order_number: str | None = Query(
         default=None, max_length=32, description="Match an order number"
     ),
@@ -130,7 +152,7 @@ async def list_orders(
         payment_status=payment_status,
     )
     return paginated(
-        [OrderSummaryRead.model_validate(order) for order in orders],
+        [order_summary_read(order, tenant.currency) for order in orders],
         total_items=total,
         params=params,
         message="Orders retrieved",
@@ -144,11 +166,12 @@ async def list_orders(
 )
 async def get_order(
     order_id: UUID,
+    tenant: CurrentTenant,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[OrderRead]:
     order = await OrderService(session, user.tenant_id).get(order_id)
-    return ok(order_read(order), message="Order retrieved")
+    return ok(order_read(order, tenant.currency), message="Order retrieved")
 
 
 @admin_router.patch(
@@ -159,10 +182,11 @@ async def get_order(
 async def update_order_status(
     order_id: UUID,
     data: OrderStatusUpdate,
+    tenant: CurrentTenant,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> ApiResponse[OrderRead]:
     order = await OrderService(session, user.tenant_id).update_status(
         order_id, data.status
     )
-    return ok(order_read(order), message="Order status updated")
+    return ok(order_read(order, tenant.currency), message="Order status updated")

@@ -20,6 +20,12 @@ from app.catalogue.schemas import (
 from app.catalogue.service import CategoryService, ProductService, VariantService
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal, dispose_engine
+from app.pricing.constants import (
+    SEED_FREE_SHIPPING_MINIMUM,
+    SEED_SHIPPING_AMOUNT,
+    SEED_TAX_PERCENTAGE,
+)
+from app.pricing.models import ShippingSettings, TaxSettings
 from app.tenants.models import Tenant, TenantDomain
 from app.tenants.repository import TenantRepository
 from app.users.models import User
@@ -190,7 +196,12 @@ async def seed() -> None:
         # ------------------------------------------------------------ tenant
         tenant = await tenants.get_active_by_slug(slug)
         if tenant is None:
-            tenant = Tenant(name=settings.seed_tenant_name, slug=slug, is_active=True)
+            tenant = Tenant(
+                name=settings.seed_tenant_name,
+                slug=slug,
+                currency=settings.seed_tenant_currency,
+                is_active=True,
+            )
             session.add(tenant)
             await session.flush()
             print(f"Created tenant: {tenant.name} ({tenant.slug})")
@@ -220,6 +231,41 @@ async def seed() -> None:
             print(f"Created tenant admin: {email}")
         else:
             print(f"Tenant admin already exists: {email}")
+
+        # ------------------------------------------------ shipping and tax
+        # What the storefront adds on top of the goods. Seeded once; an admin
+        # changes it through /admin/shipping and /admin/tax after that.
+        if await session.scalar(
+            select(ShippingSettings).where(ShippingSettings.tenant_id == tenant.id)
+        ) is None:
+            session.add(
+                ShippingSettings(
+                    tenant_id=tenant.id,
+                    shipping_amount=SEED_SHIPPING_AMOUNT,
+                    free_shipping_minimum=SEED_FREE_SHIPPING_MINIMUM,
+                    is_active=True,
+                )
+            )
+            print(
+                f"Created shipping settings: {SEED_SHIPPING_AMOUNT} "
+                f"(free over {SEED_FREE_SHIPPING_MINIMUM})"
+            )
+        else:
+            print("Shipping settings already exist")
+
+        if await session.scalar(
+            select(TaxSettings).where(TaxSettings.tenant_id == tenant.id)
+        ) is None:
+            session.add(
+                TaxSettings(
+                    tenant_id=tenant.id,
+                    tax_percentage=SEED_TAX_PERCENTAGE,
+                    is_active=True,
+                )
+            )
+            print(f"Created tax settings: {SEED_TAX_PERCENTAGE}%")
+        else:
+            print("Tax settings already exist")
 
         await session.commit()
 

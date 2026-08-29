@@ -37,6 +37,7 @@ from app.orders.constants import (
     OrderStatus,
     PaymentStatus,
 )
+from app.payments.models import Payment
 
 _ORDER_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in OrderStatus)
 _PAYMENT_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in PaymentStatus)
@@ -77,11 +78,13 @@ class Order(Base, TimestampMixin):
         ),
         CheckConstraint("subtotal >= 0", name="subtotal_not_negative"),
         CheckConstraint("shipping_amount >= 0", name="shipping_not_negative"),
+        CheckConstraint("tax_amount >= 0", name="tax_not_negative"),
         # The total is never stored independently of its parts, so a bug that
         # miscalculates one of them is a database error rather than a wrong
         # number on an invoice.
         CheckConstraint(
-            "total_amount = subtotal + shipping_amount", name="total_is_subtotal_plus_shipping"
+            "total_amount = subtotal + shipping_amount + tax_amount",
+            name="total_is_subtotal_plus_shipping_plus_tax",
         ),
         Index("ix_orders_tenant_id_customer_id", "tenant_id", "customer_id"),
         Index("ix_orders_tenant_id_status", "tenant_id", "status"),
@@ -122,6 +125,13 @@ class Order(Base, TimestampMixin):
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
 
+    # What the tenant's tax rate worked out to at the moment of purchase. It
+    # is stored, not recalculated, so changing the rate tomorrow cannot rewrite
+    # what this customer was charged today.
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
+    )
+
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
@@ -150,6 +160,22 @@ class Order(Base, TimestampMixin):
 
     delivery_country: Mapped[str] = mapped_column(
         String(MAX_CITY_LENGTH), nullable=False
+    )
+
+    # What is owed on this order and whether it has been collected. One
+    # payment per order -- checkout writes it, and the status changes settle
+    # it. Loaded the same way as the items, so reading an order never costs a
+    # second round trip.
+    payment: Mapped["Payment | None"] = relationship(
+        "Payment",
+        primaryjoin=lambda: and_(
+            Order.id == Payment.order_id,
+            Order.tenant_id == Payment.tenant_id,
+        ),
+        foreign_keys=lambda: [Payment.order_id, Payment.tenant_id],
+        uselist=False,
+        lazy="selectin",
+        viewonly=True,
     )
 
     # selectin loading: one extra query per page of orders rather than one per

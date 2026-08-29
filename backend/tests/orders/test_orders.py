@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 from app.catalogue.service import InventoryService
+from tests.conftest import headers_for
 from tests.orders.conftest import ADMIN_ORDERS, ORDERS
 
 
@@ -240,3 +241,103 @@ async def test_an_unknown_status_is_refused(client, admin_headers, order):
     response = await _status(client, admin_headers, order["id"], "TELEPORTED")
 
     assert response.status_code == 422
+
+
+# --------------------------- CUSTOMER CANCELS -------------------------------
+
+
+async def _cancel(client, headers, order_id):
+    return await client.post(f"{ORDERS}/{order_id}/cancel", headers=headers)
+
+
+async def test_a_customer_cancels_their_own_pending_order(client, customer_auth, order):
+    response = await _cancel(client, customer_auth, order["id"])
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["status"] == "CANCELLED"
+
+
+async def test_a_customer_may_still_cancel_a_confirmed_order(
+    client, admin_headers, customer_auth, order
+):
+    await _status(client, admin_headers, order["id"], "CONFIRMED")
+
+    response = await _cancel(client, customer_auth, order["id"])
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["status"] == "CANCELLED"
+
+
+async def test_a_customer_may_not_cancel_once_it_is_being_packed(
+    client, admin_headers, customer_auth, order
+):
+    await _status(client, admin_headers, order["id"], "PROCESSING")
+
+    response = await _cancel(client, customer_auth, order["id"])
+
+    assert response.status_code == 409
+    assert "contact the store" in response.json()["message"]
+
+
+async def test_an_admin_can_still_cancel_a_processing_order(
+    client, admin_headers, customer_auth, order
+):
+    """What a customer may no longer do online, the shop still can."""
+    await _status(client, admin_headers, order["id"], "PROCESSING")
+
+    response = await _status(client, admin_headers, order["id"], "CANCELLED")
+
+    assert response.status_code == 200, response.text
+
+
+async def test_a_customer_may_not_cancel_a_shipped_order(
+    client, admin_headers, customer_auth, order
+):
+    for value in ("PROCESSING", "SHIPPED"):
+        await _status(client, admin_headers, order["id"], value)
+
+    response = await _cancel(client, customer_auth, order["id"])
+
+    assert response.status_code == 409
+
+
+async def test_cancelling_twice_is_harmless(client, customer_auth, order):
+    first = await _cancel(client, customer_auth, order["id"])
+    second = await _cancel(client, customer_auth, order["id"])
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["data"]["status"] == "CANCELLED"
+
+
+async def test_a_customer_cannot_cancel_another_customers_order(
+    client, order, make_user, tenant
+):
+    intruder = await make_user(tenant=tenant, phone="+919822229001")
+
+    response = await _cancel(client, headers_for(intruder), order["id"])
+
+    assert response.status_code == 404
+
+
+async def test_cancelling_gives_the_stock_back_to_the_shelf(
+    client, customer_auth, session, tenant, order, variant
+):
+    response = await _cancel(client, customer_auth, order["id"])
+    assert response.status_code == 200, response.text
+
+    item = await InventoryService(session, tenant.id).get(UUID(variant["id"]))
+    assert item.reserved_quantity == 0
+    assert item.available_quantity == 10
+
+
+async def test_an_anonymous_caller_cannot_cancel(client, order):
+    response = await client.post(f"{ORDERS}/{order['id']}/cancel")
+
+    assert response.status_code == 401
+
+
+async def test_staff_may_not_use_the_customer_cancel_route(client, staff_headers, order):
+    response = await _cancel(client, staff_headers, order["id"])
+
+    assert response.status_code == 403

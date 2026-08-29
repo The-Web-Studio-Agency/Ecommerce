@@ -7,6 +7,8 @@ from typing import Annotated
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.tenants.constants import DEFAULT_CURRENCY
+
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
 
@@ -72,6 +74,7 @@ class Settings(BaseSettings):
 
     seed_tenant_name: str = "Zeen"
     seed_tenant_slug: str = "zeen"
+    seed_tenant_currency: str = DEFAULT_CURRENCY
     seed_tenant_domain: str = "localhost"
     seed_admin_phone: str | None = None
     seed_admin_email: str | None = None

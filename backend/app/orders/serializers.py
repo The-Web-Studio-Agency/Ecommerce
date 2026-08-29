@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from app.orders.models import Order
-from app.orders.schemas import DeliveryAddressRead, OrderItemRead, OrderRead
+from app.orders.schemas import (
+    DeliveryAddressRead,
+    OrderItemRead,
+    OrderRead,
+    OrderSummaryRead,
+)
+from app.payments.serializers import payment_read
 
 
 def delivery_address(order: Order) -> DeliveryAddressRead:
@@ -19,7 +25,8 @@ def delivery_address(order: Order) -> DeliveryAddressRead:
     )
 
 
-def order_read(order: Order) -> OrderRead:
+def order_read(order: Order, currency: str) -> OrderRead:
+    """`currency` comes from the tenant -- see `payments.serializers`."""
     return OrderRead(
         id=order.id,
         order_number=order.order_number,
@@ -28,7 +35,22 @@ def order_read(order: Order) -> OrderRead:
         items=[OrderItemRead.model_validate(item) for item in order.items],
         subtotal=order.subtotal,
         shipping_amount=order.shipping_amount,
+        tax_amount=order.tax_amount,
         total_amount=order.total_amount,
+        currency=currency,
+        payment=payment_read(order.payment, currency) if order.payment else None,
         delivery_address=delivery_address(order),
+        created_at=order.created_at,
+    )
+
+
+def order_summary_read(order: Order, currency: str) -> OrderSummaryRead:
+    return OrderSummaryRead(
+        id=order.id,
+        order_number=order.order_number,
+        status=order.status,
+        payment_status=order.payment_status,
+        total_amount=order.total_amount,
+        currency=currency,
         created_at=order.created_at,
     )
