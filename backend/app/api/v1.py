@@ -39,6 +39,9 @@ api_router.include_router(checkout_router)
 api_router.include_router(orders_router)
 api_router.include_router(orders_admin_router)
 
+#whishlist
+api_router.include_router(wishlist_router)
+
 #payments
 api_router.include_router(payments_router)
 api_router.include_router(payments_admin_router)

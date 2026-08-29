@@ -17,6 +17,7 @@ from app.payments.models import Payment
 from app.pricing.models import ShippingSettings, TaxSettings
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
+from app.wishlist.models import Wishlist, WishlistItem
 
 __all__ = [
     "AdminAuthChallenge",
@@ -42,4 +43,6 @@ __all__ = [
     "Tenant",
     "TenantDomain",
     "User",
+    "Wishlist",
+    "WishlistItem"
 ]

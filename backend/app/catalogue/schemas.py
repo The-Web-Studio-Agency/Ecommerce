@@ -309,6 +309,7 @@ class ProductCreate(BaseModel):
     seo_title: str | None = Field(default=None, max_length=MAX_SEO_TITLE_LENGTH)
     seo_description: str | None = Field(
         default=None, max_length=MAX_SEO_DESCRIPTION_LENGTH
+    
     )
 
     # A product is never listable without artwork, so at least one image is
