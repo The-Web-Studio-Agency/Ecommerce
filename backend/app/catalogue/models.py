@@ -38,6 +38,7 @@ from app.catalogue.constants import (
     InventoryReason,
 )
 from app.models.base import Base, TimestampMixin
+from app.ratings.models import Review
 
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CatalogueStatus)
 _REASON_VALUES = ", ".join(f"'{reason.value}'" for reason in InventoryReason)
@@ -183,6 +184,16 @@ class Product(Base, TimestampMixin):
         foreign_keys=lambda: [ProductVariant.product_id, ProductVariant.tenant_id],
         order_by=lambda: ProductVariant.sku,
         lazy="selectin",
+        viewonly=True,
+    )
+    reviews: Mapped[list["Review"]] = relationship(
+        "Review",
+        primaryjoin=lambda: and_(
+            Product.id == Review.product_id,
+            Product.tenant_id == Review.tenant_id,
+        ),
+        foreign_keys=lambda: [Review.product_id, Review.tenant_id],
+        cascade="all, delete-orphan",
         viewonly=True,
     )
 

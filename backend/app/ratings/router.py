@@ -18,7 +18,7 @@ def get_review_service(session: AsyncSession = Depends(get_db)) -> ReviewService
     return ReviewService(repo)
 
 
-@router.post("/", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
 async def create_review(
     data: ReviewCreate,
     current_user: CurrentUser,
@@ -26,27 +26,27 @@ async def create_review(
     service: ReviewService = Depends(get_review_service)
 ):
     # Pass user.id and tenant.id from the authenticated context
-    return service.create_review(user_id=current_user.id, tenant_id=str(tenant.id), data=data)
+    return await service.create_review(user_id=current_user.id, tenant_id=tenant.id, data=data)
 
 
 @router.get("/product/{product_id}", response_model=List[ReviewResponse])
 async def get_product_reviews(
-    product_id: int,
+    product_id: UUID,
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=50),
     service: ReviewService = Depends(get_review_service)
 ):
-    reviews, _ = service.list_product_reviews(product_id, page=page, size=size)
+    reviews, _ = await service.list_product_reviews(product_id, page=page, size=size)
     return reviews
 
 
 
 @router.get("/product/{product_id}/summary", response_model=RatingSummaryResponse)
 async def get_product_rating_summary(
-    product_id: int,
+    product_id: UUID,
     service: ReviewService = Depends(get_review_service)
 ):
-    return service.get_summary(product_id)
+    return await service.get_summary(product_id)
 
 
 @router.patch("/{review_id}", response_model=ReviewResponse)
@@ -56,15 +56,13 @@ async def update_review(
     current_user: CurrentUser,
     service: ReviewService = Depends(get_review_service)
 ):
-    return service.update_review(review_id=review_id, user_id=current_user.id, data=data)
+    return await service.update_review(review_id=review_id, user_id=current_user.id, data=data)
 
 
 @router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_review(
     review_id: int,
     current_user: CurrentUser,
-    admin_user: User = Depends(require_admin),  # Ensures only admins can bypass ownership check if desired, or handle inside service
     service: ReviewService = Depends(get_review_service)
 ):
-    is_admin = admin_user is not None
-    service.delete_review(review_id=review_id, user_id=current_user.id, is_admin=is_admin)
+    await service.delete_review(review_id=review_id, user_id=current_user.id)

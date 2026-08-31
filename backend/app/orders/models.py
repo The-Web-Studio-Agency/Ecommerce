@@ -191,6 +191,11 @@ class Order(Base, TimestampMixin):
         lazy="selectin",
         viewonly=True,
     )
+    reviews: Mapped[list["Review"]] = relationship(
+        "Review",
+        back_populates="order",
+        overlaps="product,user",
+    )
 
 
 class OrderItem(Base, TimestampMixin):

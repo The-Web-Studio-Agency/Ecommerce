@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field, HttpUrl
@@ -21,7 +22,7 @@ class ReviewImageResponse(ReviewImageBase):
 
 
 class ReviewCreate(BaseModel):
-    product_id: int
+    product_id: uuid.UUID
     rating: int = Field(..., ge=1, le=5)
     title: Optional[str] = Field(None, max_length=150)
     comment: Optional[str] = Field(None, max_length=2000)
@@ -37,10 +38,10 @@ class ReviewUpdate(BaseModel):
 
 class ReviewResponse(BaseModel):
     id: int
-    tenant_id: str
-    product_id: int
-    user_id: int
-    order_id: Optional[int] = None
+    tenant_id: uuid.UUID
+    product_id: uuid.UUID
+    user_id: uuid.UUID
+    order_id: Optional[uuid.UUID] = None
     rating: int
     title: Optional[str] = None
     comment: Optional[str] = None
@@ -55,7 +56,7 @@ class ReviewResponse(BaseModel):
 
 
 class RatingSummaryResponse(BaseModel):
-    product_id: int
+    product_id: uuid.UUID
     average_rating: float
     total_reviews: int
     rating_distribution: dict[int, int]  # e.g., {1: count, 2: count, ... 5: count}

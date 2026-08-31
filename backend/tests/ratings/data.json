@@ -1,0 +1,19 @@
+{
+    "routes": { "reviews": "/api/v1/reviews" },
+    "customers": {
+      "owner": "+919811110001",
+      "intruder": "+919811110002",
+      "shopper": "+919811110006"
+    },
+    "review": {
+      "rating": 5,
+      "title": "Excellent product!",
+      "comment": "Really loved the quality and material.",
+      "images": [
+        {
+          "image_url": "https://example.com/images/review-1.jpg",
+          "alt_text": "Product front view"
+        }
+      ]
+    }
+  }

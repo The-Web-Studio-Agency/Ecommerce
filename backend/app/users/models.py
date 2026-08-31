@@ -2,7 +2,7 @@ import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.auth.constants import UserRole, UserStatus
 from app.models.base import Base, TimestampMixin
@@ -66,7 +66,12 @@ class User(Base, TimestampMixin):
     )
 
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
+    reviews: Mapped[list["Review"]] = relationship(
+        "Review",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        overlaps="order,product,reviews",
+    )
     @property
     def is_active(self) -> bool:
         return self.status == UserStatus.ACTIVE.value
