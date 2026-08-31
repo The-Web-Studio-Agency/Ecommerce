@@ -38,15 +38,9 @@ from app.catalogue.constants import (
     InventoryReason,
 )
 from app.models.base import Base, TimestampMixin
-from app.ratings.models import Review
 
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CatalogueStatus)
 _REASON_VALUES = ", ".join(f"'{reason.value}'" for reason in InventoryReason)
-
-# Every child table carries tenant_id and joins to its parent on
-# (tenant_id, parent_id) rather than parent_id alone. The composite foreign key
-# makes it impossible for a row to point at a parent in another tenant, so
-# isolation is enforced by the database and not only by repository filters.
 
 
 class Category(Base, TimestampMixin):
@@ -77,9 +71,6 @@ class Category(Base, TimestampMixin):
         String(MAX_DESCRIPTION_LENGTH), nullable=True
     )
 
-    # Categories share the product lifecycle instead of a separate is_active
-    # flag. Archived products still reference their category, so a category is
-    # archived rather than deleted -- a hard delete would break that reference.
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -101,7 +92,6 @@ class Product(Base, TimestampMixin):
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
         Index("ix_products_tenant_id_category_id", "tenant_id", "category_id"),
-        # Serves the storefront listing, which always filters on status.
         Index("ix_products_tenant_id_status", "tenant_id", "status"),
         Index("ix_products_tenant_id_is_featured", "tenant_id", "is_featured"),
         Index("ix_products_tenant_id_brand", "tenant_id", "brand"),
@@ -149,8 +139,6 @@ class Product(Base, TimestampMixin):
         String(MAX_SEO_DESCRIPTION_LENGTH), nullable=True
     )
 
-    # selectin loading: one extra query per page rather than one per product,
-    # which is what keeps the storefront listing off an N+1.
     images: Mapped[list["ProductImage"]] = relationship(
         "ProductImage",
         primaryjoin=lambda: and_(
@@ -186,26 +174,10 @@ class Product(Base, TimestampMixin):
         lazy="selectin",
         viewonly=True,
     )
-    reviews: Mapped[list["Review"]] = relationship(
-        "Review",
-        primaryjoin=lambda: and_(
-            Product.id == Review.product_id,
-            Product.tenant_id == Review.tenant_id,
-        ),
-        foreign_keys=lambda: [Review.product_id, Review.tenant_id],
-        cascade="all, delete-orphan",
-        viewonly=True,
-    )
 
 
 class ProductOption(Base, TimestampMixin):
-    """
-    A dimension a product varies along -- "Color", "Size".
-
-    Options belong to the product; the concrete values live on the variant link
-    (ProductVariantOption). Two tables rather than three keeps the MVP simple
-    while still answering "which colors exist" and "which SKU is Black / M".
-    """
+    """A dimension a product varies along, such as Color or Size."""
 
     __tablename__ = "product_options"
 
@@ -239,7 +211,6 @@ class ProductOption(Base, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(MAX_OPTION_NAME_LENGTH), nullable=False)
 
-    # Display order, so the storefront renders Color before Size consistently.
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
@@ -276,8 +247,6 @@ class ProductVariant(Base, TimestampMixin):
 
     sku: Mapped[str] = mapped_column(String(MAX_SKU_LENGTH), nullable=False)
 
-    # Kept as a human label ("Small / Black") alongside structured options, so
-    # existing callers and admin listings do not need the option join.
     name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
 
     price: Mapped[Decimal] = mapped_column(
@@ -387,8 +356,6 @@ class ProductImage(Base, TimestampMixin):
         Index("ix_product_images_tenant_id_product_id", "tenant_id", "product_id"),
         CheckConstraint("length(trim(url)) > 0", name="image_url_not_blank"),
         CheckConstraint("sort_order >= 0", name="image_sort_order_valid"),
-        # At most one primary image per product. Enforced here rather than in
-        # Python so two concurrent "make this primary" requests cannot both win.
         Index(
             "uq_product_images_one_primary_per_product",
             "tenant_id",
@@ -422,16 +389,7 @@ class ProductImage(Base, TimestampMixin):
 
 
 class InventoryItem(Base, TimestampMixin):
-    """
-    Stock for one variant.
-
-    A separate table rather than columns on ProductVariant: stock changes on
-    every order while the variant row is read constantly by the storefront, so
-    keeping them apart avoids locking a hot read row to reserve a unit.
-
-    `available_quantity` is what physically exists; `reserved_quantity` is the
-    part already promised to open orders. Sellable stock is the difference.
-    """
+    """Stock for one variant; sellable stock is available minus reserved."""
 
     __tablename__ = "inventory_items"
 
@@ -447,8 +405,6 @@ class InventoryItem(Base, TimestampMixin):
         ),
         CheckConstraint("available_quantity >= 0", name="available_not_negative"),
         CheckConstraint("reserved_quantity >= 0", name="reserved_not_negative"),
-        # Cannot promise more than exists. This is the invariant that makes
-        # overselling a database error rather than a race nobody notices.
         CheckConstraint(
             "reserved_quantity <= available_quantity", name="reserved_within_available"
         ),
@@ -475,12 +431,7 @@ class InventoryItem(Base, TimestampMixin):
 
 
 class InventoryMovement(Base):
-    """
-    Append-only record of every stock change.
-
-    Kept so that a stock level can always be explained after the fact, which
-    matters once orders start moving stock automatically.
-    """
+    """Append-only record of every stock change."""
 
     __tablename__ = "inventory_movements"
 
@@ -512,13 +463,10 @@ class InventoryMovement(Base):
 
     variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    # Signed change to available_quantity. Reservations move reserved_quantity
-    # instead and are recorded with a delta of 0.
     delta: Mapped[int] = mapped_column(Integer, nullable=False)
 
     reason: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    # Free-form pointer to whatever caused the movement (an order id, later on).
     reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)
