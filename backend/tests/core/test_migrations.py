@@ -7,7 +7,6 @@ from pathlib import Path
 import app.models.registry as registry
 from app.models.base import Base
 
-# tests/core/test_migrations.py -> tests/core -> tests -> backend
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 EXPECTED_TABLES = {

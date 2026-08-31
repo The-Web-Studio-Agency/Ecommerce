@@ -15,19 +15,7 @@ PAYMENT_NOT_FOUND = "Payment not found"
 
 
 class PaymentService:
-    """
-    Reading back what is owed on an order, and what has been collected.
-
-    Read-only on purpose. Cash on delivery is the only way to pay, so there is
-    nothing for a customer to choose: checkout writes the payment, and the
-    order lifecycle settles it -- PAID when the order is delivered, FAILED when
-    it is cancelled. See `CheckoutService.place_order` and
-    `OrderService.update_status`.
-
-    Constructed with a tenant id, so every query is already scoped to one
-    storefront. Customer-facing methods take the customer id as well, which is
-    what keeps one customer out of another's payments.
-    """
+    """Read-only access to payments, scoped to one tenant."""
 
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session
@@ -43,12 +31,7 @@ class PaymentService:
         return payment
 
     async def get_for_customer(self, customer_id: UUID, payment_id: UUID) -> Payment:
-        """
-        Customer lookup: payments on their own orders only.
-
-        Another customer's payment and another tenant's payment both come back
-        as "not found", so neither can be probed for existence.
-        """
+        """Fetch a payment on one of the customer's own orders."""
         payment = await self.get(payment_id)
 
         order = await self.orders.get_for_customer(customer_id, payment.order_id)

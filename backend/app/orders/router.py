@@ -22,18 +22,11 @@ from app.orders.service import CheckoutService, OrderService
 from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 
-# Customer-facing checkout. Both the tenant and the customer come from the
-# access token, and the only thing the request carries is an address id.
 checkout_router = APIRouter(prefix="/checkout", tags=["Checkout"])
 
-# A customer reading their own orders.
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
-# Order management for the shop. Reads allow STAFF, status changes need ADMIN.
 admin_router = APIRouter(prefix="/admin/orders", tags=["Admin-Order_management"])
-
-
-# ------------------------------- CHECKOUT -----------------------------------
 
 
 @checkout_router.post(
@@ -65,9 +58,6 @@ async def place_order(
         data.address_id
     )
     return ok(order_read(order, tenant.currency), message="Order placed")
-
-
-# --------------------------- CUSTOMER ORDERS --------------------------------
 
 
 @router.get(
@@ -124,9 +114,6 @@ async def get_my_order(
         user.id, order_id
     )
     return ok(order_read(order, tenant.currency), message="Order retrieved")
-
-
-# ----------------------------- ADMIN ORDERS ---------------------------------
 
 
 @admin_router.get(

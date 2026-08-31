@@ -1,8 +1,4 @@
-"""
-Product images: ordering, the primary image, and the last-image rule.
-
-Every test follows the same shape: setup, one action, then assertions.
-"""
+"""Product images: ordering, the primary image, and the last-image rule."""
 
 from __future__ import annotations
 

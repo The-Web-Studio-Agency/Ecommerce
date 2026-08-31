@@ -185,10 +185,6 @@ async def _verify_staff_otp(
     return ok(tokens, message="Login successful")
 
 
-# Note: staff OTP verification is intentionally not exposed publicly.
-# Legacy admin verification route remains at /admin/auth/verify-otp (hidden from docs).
-
-
 @admin_router.post(
     "/verify-otp",
     include_in_schema=False,

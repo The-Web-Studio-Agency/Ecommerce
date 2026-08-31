@@ -16,14 +16,9 @@ from app.pricing.serializers import shipping_read, tax_read
 from app.pricing.service import ShippingService, TaxService
 from app.users.models import User
 
-# Store configuration. Staff may read what the shop charges; only an ADMIN may
-# change it. The tenant always comes from the access token, never the body.
 shipping_router = APIRouter(prefix="/admin/shipping", tags=["Admin-Shipping"])
 
 tax_router = APIRouter(prefix="/admin/tax", tags=["Admin-Tax"])
-
-
-# ------------------------------- SHIPPING -----------------------------------
 
 
 @shipping_router.get(
@@ -51,9 +46,6 @@ async def update_shipping_settings(
 ) -> ApiResponse[ShippingSettingsRead]:
     settings = await ShippingService(session, user.tenant_id).update_settings(data)
     return ok(shipping_read(settings), message="Shipping settings updated")
-
-
-# --------------------------------- TAX --------------------------------------
 
 
 @tax_router.get(

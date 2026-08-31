@@ -13,8 +13,6 @@ from app.core.responses import ErrorPayload, ErrorResponse
 
 logger = get_logger("errors")
 
-# Starlette raises bare HTTPExceptions for routing and method failures; map the
-# ones we can actually produce onto the vocabulary the rest of the API uses.
 _STATUS_ERROR_CODES = {
     status.HTTP_401_UNAUTHORIZED: "AUTHENTICATION_FAILED",
     status.HTTP_403_FORBIDDEN: "PERMISSION_DENIED",
@@ -74,13 +72,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
 async def validation_error_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    """
-    Report *which* field failed and why, never what was submitted.
-
-    FastAPI's default handler serialises the rejected value under `input`,
-    which leaks passwords and one-time codes into response bodies and access
-    logs. Only the location, type and message are echoed back.
-    """
+    """Report which field failed and why, never the value that was submitted."""
     details = [
         {
             "field": ".".join(str(part) for part in error.get("loc", ())[1:]),

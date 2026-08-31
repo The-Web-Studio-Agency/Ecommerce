@@ -1,10 +1,4 @@
-"""
-What the store adds on top of the goods.
-
-Two settings rows per tenant -- one flat shipping charge, one tax percentage --
-and nothing else. No zones, no jurisdictions, no rules: whatever a tenant puts
-here is what every order of theirs is charged.
-"""
+"""Per-tenant shipping and tax settings: one flat charge, one percentage."""
 
 import uuid
 from decimal import Decimal
@@ -17,24 +11,16 @@ from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
 from app.models.base import Base, TimestampMixin
 from app.pricing.constants import MAX_TAX_PERCENTAGE
 
-# 999.99 is plenty for a percentage; the check constraint holds it to 100.
 TAX_PRECISION = 5
 TAX_SCALE = 2
 
 
 class ShippingSettings(Base, TimestampMixin):
-    """
-    One tenant's delivery charge.
-
-    `free_shipping_minimum` is optional. Left NULL, every order pays
-    `shipping_amount`; set, an order at or above it ships free.
-    """
+    """One tenant's delivery charge, free above `free_shipping_minimum`."""
 
     __tablename__ = "shipping_settings"
 
     __table_args__ = (
-        # One configuration per tenant, enforced here rather than in Python so
-        # two concurrent first-writes cannot create a second row.
         UniqueConstraint("tenant_id", name="uq_shipping_settings_tenant_id"),
         CheckConstraint("shipping_amount >= 0", name="shipping_amount_not_negative"),
         CheckConstraint(
@@ -61,8 +47,6 @@ class ShippingSettings(Base, TimestampMixin):
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=True
     )
 
-    # Switched off means the tenant charges nothing for delivery, which is also
-    # what a tenant with no row at all gets.
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 

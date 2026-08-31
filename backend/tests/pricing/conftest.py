@@ -1,9 +1,4 @@
-"""
-Fixtures for the shipping and tax tests.
-
-The variant is priced at 1000.00 so the worked example from the spec falls out
-of two of them: 2000.00 goods + 100.00 delivery, taxed at 18%, is 2478.00.
-"""
+"""Fixtures for the shipping and tax tests."""
 
 from __future__ import annotations
 

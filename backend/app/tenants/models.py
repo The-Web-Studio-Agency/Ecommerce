@@ -12,8 +12,6 @@ class Tenant(Base, TimestampMixin):
     __tablename__ = "tenants"
 
     __table_args__ = (
-        # ISO 4217, upper case. Checked here so a lower-case "inr" cannot reach
-        # a price label anywhere in the API.
         CheckConstraint(
             f"currency = upper(currency) AND length(currency) = {CURRENCY_CODE_LENGTH}",
             name="currency_is_iso_4217",
@@ -38,9 +36,6 @@ class Tenant(Base, TimestampMixin):
         index=True,
     )
 
-    # What this storefront prices and collects in. Zeen sells in India, so
-    # INR -- but a tenant in another market carries its own, which is why this
-    # is a column rather than a constant.
     currency: Mapped[str] = mapped_column(
         String(CURRENCY_CODE_LENGTH),
         nullable=False,

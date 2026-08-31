@@ -47,9 +47,6 @@ def _strip_optional(value: str | None) -> str | None:
     return value if value is None else value.strip()
 
 
-# ----------------------------- CATEGORIES -----------------------------------
-
-
 class CategoryCreate(BaseModel):
     name: str = Name
     description: str | None = Description
@@ -84,9 +81,6 @@ class CategoryStorefrontRead(BaseModel):
     id: UUID
     name: str
     description: str | None
-
-
-# ------------------------------- IMAGES -------------------------------------
 
 
 class ProductImageCreate(BaseModel):
@@ -142,9 +136,6 @@ class ProductImageStorefrontRead(BaseModel):
     is_primary: bool
 
 
-# ------------------------------- OPTIONS ------------------------------------
-
-
 class VariantOptionValue(BaseModel):
     """One dimension of a variant, e.g. name="Color", value="Black"."""
 
@@ -168,9 +159,6 @@ class StorefrontOption(BaseModel):
 
     name: str
     values: list[str]
-
-
-# ------------------------------ INVENTORY -----------------------------------
 
 
 class InventoryRead(BaseModel):
@@ -219,9 +207,6 @@ class InventoryMovementRead(BaseModel):
     reason: InventoryReason
     reference: str | None
     note: str | None
-
-
-# ------------------------------- VARIANTS -----------------------------------
 
 
 class VariantCreate(BaseModel):
@@ -293,9 +278,6 @@ class VariantStorefrontRead(BaseModel):
     available_quantity: int
 
 
-# ------------------------------- PRODUCTS -----------------------------------
-
-
 class ProductCreate(BaseModel):
     category_id: UUID
     name: str = Name
@@ -311,8 +293,6 @@ class ProductCreate(BaseModel):
         default=None, max_length=MAX_SEO_DESCRIPTION_LENGTH
     )
 
-    # A product is never listable without artwork, so at least one image is
-    # required up front rather than left to a follow-up call.
     images: list[ProductImageCreate] = Field(min_length=MIN_PRODUCT_IMAGES)
 
     _strip_name = field_validator("name")(_reject_blank)
@@ -369,12 +349,7 @@ class ProductRead(BaseModel):
 
 
 class ProductSummaryStorefrontRead(BaseModel):
-    """
-    Lightweight listing row.
-
-    Carries only what a grid renders -- primary image and price range -- rather
-    than every variant and image of every product.
-    """
+    """Lightweight listing row: primary image and price range only."""
 
     id: UUID
     category_id: UUID

@@ -1,11 +1,4 @@
-"""
-Catalogue access control: tenant isolation and role permissions.
-
-Every test follows the same shape: setup, one action, then assertions.
-
-A resource belonging to another tenant reads as 404, never 403 -- the API must
-not confirm that an id exists somewhere else.
-"""
+"""Catalogue access control: tenant isolation and role permissions."""
 
 from __future__ import annotations
 
@@ -23,9 +16,6 @@ from tests.catalogue.factories import (
 from tests.conftest import headers_for
 
 UNKNOWN_ID = "00000000-0000-0000-0000-000000000000"
-
-
-# ----------------------------- tenant isolation -----------------------------
 
 
 async def test_another_tenants_category_cannot_be_read(
@@ -216,9 +206,6 @@ async def test_a_forged_tenant_claim_does_not_change_scope(
     )
 
     assert response.status_code == 401
-
-
-# ------------------------------- permissions --------------------------------
 
 
 async def test_staff_may_read_the_catalogue(client, staff_headers, tenant):

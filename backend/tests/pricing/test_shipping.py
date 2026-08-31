@@ -6,15 +6,12 @@ from decimal import Decimal
 
 from tests.pricing.conftest import SHIPPING, shipping_payload
 
-# ----------------------------- CONFIGURATION --------------------------------
-
 
 async def test_shipping_settings_can_be_read(client, staff_headers):
     response = await client.get(SHIPPING, headers=staff_headers)
 
     assert response.status_code == 200, response.text
     body = response.json()["data"]
-    # Nothing configured yet, so the storefront ships free.
     assert Decimal(body["shipping_amount"]) == Decimal("0.00")
     assert body["free_shipping_minimum"] is None
     assert body["is_active"] is False
@@ -96,7 +93,6 @@ async def test_shipping_settings_are_per_tenant(
 
     response = await other_client.get(SHIPPING, headers=other_admin_headers)
 
-    # Zeen configured delivery; Acme did not, and cannot see Zeen's.
     assert response.status_code == 200, response.text
     assert response.json()["data"]["is_active"] is False
 
@@ -118,15 +114,12 @@ async def test_one_tenants_update_does_not_touch_another(
     assert Decimal(acme.json()["data"]["shipping_amount"]) == Decimal("250.00")
 
 
-# ------------------------------ CALCULATION ---------------------------------
-
-
 async def test_shipping_applies_below_the_free_threshold(
     set_shipping, set_tax, fill_cart, preview
 ):
     await set_shipping()
     await set_tax(tax_percentage="0.00")
-    await fill_cart(1)  # 1000.00, under the 2000.00 threshold
+    await fill_cart(1)
 
     body = await preview()
 
@@ -139,7 +132,7 @@ async def test_shipping_becomes_free_at_the_threshold(
 ):
     await set_shipping()
     await set_tax(tax_percentage="0.00")
-    await fill_cart(2)  # exactly 2000.00
+    await fill_cart(2)
 
     body = await preview()
 
@@ -152,7 +145,7 @@ async def test_shipping_stays_free_above_the_threshold(
 ):
     await set_shipping()
     await set_tax(tax_percentage="0.00")
-    await fill_cart(3)  # 3000.00
+    await fill_cart(3)
 
     body = await preview()
 
@@ -164,7 +157,7 @@ async def test_no_threshold_means_shipping_always_applies(
 ):
     await set_shipping(free_shipping_minimum=None)
     await set_tax(tax_percentage="0.00")
-    await fill_cart(5)  # 5000.00 -- still pays, there is no free threshold
+    await fill_cart(5)
 
     body = await preview()
 

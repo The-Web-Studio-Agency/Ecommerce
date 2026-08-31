@@ -21,12 +21,7 @@ class AddressRepository(TenantScopedRepository[Address]):
     async def get_for_customer(
         self, customer_id: UUID, address_id: UUID
     ) -> Address | None:
-        """
-        Scoped to the customer as well as the tenant.
-
-        An address id belonging to somebody else simply does not resolve, so
-        the caller learns nothing about whose it is.
-        """
+        """Fetch an address scoped to the customer as well as the tenant."""
         return await self.find_one(
             Address.id == address_id, Address.customer_id == customer_id
         )

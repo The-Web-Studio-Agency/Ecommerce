@@ -1,10 +1,4 @@
-"""
-Fixtures for the catalogue tests.
-
-A test should start with what it is actually testing, not three lines of setup,
-so the common chain -- category, then product, then a stocked variant -- is
-supplied here. Payloads come from data.json in this folder.
-"""
+"""Fixtures for the catalogue tests; payloads come from data.json."""
 
 from __future__ import annotations
 
@@ -29,12 +23,7 @@ async def product(client, admin_headers, category) -> dict:
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def new_variant(client, admin_headers, product):
-    """
-    Factory for stocked variants: `await new_variant(initial_quantity=3)`.
-
-    SKUs are numbered automatically, because they must be unique per tenant and
-    a test asking for two variants should not have to care.
-    """
+    """Factory for stocked variants: `await new_variant(initial_quantity=3)`."""
     counter = {"n": 0}
 
     async def _make(**overrides) -> dict:
@@ -61,12 +50,7 @@ async def variant(new_variant) -> dict:
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def product_with_images(client, admin_headers, category):
-    """
-    Factory: `product, images = await product_with_images(3)`.
-
-    Returns the product and its images already listed in sort order, because
-    almost every image test needs both.
-    """
+    """Factory: `product, images = await product_with_images(3)`, images in sort order."""
 
     async def _make(count: int = 3) -> tuple[dict, list[dict]]:
         product = await make_product(
@@ -88,12 +72,7 @@ async def product_with_images(client, admin_headers, category):
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def publish(client, admin_headers, category):
-    """
-    Factory for something the storefront will actually show.
-
-    `await publish(name="Hero", price="900.00", featured=True)` creates an
-    ACTIVE product in an ACTIVE category with one ACTIVE, stocked variant.
-    """
+    """Factory for an ACTIVE, stocked product in an ACTIVE category."""
     counter = {"n": 0}
 
     async def _publish(**overrides) -> dict:

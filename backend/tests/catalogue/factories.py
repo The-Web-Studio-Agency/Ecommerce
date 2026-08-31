@@ -1,10 +1,4 @@
-"""
-Builders for catalogue fixtures.
-
-Code lives here; the payloads they send come from data.json in this folder.
-Other packages (cart, for one) import these rather than reaching into a test
-module for helpers.
-"""
+"""Builders for catalogue fixtures."""
 
 from __future__ import annotations
 

@@ -1,11 +1,4 @@
-"""
-Paying for an order, in cash, when it arrives.
-
-Checkout writes the payment -- cash on delivery is the only way to pay, so
-there is nothing to choose and no endpoint that creates one. The money is
-recorded when an admin marks the order delivered, and written off when the
-order is cancelled.
-"""
+"""Paying for an order, in cash, when it arrives."""
 
 from __future__ import annotations
 
@@ -53,9 +46,6 @@ async def _payment(client, headers, payment_id) -> dict:
     return response.json()["data"]
 
 
-# ------------------------- WRITTEN BY CHECKOUT ------------------------------
-
-
 async def test_checkout_creates_the_payment(client, admin_headers, order):
     response = await client.get(
         ADMIN_PAYMENTS, params={"order_id": order["id"]}, headers=admin_headers
@@ -98,7 +88,6 @@ async def test_a_new_payment_is_cash_on_delivery_and_pending(client, customer_au
 
 
 async def test_the_amount_comes_from_the_order(order, payment):
-    # 2 x 999.00, straight off the order -- the client never sends an amount.
     assert Decimal(payment["amount"]) == Decimal(order["total_amount"])
     assert Decimal(payment["amount"]) == Decimal("1998.00")
 
@@ -122,9 +111,6 @@ async def test_an_order_never_exists_without_its_payment(
     )
     assert response.json()["meta"]["total_items"] == 1
     assert Decimal(response.json()["data"][0]["amount"]) == Decimal("999.00")
-
-
-# ------------------------------ CURRENCY ------------------------------------
 
 
 async def test_the_currency_comes_from_the_tenant(client, customer_auth, payment):
@@ -159,9 +145,6 @@ async def test_a_currency_must_be_an_iso_code(session, other_tenant):
     await session.rollback()
 
 
-# ------------------------------ COLLECTING ----------------------------------
-
-
 async def test_delivering_the_order_collects_the_cash(
     client, admin_headers, customer_auth, order, payment
 ):
@@ -192,7 +175,6 @@ async def test_cancelling_the_order_writes_the_payment_off(
     assert cancelled.status_code == 200, cancelled.text
 
     assert (await _payment(client, customer_auth, payment["id"]))["status"] == "FAILED"
-    # The order was never delivered, so no money ever changed hands.
     assert (await _order(client, admin_headers, order["id"]))["payment_status"] == "PENDING"
 
 
@@ -210,13 +192,7 @@ async def test_a_delivered_order_cannot_be_cancelled(
 async def test_an_order_with_no_payment_can_still_be_delivered(
     client, admin_headers, session, tenant, order, payment
 ):
-    """
-    The collect/write-off steps guard against a missing payment.
-
-    Checkout writes one for every order, so this cannot happen through the
-    API -- the row is removed directly to prove the guard holds rather than
-    raising on a half-migrated order.
-    """
+    """Delivery still works when the payment row is missing."""
     row = await PaymentRepository(session, tenant.id).get(UUID(payment["id"]))
     await session.delete(row)
     await session.commit()
@@ -225,7 +201,6 @@ async def test_an_order_with_no_payment_can_still_be_delivered(
 
     delivered = await _order(client, admin_headers, order["id"])
     assert delivered["status"] == "DELIVERED"
-    # Nothing was collected, because there was nothing to collect.
     assert delivered["payment_status"] == "PENDING"
     assert delivered["payment"] is None
 
@@ -250,8 +225,6 @@ async def test_collecting_the_cash_leaves_inventory_alone(
     await _deliver(client, admin_headers, order["id"])
 
     item = await InventoryService(session, tenant.id).get(UUID(variant["id"]))
-    # Shipping already took the two units off the shelf; delivering changes
-    # nothing further.
     assert item.reserved_quantity == 0
     assert item.available_quantity == 8
 
@@ -265,9 +238,6 @@ async def test_writing_a_payment_off_still_returns_the_stock(
     item = await InventoryService(session, tenant.id).get(UUID(variant["id"]))
     assert item.reserved_quantity == 0
     assert item.available_quantity == 10
-
-
-# -------------------------------- READS -------------------------------------
 
 
 async def test_a_customer_reads_their_own_payment(client, customer_auth, payment):

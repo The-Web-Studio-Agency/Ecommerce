@@ -1,11 +1,4 @@
-"""
-Fixtures for the payment tests.
-
-Cash on delivery is the only way to pay, so there is no gateway to stand in for
-and nothing for a customer to choose: checkout writes the payment, and the cash
-lands when an admin marks the order delivered. An order needs a variant, an
-address and a cart, so all three are built here.
-"""
+"""Fixtures for the payment tests."""
 
 from __future__ import annotations
 
@@ -89,11 +82,6 @@ async def order(make_order, customer_auth, variant) -> dict:
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def payment(order) -> dict:
-    """
-    The COD payment checkout wrote for `order`: PENDING.
-
-    Read straight off the order the customer placed -- there is no endpoint
-    that creates one, and no admin call needed to find it.
-    """
+    """The COD payment checkout wrote for `order`: PENDING."""
     assert order["payment"] is not None, order
     return order["payment"]

@@ -12,9 +12,6 @@ from app.core.database import get_db
 from app.core.responses import ApiResponse, ok
 from app.users.models import User
 
-# Customer-facing and authenticated. The tenant comes from the hostname (via
-# the token's tenant check) and the customer from the token -- neither is ever
-# read from the request body.
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
 

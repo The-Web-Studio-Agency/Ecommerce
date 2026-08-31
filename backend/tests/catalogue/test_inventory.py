@@ -1,12 +1,4 @@
-"""
-Inventory: stock levels, reservations and movement history.
-
-Every test follows the same shape:
-
-    setup (usually just a fixture)
-    one action, assigned to `response`
-    assertions, status code first
-"""
+"""Inventory: stock levels, reservations and movement history."""
 
 from __future__ import annotations
 
@@ -195,9 +187,6 @@ async def test_concurrent_reservations_never_oversell(engine, tenant, new_varian
     results = await run_concurrently(engine, 8, reserve)
 
     assert len(succeeded(results)) == 5
-
-
-# ------------------------------ variant options -----------------------------
 
 
 async def test_a_variant_can_carry_options(client, admin_headers, product):

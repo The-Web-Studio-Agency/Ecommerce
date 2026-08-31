@@ -123,16 +123,7 @@ class CategoryService:
         return category
 
     async def delete(self, category_id: UUID) -> None:
-        """
-        Archive the category rather than removing the row.
-
-        Archived products keep a foreign key to their category, so a hard delete
-        would either fail or orphan order history. Archiving keeps the reference
-        resolvable and matches how products and variants already behave.
-
-        Only live products block this: a category whose products are all
-        archived has nothing left to protect.
-        """
+        """Archive the category rather than deleting it; live products block it."""
         category = await self.get(category_id)
 
         if category.status == CatalogueStatus.ARCHIVED.value:
@@ -166,12 +157,7 @@ class ProductService:
         return category
 
     async def create(self, data: ProductCreate) -> Product:
-        """
-        Create a product together with its images in one transaction.
-
-        The schema requires at least one image, and both rows are written
-        atomically, so a product never exists in an image-less state.
-        """
+        """Create a product together with its images in one transaction."""
         await self._require_category(data.category_id)
 
         product = Product(
@@ -189,7 +175,6 @@ class ProductService:
         try:
             await self.products.add(product)
 
-            # If the caller nominated no primary, the first image becomes one.
             has_primary = any(image.is_primary for image in data.images)
             for position, image in enumerate(data.images):
                 await self.images.add(
@@ -223,13 +208,7 @@ class ProductService:
         return product
 
     async def get_public(self, product_id: UUID) -> Product:
-        """
-        Fetch a product only when it is publicly visible.
-
-        Visible means ACTIVE *and* in an active category -- the same rule the
-        listing applies, so a product cannot be reached by id after its category
-        is retired.
-        """
+        """Fetch a product only when it is ACTIVE and its category is too."""
         product = await self.get(product_id)
 
         if product.status != CatalogueStatus.ACTIVE.value:
@@ -297,13 +276,7 @@ class ProductService:
         return await self.get(product.id)
 
     async def delete(self, product_id: UUID) -> None:
-        """
-        Archive the product and its variants.
-
-        Orders will reference both, so the rows stay. Variants are archived in
-        the same transaction, otherwise they remain individually readable on the
-        storefront after their parent product is gone.
-        """
+        """Archive the product and its variants in one transaction."""
         product = await self.get(product_id)
 
         if product.status == CatalogueStatus.ARCHIVED.value:
@@ -350,12 +323,7 @@ class VariantService:
     async def _sync_options(
         self, product_id: UUID, variant_id: UUID, options: list[VariantOptionValue]
     ) -> None:
-        """
-        Attach structured option values to a variant.
-
-        Option names live on the product so every variant shares one "Color"
-        rather than inventing its own; the value is what varies per variant.
-        """
+        """Attach option values to a variant, reusing the product's option names."""
         existing = list(
             (await self.session.scalars(self.options.list_select(product_id))).all()
         )
@@ -407,8 +375,6 @@ class VariantService:
             await self.variants.add(variant)
             await self._sync_options(product_id, variant.id, data.options)
 
-            # Every variant gets an inventory row at birth, so stock operations
-            # never have to cope with a missing record.
             await self.inventory.add(
                 InventoryItem(
                     variant_id=variant.id,
@@ -516,8 +482,6 @@ class ProductImageService:
         return product
 
     async def _require_image(self, image_id: UUID) -> ProductImage:
-        # Repository is tenant-scoped, so another tenant's image id simply
-        # does not resolve -- it reads as "not found" rather than "forbidden".
         image = await self.images.get(image_id)
         if image is None:
             raise NotFoundError(IMAGE_NOT_FOUND)
@@ -574,8 +538,6 @@ class ProductImageService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            # The partial unique index fired: another request claimed primary
-            # between our clear and our write.
             raise ConflictError(
                 "Another image was set as primary, please retry"
             ) from exc
@@ -625,13 +587,7 @@ class ProductImageService:
         return await self.list_for_product(product_id)
 
     async def delete(self, image_id: UUID) -> None:
-        """
-        Remove an image, refusing to take a product's last one.
-
-        The product row is locked first so that two concurrent deletes are
-        serialised: the second waits, re-counts after the first commits, and
-        sees one image left rather than the two both would have seen.
-        """
+        """Remove an image, refusing to take a product's last one."""
         image = await self._require_image(image_id)
 
         await self.products.lock(image.product_id)
@@ -645,7 +601,6 @@ class ProductImageService:
         await self.images.delete(image)
 
         if was_primary:
-            # Keep the invariant that a product with images has a primary one.
             successor = await self.session.scalar(
                 self.images.list_select(product_id).limit(1)
             )
@@ -660,18 +615,7 @@ class ProductImageService:
 
 
 class InventoryService:
-    """
-    Stock operations.
-
-    Every mutation goes through a conditional UPDATE in the repository, so the
-    precondition is checked by PostgreSQL under the row lock rather than in a
-    read-then-write window a concurrent order could slip into. A refused update
-    surfaces as a ConflictError.
-
-    `reserve`, `release` and `fulfil` take `commit=False` so checkout can call
-    them inside its own transaction: the stock change is flushed but not
-    committed, and rolls back with the rest if a later step fails.
-    """
+    """Stock operations; `commit=False` leaves the transaction to the caller."""
 
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session

@@ -1,9 +1,4 @@
-"""
-Fixtures for the cart tests.
-
-A cart test needs a signed-in customer and something to put in the basket, so
-both are supplied here rather than rebuilt in every test.
-"""
+"""Fixtures for the cart tests."""
 
 from __future__ import annotations
 

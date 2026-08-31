@@ -14,9 +14,6 @@ from app.tenants.repository import TenantRepository
 
 logger = get_logger("tenants")
 
-# Hosts that can only mean "a developer on this machine". The dev fallback is
-# limited to these so that a real but unregistered domain still 404s -- keeping
-# tenant isolation behaving the same locally as it does in production.
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]", "0.0.0.0"})
 
 
@@ -49,14 +46,6 @@ async def resolve_tenant(
 
     tenant = await repository.get_active_by_domain(hostname) if hostname else None
 
-    # Development convenience: a request to localhost falls back to the seeded
-    # tenant, so the API is usable without registering a domain first. Any other
-    # unrecognised host still 404s, so cross-tenant bugs surface locally.
-    #
-    # The fallback is read-only on purpose. Creating the tenant here would write
-    # into whichever transaction the request handler happens to be using, and
-    # commit or discard it as a side effect. `python -m app.commands.seed` owns
-    # tenant creation.
     settings = get_settings()
     if tenant is None and not settings.is_production and hostname in LOOPBACK_HOSTS:
         tenant = await repository.get_active_by_slug(settings.seed_tenant_slug)

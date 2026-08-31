@@ -17,9 +17,6 @@ async def _sellable(client, admin_headers, variant_id) -> int:
     return response.json()["data"]["sellable_quantity"]
 
 
-# ------------------------------- PREVIEW ------------------------------------
-
-
 async def test_a_preview_prices_the_cart(client, customer_auth, variant, add_to_cart):
     await add_to_cart(customer_auth, variant["id"], 2)
 
@@ -50,9 +47,6 @@ async def test_previewing_an_empty_cart_is_refused(client, customer_auth, tenant
 
     assert response.status_code == 409
     assert "empty" in response.json()["message"].lower()
-
-
-# ----------------------------- PLACING AN ORDER -----------------------------
 
 
 async def test_an_order_is_created_from_the_cart(
@@ -170,9 +164,6 @@ async def test_a_later_rename_does_not_change_the_order(
     assert response.json()["data"]["items"][0]["product_name"] == original
 
 
-# --------------------------------- CART -------------------------------------
-
-
 async def test_the_cart_is_marked_converted(session, order, customer):
     from app.cart.repository import CartRepository
     from app.orders.repository import OrderRepository
@@ -203,9 +194,6 @@ async def test_the_next_add_to_cart_starts_a_fresh_cart(
 
     assert cart["id"] != order["id"]
     assert cart["item_count"] == 1
-
-
-# ------------------------------- VALIDATION ---------------------------------
 
 
 async def test_an_empty_cart_cannot_be_ordered(
@@ -259,7 +247,6 @@ async def test_stock_sold_out_after_adding_blocks_checkout(
     variant = await new_variant(initial_quantity=5)
     await add_to_cart(customer_auth, variant["id"], 5)
 
-    # Somebody else took the stock between adding and checking out.
     await client.put(
         inventory_url(variant["id"]), json={"available_quantity": 2}, headers=admin_headers
     )
@@ -289,18 +276,10 @@ async def test_prices_are_never_taken_from_the_request(
     assert response.json()["data"]["total_amount"] == "999.00"
 
 
-# ------------------------------ TRANSACTION ---------------------------------
-
-
 async def test_a_failed_checkout_reserves_nothing(
     client, admin_headers, customer_auth, address, new_variant, add_to_cart, place_order
 ):
-    """
-    Two lines, the second of which cannot be satisfied.
-
-    The first line's reservation has to roll back with the failure, otherwise a
-    customer could quietly lock up stock by checking out a doomed cart.
-    """
+    """Two lines, the second unsatisfiable: the first must not stay reserved."""
     good = await new_variant(initial_quantity=10)
     short = await new_variant(initial_quantity=5)
 
@@ -338,12 +317,7 @@ async def test_only_one_of_two_racing_checkouts_can_take_the_last_units(
     engine, session, tenant, make_user, client, admin_headers, new_variant,
     add_to_cart, save_address,
 ):
-    """
-    Stock of 10, two customers each wanting 6. Exactly one may win.
-
-    The losing checkout must fail with a conflict rather than both succeeding
-    and putting the shop 2 units short.
-    """
+    """Stock of 10, two customers each wanting 6: exactly one may win."""
     variant = await new_variant(initial_quantity=10)
 
     racers = []

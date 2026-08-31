@@ -30,8 +30,6 @@ class CartItemRead(BaseModel):
     variant_name: str
     sku: str
     quantity: int
-    # Prices are read from the database and sent as Decimal -- never floats,
-    # and never taken from the request.
     unit_price: Decimal
     subtotal: Decimal
     image: CartItemImage | None = None

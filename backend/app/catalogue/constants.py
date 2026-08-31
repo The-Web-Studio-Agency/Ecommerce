@@ -2,12 +2,7 @@ from enum import Enum
 
 
 class CatalogueStatus(str, Enum):
-    """
-    Lifecycle shared by categories, products and variants.
-
-    ARCHIVED is a soft delete: rows are kept because orders will reference them,
-    so historical data stays resolvable long after something leaves the catalogue.
-    """
+    """Lifecycle shared by categories, products and variants; ARCHIVED is a soft delete."""
 
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
@@ -15,12 +10,7 @@ class CatalogueStatus(str, Enum):
 
 
 class ProductSort(str, Enum):
-    """
-    Sort orders the storefront may ask for.
-
-    An enum rather than a free-text column name: the value is mapped to an
-    ORDER BY clause in the repository, so a request can never reach the query.
-    """
+    """Sort orders the storefront may ask for."""
 
     NEWEST = "newest"
     NAME_ASC = "name_asc"
@@ -61,8 +51,6 @@ MAX_ALT_TEXT_LENGTH = 255
 MAX_OPTION_NAME_LENGTH = 60
 MAX_OPTION_VALUE_LENGTH = 100
 
-# A product is not sellable without artwork, so creation requires at least one
-# image and deletion refuses to take the last one.
 MIN_PRODUCT_IMAGES = 1
 
 MAX_OPTIONS_PER_PRODUCT = 3

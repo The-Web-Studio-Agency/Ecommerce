@@ -40,11 +40,7 @@ from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated
 from app.users.models import User
 
-# Authenticated management API. Writes require ADMIN, reads allow STAFF too.
 router = APIRouter(prefix="/catalogue", tags=["Admin-Catalogue_management"])
-
-
-# ------------------------------ CATEGORIES ----------------------------------
 
 
 @router.post(
@@ -122,9 +118,6 @@ async def delete_category(
 ) -> Response:
     await CategoryService(session, user.tenant_id).delete(category_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# -------------------------------- PRODUCTS ----------------------------------
 
 
 @router.post(
@@ -216,9 +209,6 @@ async def delete_product(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-# -------------------------------- VARIANTS ----------------------------------
-
-
 @router.post(
     "/products/{product_id}/variants",
     response_model=ApiResponse[VariantRead],
@@ -298,9 +288,6 @@ async def delete_variant(
 ) -> Response:
     await VariantService(session, user.tenant_id).delete(variant_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# ------------------------------- INVENTORY ----------------------------------
 
 
 @router.get(
@@ -388,9 +375,6 @@ async def list_inventory_movements(
         params=params,
         message="Movements retrieved",
     )
-
-
-# --------------------------------- IMAGES -----------------------------------
 
 
 @router.get(

@@ -24,13 +24,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 def require_dev_environment() -> None:
-    """
-    Refuse to serve these routes outside development.
-
-    They create privileged accounts with no authentication, which is only
-    acceptable as local scaffolding. The guard is a dependency rather than an
-    `if` inside each handler so it cannot be forgotten on a new route.
-    """
+    """Refuse to serve these routes outside development."""
     settings = get_settings()
     if settings.is_production:
         raise PermissionDeniedError(
@@ -44,14 +38,7 @@ async def _resolve_target_tenant(
     tenant_id: UUID | None,
     session: AsyncSession,
 ) -> Tenant:
-    """
-    Pick the tenant to provision into.
-
-    Preference order: the tenant the request domain resolved to, an explicitly
-    supplied tenant id, then the only active tenant if there is exactly one.
-    Guessing between several tenants would silently provision into the wrong
-    storefront, so that case is an error rather than a coin flip.
-    """
+    """Pick the tenant to provision into: domain, explicit id, then the sole tenant."""
     if tenant is not None:
         return tenant
 

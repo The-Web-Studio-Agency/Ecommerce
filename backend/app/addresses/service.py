@@ -17,12 +17,7 @@ ADDRESS_NOT_FOUND = "Address not found"
 
 
 class AddressService:
-    """
-    A customer's delivery addresses.
-
-    Everything here is scoped to one customer inside one tenant: the service is
-    constructed with both ids, and no method takes them from the caller.
-    """
+    """A customer's delivery addresses, scoped to one customer and tenant."""
 
     def __init__(self, session: AsyncSession, tenant_id: UUID, customer_id: UUID) -> None:
         self.session = session
@@ -41,14 +36,9 @@ class AddressService:
         return list(rows.all())
 
     async def create(self, data: AddressCreate) -> Address:
-        # The first address a customer saves becomes their default, so checkout
-        # always has something sensible to pre-select.
         is_default = data.is_default or not await self.addresses.has_any(self.customer_id)
 
         try:
-            # Demote the old default before inserting the new one. A unique
-            # index allows only one default per customer, so the order matters:
-            # two rows must never both be default, even for one flush.
             if is_default:
                 await self.addresses.clear_default(self.customer_id)
 
@@ -79,7 +69,6 @@ class AddressService:
         address = await self.get(address_id)
         changes = data.model_dump(exclude_unset=True)
 
-        # Held back and applied last, for the same reason as in `create`.
         make_default = changes.pop("is_default", None)
 
         for field, value in changes.items():
@@ -105,12 +94,7 @@ class AddressService:
         return address
 
     async def delete(self, address_id: UUID) -> None:
-        """
-        Remove the address for good.
-
-        Orders keep their own copy of the address they were placed with, so
-        deleting one here never changes order history.
-        """
+        """Delete the address; orders keep their own copy of it."""
         address = await self.get(address_id)
 
         await self.addresses.delete(address)

@@ -14,4 +14,3 @@ class PaymentProvider(str, Enum):
     """How the money arrives. Cash on delivery is the only way for now."""
 
     COD = "COD"
-

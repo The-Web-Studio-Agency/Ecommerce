@@ -25,18 +25,7 @@ ITEM_NOT_FOUND = "Cart item not found"
 
 
 class CartService:
-    """
-    Everything the cart does.
-
-    Two rules worth knowing up front:
-
-    * Adding to a cart never reserves stock. Ten customers may each hold the
-      last item in their basket; whoever checks out first gets it. Reservation
-      belongs to checkout.
-    * Nothing about the product is copied into the cart. Names, prices and
-      images are read from the catalogue when the cart is rendered, so they are
-      never stale.
-    """
+    """Cart operations; adding never reserves stock."""
 
     def __init__(self, session: AsyncSession, tenant_id: UUID, customer_id: UUID) -> None:
         self.session = session
@@ -49,16 +38,8 @@ class CartService:
         self.products = ProductRepository(session, tenant_id)
         self.inventory = InventoryService(session, tenant_id)
 
-    # ---------------------------------------------------------------- cart
-
     async def get_or_create_cart(self) -> Cart:
-        """
-        The customer's active cart, created on first use.
-
-        A unique index guarantees one active cart per customer, so a race
-        between two first-requests raises IntegrityError; the loser just reads
-        the cart the winner created.
-        """
+        """The customer's active cart, created on first use."""
         cart = await self.carts.get_active(self.customer_id)
         if cart is not None:
             return cart
@@ -93,14 +74,10 @@ class CartService:
         )
         return await self._render(cart)
 
-    # --------------------------------------------------------------- items
-
     async def add_item(self, data: CartItemCreate) -> CartRead:
         cart = await self.get_or_create_cart()
 
         existing = await self.items.get_by_variant(cart.id, data.variant_id)
-        # Adding a variant already in the cart tops it up rather than adding a
-        # second line, so the requested total is what we check stock against.
         wanted = data.quantity + (existing.quantity if existing else 0)
 
         await self._check_available(data.variant_id, wanted)
@@ -112,8 +89,6 @@ class CartService:
                 await self.items.add_item(cart.id, data.variant_id, data.quantity)
             await self.session.commit()
         except IntegrityError:
-            # Two requests added the same variant at once and the unique
-            # constraint caught the second. The row now exists, so top it up.
             await self.session.rollback()
             return await self._top_up(cart, data)
 
@@ -145,8 +120,6 @@ class CartService:
         if item is None:
             raise NotFoundError(ITEM_NOT_FOUND)
 
-        # Re-checked on every update: the variant may have been archived or
-        # sold down since it went into the basket.
         await self._check_available(item.variant_id, data.quantity)
 
         item.quantity = data.quantity
@@ -164,9 +137,6 @@ class CartService:
     async def remove_item(self, item_id: UUID) -> CartRead:
         cart = await self.get_or_create_cart()
 
-        # Scoped to this customer's cart, so an item id belonging to somebody
-        # else simply does not resolve -- it reads as "not found", which tells
-        # the caller nothing about whose cart it is in.
         item = await self.items.get_item(cart.id, item_id)
         if item is None:
             raise NotFoundError(ITEM_NOT_FOUND)
@@ -182,14 +152,8 @@ class CartService:
         )
         return await self._render(cart)
 
-    # ---------------------------------------------------------- validation
-
     async def _check_available(self, variant_id: UUID, quantity: int) -> None:
-        """
-        Can the customer have this many, right now?
-
-        A check, not a hold: nothing is reserved here.
-        """
+        """Check stock for this quantity; nothing is reserved here."""
         variant = await self.variants.get(variant_id)
         if variant is None:
             raise NotFoundError(VARIANT_NOT_FOUND)
@@ -211,8 +175,6 @@ class CartService:
                 f"Only {available} items are available",
                 error_code="INSUFFICIENT_STOCK",
             )
-
-    # ------------------------------------------------------------ response
 
     async def _render(self, cart: Cart) -> CartRead:
         rows = await self.items.list_with_catalogue(cart.id)

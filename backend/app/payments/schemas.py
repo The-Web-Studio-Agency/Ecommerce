@@ -10,12 +10,7 @@ from app.payments.constants import PaymentProvider, PaymentStatus
 
 
 class PaymentRead(BaseModel):
-    """
-    A payment as the API reports it.
-
-    No customer id -- a caller who can read this already had to prove which
-    order is theirs.
-    """
+    """A payment as the API reports it."""
 
     id: UUID
     order_id: UUID

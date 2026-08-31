@@ -15,9 +15,6 @@ async def _status(client, headers, order_id, value):
     )
 
 
-# ---------------------------- CUSTOMER READS --------------------------------
-
-
 async def test_a_customer_lists_their_own_orders(client, customer_auth, order):
     response = await client.get(ORDERS, headers=customer_auth)
 
@@ -51,9 +48,6 @@ async def test_the_response_hides_internal_fields(client, customer_auth, order):
     assert "customer_id" not in body
     assert "updated_at" not in body
     assert "order_id" not in body["items"][0]
-
-
-# ------------------------------ ADMIN READS ---------------------------------
 
 
 async def test_staff_may_list_orders(client, staff_headers, order):
@@ -118,9 +112,6 @@ async def test_a_customer_may_not_reach_the_admin_orders_api(
     assert response.status_code == 403
 
 
-# ---------------------------- STATUS CHANGES --------------------------------
-
-
 async def test_an_admin_moves_an_order_forward(client, admin_headers, order):
     response = await _status(client, admin_headers, order["id"], "CONFIRMED")
 
@@ -181,9 +172,6 @@ async def test_payment_status_is_not_touched_by_fulfilment(
     assert response.json()["data"]["payment_status"] == "PENDING"
 
 
-# ---------------------------- STOCK MOVEMENT --------------------------------
-
-
 async def test_shipping_takes_the_stock_off_the_shelf(
     client, admin_headers, session, tenant, order, variant
 ):
@@ -241,9 +229,6 @@ async def test_an_unknown_status_is_refused(client, admin_headers, order):
     response = await _status(client, admin_headers, order["id"], "TELEPORTED")
 
     assert response.status_code == 422
-
-
-# --------------------------- CUSTOMER CANCELS -------------------------------
 
 
 async def _cancel(client, headers, order_id):

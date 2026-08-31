@@ -1,9 +1,4 @@
-"""
-Fixtures for the checkout and order tests.
-
-A checkout test needs a signed-in customer, a saved address, and something in
-the basket, so all three are built here rather than in every test.
-"""
+"""Fixtures for the checkout and order tests."""
 
 from __future__ import annotations
 

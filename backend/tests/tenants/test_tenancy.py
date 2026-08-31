@@ -207,7 +207,6 @@ async def test_a_staff_challenge_from_one_tenant_cannot_be_verified_at_another(
 ):
     await make_user(tenant=tenant, email="staff@zeen.com", role=UserRole.STAFF.value)
 
-    # Staff now authenticate with password and receive tenant-scoped tokens.
     resp = await client.post(
         "/api/v1/staff/auth/login",
         json={"identifier": "staff@zeen.com", "password": ADMIN_PASSWORD},
@@ -215,13 +214,11 @@ async def test_a_staff_challenge_from_one_tenant_cannot_be_verified_at_another(
     assert resp.status_code == 200
     tokens = resp.json()["data"]
 
-    # Trying to use the refresh token against another tenant must fail.
     crossed = await other_client.post(
         "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
     assert crossed.status_code == 401
 
-    # Using the refresh token against the same tenant should succeed.
     intact = await client.post(
         "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )

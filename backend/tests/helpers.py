@@ -1,16 +1,4 @@
-"""
-Loaders for the JSON test data that sits beside each test package.
-
-Every package keeps its own `data.json` next to its tests -- catalogue data in
-tests/catalogue/, auth data in tests/auth/ -- so the fixtures live with the
-tests that use them and there are no sample payloads hard-coded in Python.
-
-    DATA = load_data(__file__)          # reads data.json beside this module
-    payload = sample(DATA, "category", name="Skirts")
-
-`sample` always returns a deep copy, so a test that applies overrides can never
-mutate the shared defaults for the next test.
-"""
+"""Loaders for the JSON test data that sits beside each test package."""
 
 from __future__ import annotations
 
@@ -39,25 +27,14 @@ def shared_data() -> dict[str, Any]:
 
 
 def sample(source: dict[str, Any], key: str, /, **overrides: Any) -> dict[str, Any]:
-    """
-    A fresh copy of one payload, with overrides applied.
-
-    `source` and `key` are positional-only so that "name", "key" and friends
-    stay usable as payload override keys.
-    """
+    """A fresh deep copy of one payload, with overrides applied."""
     payload = copy.deepcopy(source[key])
     payload.update(overrides)
     return payload
 
 
 async def run_concurrently(engine, times: int, work) -> list[Any]:
-    """
-    Run `work(session, index)` `times` over at once, each on its own session.
-
-    Keeps the async_sessionmaker/gather plumbing out of the tests. Returns what
-    each call returned, or the exception it raised, so a test can simply count
-    how many succeeded.
-    """
+    """Run `work(session, index)` `times` over at once, each on its own session."""
     import asyncio
 
     from sqlalchemy.ext.asyncio import async_sessionmaker

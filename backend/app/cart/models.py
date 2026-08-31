@@ -32,8 +32,6 @@ class Cart(Base, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_carts_tenant_id_id"),
-        # Composite foreign key: a cart cannot point at a user in another
-        # tenant, which is the same pattern the catalogue tables use.
         ForeignKeyConstraint(
             ["tenant_id", "customer_id"],
             ["users.tenant_id", "users.id"],
@@ -41,8 +39,6 @@ class Cart(Base, TimestampMixin):
             ondelete="CASCADE",
         ),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
-        # "One active cart" is enforced here rather than in Python, so two
-        # concurrent first-requests cannot each create one.
         Index(
             "uq_carts_one_active_per_customer",
             "tenant_id",
@@ -70,19 +66,11 @@ class Cart(Base, TimestampMixin):
 
 
 class CartItem(Base, TimestampMixin):
-    """
-    A variant and how many of it the customer wants.
-
-    Deliberately stores no product name, SKU, price or image: those are read
-    from the catalogue when the cart is rendered, so a price or name change is
-    reflected immediately instead of going stale in the basket.
-    """
+    """A variant and its quantity; catalogue data is read live, never copied in."""
 
     __tablename__ = "cart_items"
 
     __table_args__ = (
-        # One row per variant per cart -- adding the same variant again bumps
-        # the quantity rather than creating a second line.
         UniqueConstraint("cart_id", "variant_id", name="uq_cart_items_cart_variant"),
         ForeignKeyConstraint(
             ["tenant_id", "cart_id"],

@@ -1,11 +1,4 @@
-"""
-Turn catalogue ORM rows into API payloads.
-
-Kept out of the routers (which stay HTTP-only) and out of the services (which
-own business rules). Every builder reads only relationships that are
-selectin-loaded on the model, so rendering a page of products costs a fixed
-number of queries rather than one per row.
-"""
+"""Turn catalogue ORM rows into API payloads."""
 
 from __future__ import annotations
 
@@ -88,13 +81,7 @@ def storefront_variant(variant: ProductVariant) -> VariantStorefrontRead:
 
 
 def storefront_options(product: Product) -> list[StorefrontOption]:
-    """
-    Every option and the values its sellable variants offer.
-
-    Driven by the product's own option list so ordering is stable (Color before
-    Size), and values are collected in variant order rather than sorted, which
-    keeps sizes in the order the admin entered them.
-    """
+    """Every option and the values its sellable variants offer."""
     values: dict[str, list[str]] = {option.name: [] for option in product.options}
 
     for variant in _public_variants(product):

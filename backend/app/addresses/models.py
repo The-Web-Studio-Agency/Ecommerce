@@ -22,21 +22,12 @@ MAX_POSTAL_CODE_LENGTH = 20
 
 
 class Address(Base, TimestampMixin):
-    """
-    A delivery address belonging to one customer.
-
-    Orders do not keep a reference to this row -- they copy the fields in at
-    checkout (see app/orders/models.py). That is what lets a customer edit or
-    delete an address without rewriting the address on an order they already
-    placed.
-    """
+    """A customer's delivery address, copied onto orders at checkout."""
 
     __tablename__ = "addresses"
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_addresses_tenant_id_id"),
-        # Composite foreign key: an address cannot point at a customer in
-        # another tenant, the same pattern carts and the catalogue use.
         ForeignKeyConstraint(
             ["tenant_id", "customer_id"],
             ["users.tenant_id", "users.id"],
@@ -48,9 +39,6 @@ class Address(Base, TimestampMixin):
         CheckConstraint("length(trim(city)) > 0", name="city_not_blank"),
         CheckConstraint("length(trim(postal_code)) > 0", name="postal_code_not_blank"),
         CheckConstraint(r"phone ~ '^\+[1-9][0-9]{7,14}$'", name="phone_is_e164"),
-        # At most one default address per customer. Enforced here rather than
-        # in Python so two concurrent "make this default" requests cannot both
-        # win -- the same trick product_images uses for its primary image.
         Index(
             "uq_addresses_one_default_per_customer",
             "tenant_id",

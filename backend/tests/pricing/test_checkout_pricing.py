@@ -1,9 +1,4 @@
-"""
-What checkout charges, and what the order keeps.
-
-The amounts are read from the tenant's settings at the moment of purchase and
-frozen onto the order, so changing a rate later cannot rewrite history.
-"""
+"""What checkout charges, and what the order freezes onto itself."""
 
 from __future__ import annotations
 
@@ -13,8 +8,6 @@ from uuid import UUID
 from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
 from tests.pricing.conftest import ADMIN_ORDERS, ADMIN_PAYMENTS, CHECKOUT, ORDERS
-
-# ------------------------------- PREVIEW ------------------------------------
 
 
 async def test_the_preview_reports_every_amount(
@@ -59,9 +52,6 @@ async def test_the_preview_reserves_nothing(
 
     item = await InventoryService(session, tenant.id).get(UUID(variant["id"]))
     assert item.reserved_quantity == 0
-
-
-# --------------------------- NOTHING FROM THE CLIENT ------------------------
 
 
 async def test_the_frontend_cannot_override_shipping(
@@ -119,9 +109,6 @@ async def test_a_placed_order_ignores_amounts_in_the_body(
     assert Decimal(order["total_amount"]) == Decimal("2478.00")
 
 
-# ---------------------------- STORED ON THE ORDER ---------------------------
-
-
 async def test_the_order_stores_every_amount(
     client, customer_auth, set_shipping, set_tax, fill_cart, place_order
 ):
@@ -161,7 +148,6 @@ async def test_a_later_tax_change_does_not_rewrite_an_old_order(
     await fill_cart(2)
     order = await place_order()
 
-    # The shop puts its rate up tomorrow.
     await set_tax(tax_percentage="20.00")
 
     response = await client.get(f"{ORDERS}/{order['id']}", headers=customer_auth)
@@ -201,9 +187,6 @@ async def test_an_admin_sees_the_same_amounts(
     assert Decimal(response.json()["data"]["tax_amount"]) == Decimal("378.00")
 
 
-# ------------------------ THE REST OF CHECKOUT IS INTACT --------------------
-
-
 async def test_checkout_still_reserves_inventory(
     session, tenant, set_shipping, set_tax, fill_cart, place_order, variant
 ):
@@ -214,8 +197,6 @@ async def test_checkout_still_reserves_inventory(
     await place_order()
 
     item = await InventoryService(session, tenant.id).get(UUID(variant["id"]))
-    # Reserving holds the units without taking them off the shelf -- that only
-    # happens on despatch. What is left to sell is what drops.
     assert item.reserved_quantity == 2
     assert item.available_quantity == 20
     assert sellable_quantity(item) == 18
@@ -237,20 +218,18 @@ async def test_checkout_still_creates_the_cod_payment(
     payment = response.json()["data"][0]
     assert payment["provider"] == "COD"
     assert payment["status"] == "PENDING"
-    # The payment is for the full total, tax and delivery included.
     assert Decimal(payment["amount"]) == Decimal("2478.00")
 
 
 async def test_free_shipping_carries_through_to_the_order(
     set_shipping, set_tax, fill_cart, place_order
 ):
-    await set_shipping()  # free over 2000.00
+    await set_shipping()
     await set_tax()
     await fill_cart(2)
 
     order = await place_order()
 
     assert Decimal(order["shipping_amount"]) == Decimal("0.00")
-    # 2000.00 goods, nothing to deliver-charge, 18% of 2000.00
     assert Decimal(order["tax_amount"]) == Decimal("360.00")
     assert Decimal(order["total_amount"]) == Decimal("2360.00")

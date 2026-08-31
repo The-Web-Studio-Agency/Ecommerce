@@ -6,15 +6,12 @@ from decimal import Decimal
 
 from tests.pricing.conftest import TAX, tax_payload
 
-# ----------------------------- CONFIGURATION --------------------------------
-
 
 async def test_tax_settings_can_be_read(client, staff_headers):
     response = await client.get(TAX, headers=staff_headers)
 
     assert response.status_code == 200, response.text
     body = response.json()["data"]
-    # Nothing configured yet, so the storefront charges no tax.
     assert Decimal(body["tax_percentage"]) == Decimal("0.00")
     assert body["is_active"] is False
 
@@ -97,17 +94,13 @@ async def test_one_tenants_update_does_not_touch_another(
     assert Decimal(acme.json()["data"]["tax_percentage"]) == Decimal("5.00")
 
 
-# ------------------------------ CALCULATION ---------------------------------
-
-
 async def test_tax_is_charged_on_the_goods(set_shipping, set_tax, fill_cart, preview):
     await set_shipping(is_active=False)
     await set_tax()
-    await fill_cart(1)  # 1000.00, no delivery charge
+    await fill_cart(1)
 
     body = await preview()
 
-    # 1000.00 x 18 / 100
     assert Decimal(body["tax_amount"]) == Decimal("180.00")
     assert Decimal(body["total_amount"]) == Decimal("1180.00")
 
@@ -124,7 +117,6 @@ async def test_tax_includes_the_delivery_charge(
 
     assert Decimal(body["subtotal"]) == Decimal("2000.00")
     assert Decimal(body["shipping_amount"]) == Decimal("100.00")
-    # (2000.00 + 100.00) x 18 / 100 -- not 2000 x 18 / 100, which would be 360.
     assert Decimal(body["tax_amount"]) == Decimal("378.00")
     assert Decimal(body["total_amount"]) == Decimal("2478.00")
 
@@ -179,5 +171,4 @@ async def test_a_fractional_tax_rounds_half_up(set_shipping, set_tax, fill_cart,
 
     body = await preview()
 
-    # 1000.00 x 0.13 / 100 = 1.30
     assert Decimal(body["tax_amount"]) == Decimal("1.30")

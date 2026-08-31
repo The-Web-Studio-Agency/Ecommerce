@@ -1,8 +1,4 @@
-"""
-Storefront: what the public can see, search and sort.
-
-Every test follows the same shape: setup, one action, then assertions.
-"""
+"""Storefront: what the public can see, search and sort."""
 
 from __future__ import annotations
 
@@ -15,8 +11,6 @@ from tests.catalogue.factories import (
     make_category,
     make_product,
 )
-
-# -------------------------------- visibility --------------------------------
 
 
 async def test_an_active_product_is_public(client, publish):
@@ -61,9 +55,6 @@ async def test_the_storefront_needs_no_authentication(client, publish):
     response = await client.get(f"{STOREFRONT}/products")
 
     assert response.status_code == 200
-
-
-# ------------------------------- response shape -----------------------------
 
 
 async def test_internal_fields_are_never_exposed(client, publish):
@@ -113,9 +104,6 @@ async def test_the_listing_is_lightweight(client, publish):
     assert "price_from" in row
     assert "variants" not in row
     assert "images" not in row
-
-
-# --------------------------- search, filter, sort ---------------------------
 
 
 async def test_featured_products_can_be_filtered(client, publish):
@@ -215,9 +203,6 @@ async def test_the_listing_paginates(client, publish):
     assert body["meta"]["total_items"] == 5
     assert body["meta"]["total_pages"] == 3
     assert [p["name"] for p in body["data"]] == ["Item 2", "Item 3"]
-
-
-# ------------------------------ tenant isolation ----------------------------
 
 
 async def test_each_hostname_serves_its_own_tenant(

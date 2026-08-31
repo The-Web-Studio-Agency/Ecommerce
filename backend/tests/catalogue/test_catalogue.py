@@ -1,9 +1,4 @@
-"""
-Catalogue CRUD: categories, products and variants.
-
-Every test follows the same shape: setup (usually a fixture), one action
-assigned to `response`, then assertions with the status code first.
-"""
+"""Catalogue CRUD: categories, products and variants."""
 
 from __future__ import annotations
 
@@ -20,9 +15,6 @@ from tests.catalogue.factories import (
 )
 
 UNKNOWN_ID = "00000000-0000-0000-0000-000000000000"
-
-
-# ------------------------------- categories ---------------------------------
 
 
 async def test_a_category_can_be_created(category):
@@ -125,9 +117,6 @@ async def test_an_invalid_category_payload_is_rejected(
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-# -------------------------------- products ----------------------------------
-
-
 async def test_a_product_can_be_created(product, category):
     assert product["category_id"] == category["id"]
     assert product["status"] == "ACTIVE"
@@ -217,9 +206,6 @@ async def test_deleting_a_product_archives_it_and_its_variants(
     assert after.json()["data"]["status"] == "ARCHIVED"
 
 
-# ---------------------------- products and images ---------------------------
-
-
 async def test_a_product_cannot_be_created_without_images(
     client, admin_headers, category
 ):
@@ -265,7 +251,6 @@ async def test_images_are_stored_with_the_product(client, admin_headers, categor
         "https://cdn.example.com/a.jpg",
         "https://cdn.example.com/b.jpg",
     ]
-    # Nobody nominated a primary, so the first image becomes one.
     assert [image["is_primary"] for image in images] == [True, False]
 
 
@@ -284,9 +269,6 @@ async def test_only_one_image_may_be_marked_primary(client, admin_headers, categ
     )
 
     assert response.status_code == 422
-
-
-# -------------------------------- variants ----------------------------------
 
 
 async def test_a_variant_can_be_created(client, admin_headers, product):
@@ -403,9 +385,6 @@ async def test_an_archived_product_cannot_take_new_variants(
     )
 
     assert response.status_code == 409
-
-
-# ------------------------------- pagination ---------------------------------
 
 
 async def test_categories_are_paginated(client, admin_headers, tenant):

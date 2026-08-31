@@ -1,9 +1,4 @@
-"""
-Every response carries an X-Request-Id: the one the client sent, or a fresh one.
-
-The same id has to show up in the response header and in an error body, so a
-support ticket quoting one id can be traced through the logs.
-"""
+"""Every response carries an X-Request-Id: the one the client sent, or a fresh one."""
 
 from __future__ import annotations
 

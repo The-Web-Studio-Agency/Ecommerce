@@ -19,29 +19,23 @@ from app.users.router import router as users_router
 
 api_router = APIRouter()
 
-#authentication
 api_router.include_router(auth_router)
 api_router.include_router(auth_admin_router)
 api_router.include_router(auth_staff_router)
 api_router.include_router(users_router)
 
-#catalogue
 api_router.include_router(catalogue_router)
 api_router.include_router(storefront_router)
 
-#cart
 api_router.include_router(cart_router)
 
-#checkout and orders
 api_router.include_router(addresses_router)
 api_router.include_router(checkout_router)
 api_router.include_router(orders_router)
 api_router.include_router(orders_admin_router)
 
-#payments
 api_router.include_router(payments_router)
 api_router.include_router(payments_admin_router)
 
-#shipping and tax
 api_router.include_router(shipping_router)
 api_router.include_router(tax_router)

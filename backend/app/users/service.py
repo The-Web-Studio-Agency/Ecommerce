@@ -26,13 +26,7 @@ class UserService:
         password: str,
         name: str | None = None,
     ) -> tuple[User, bool]:
-        """
-        Create a user for the tenant if one does not already exist.
-
-        Returns the user and whether this call created it, so the caller can
-        distinguish 201 from 200 rather than reporting every request as a
-        creation.
-        """
+        """Create the tenant's user if absent; returns the user and whether it was created."""
         email = email.strip().lower()
         phone = normalize_phone(phone)
 
@@ -44,8 +38,6 @@ class UserService:
         if existing is not None:
             return existing, False
 
-        # A CHECK constraint ties password presence to role: customers
-        # authenticate by OTP and must not carry a password hash.
         password_hash = (
             None if role is UserRole.CUSTOMER else await hash_password(password)
         )

@@ -55,7 +55,6 @@ class AuthService:
         self.challenges = AdminChallengeRepository(session)
         self.tokens = RefreshTokenRepository(session)
 
-
     async def request_customer_otp(self, phone: str) -> None:
         user = await self.users.get_by_phone(tenant_id=self.tenant.id, phone=phone)
 
@@ -97,7 +96,6 @@ class AuthService:
             "auth.login user_id=%s tenant_id=%s role=%s", user.id, self.tenant.id, user.role
         )
         return tokens
-
 
     async def admin_login(self, identifier: str, password: str) -> TokenPair:
         user = await self._verify_password_user(
@@ -171,7 +169,6 @@ class AuthService:
         )
         return tokens
 
-
     async def refresh_tokens(self, refresh_token: str) -> TokenPair:
         payload = decode_token(refresh_token, expected_type="refresh")
         if payload.tenant_id != str(self.tenant.id):
@@ -224,7 +221,6 @@ class AuthService:
             logger.info("auth.logout user_id=%s tenant_id=%s", stored.user_id, self.tenant.id)
 
         await self.session.commit()
-
 
     async def _verify_password_user(
         self, identifier: str, password: str, *, roles: frozenset[str]

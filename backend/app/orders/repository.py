@@ -43,12 +43,7 @@ class OrderRepository(TenantScopedRepository[Order]):
         return stmt.order_by(Order.created_at.desc())
 
     async def get_for_customer(self, customer_id: UUID, order_id: UUID) -> Order | None:
-        """
-        Scoped to the customer as well as the tenant.
-
-        Another customer's order id does not resolve, so it reads as "not
-        found" -- which tells the caller nothing about whose order it is.
-        """
+        """Fetch an order scoped to the customer as well as the tenant."""
         return await self.find_one(
             Order.id == order_id, Order.customer_id == customer_id
         )

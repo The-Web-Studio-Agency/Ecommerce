@@ -11,12 +11,7 @@ from app.payments.schemas import PaymentRead
 
 
 class CheckoutItem(BaseModel):
-    """
-    One validated line, priced from the database.
-
-    The same shape is returned by the preview and written to an order item, so
-    what a customer sees before confirming is exactly what gets stored.
-    """
+    """One validated line, priced from the database."""
 
     product_id: UUID
     variant_id: UUID
@@ -37,12 +32,7 @@ class CheckoutPreview(BaseModel):
 
 
 class CheckoutCreate(BaseModel):
-    """
-    The only thing checkout accepts from the client.
-
-    Quantities come from the cart and prices come from the catalogue, so
-    neither can be tampered with in the request.
-    """
+    """The only thing checkout accepts from the client: which address to deliver to."""
 
     address_id: UUID
 
@@ -81,10 +71,7 @@ class OrderRead(BaseModel):
     shipping_amount: Decimal
     tax_amount: Decimal
     total_amount: Decimal
-    # From the tenant, not the order: a storefront prices in one currency.
     currency: str
-    # Optional only for orders placed before payments existed -- checkout has
-    # written one for every order since.
     payment: PaymentRead | None
     delivery_address: DeliveryAddressRead
     created_at: datetime

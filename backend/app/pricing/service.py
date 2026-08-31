@@ -20,12 +20,7 @@ SAVE_FAILED = "Unable to save the settings, please try again"
 
 
 class ShippingService:
-    """
-    What delivery costs.
-
-    One flat charge per tenant, optionally free above a threshold. A tenant
-    that has configured nothing -- or switched it off -- ships free.
-    """
+    """One flat delivery charge per tenant, optionally free above a threshold."""
 
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session
@@ -67,12 +62,7 @@ class ShippingService:
         return settings
 
     async def calculate(self, subtotal: Decimal) -> Decimal:
-        """
-        What this basket costs to deliver.
-
-        Free if the tenant has not set delivery up, switched it off, or the
-        basket has reached their free-shipping threshold.
-        """
+        """What this basket costs to deliver."""
         settings = await self.get_settings()
 
         if settings is None or not settings.is_active:
@@ -86,12 +76,7 @@ class ShippingService:
 
 
 class TaxService:
-    """
-    What tax is due.
-
-    One percentage per tenant, charged on the goods *and* the delivery. A
-    tenant that has configured nothing -- or switched it off -- charges no tax.
-    """
+    """One tax percentage per tenant, charged on the goods and the delivery."""
 
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session
@@ -129,11 +114,7 @@ class TaxService:
         return settings
 
     async def calculate(self, subtotal: Decimal, shipping: Decimal) -> Decimal:
-        """
-        Tax on the goods and the delivery together.
-
-        2000.00 goods + 100.00 delivery at 18% is 2100.00 x 18 / 100 = 378.00.
-        """
+        """Tax on the goods and the delivery together."""
         settings = await self.get_settings()
 
         if settings is None or not settings.is_active:

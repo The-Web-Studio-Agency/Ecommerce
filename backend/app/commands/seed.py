@@ -32,11 +32,6 @@ from app.users.models import User
 from app.users.repository import UserRepository
 from app.users.service import UserService
 
-# --------------------------------------------------------------------------
-# Demo catalogue. Ten of each, so the storefront has something to render and
-# pagination has more than one page at the default size.
-# --------------------------------------------------------------------------
-
 CATEGORIES: list[tuple[str, str]] = [
     ("Dresses", "Day dresses, midis and occasion wear."),
     ("Tops", "Blouses, shirts and knitwear."),
@@ -50,11 +45,8 @@ CATEGORIES: list[tuple[str, str]] = [
     ("Accessories", "Belts, sunglasses and small leather goods."),
 ]
 
-# Every product carries a brand of Zeen, so it is applied at build time
-# rather than repeated on each row.
 PRODUCT_BRAND = "Zeen"
 
-# (category, name, short description, price, sku stem, featured)
 PRODUCTS: list[tuple[str, str, str, str, str, bool]] = [
     (
         "Dresses",
@@ -138,7 +130,6 @@ PRODUCTS: list[tuple[str, str, str, str, str, bool]] = [
     ),
 ]
 
-# (email local part, name, role)
 USERS: list[tuple[str, str, UserRole]] = [
     ("priya.menon", "Priya Menon", UserRole.STAFF),
     ("arjun.rao", "Arjun Rao", UserRole.STAFF),
@@ -152,8 +143,6 @@ USERS: list[tuple[str, str, UserRole]] = [
     ("kabir.singh", "Kabir Singh", UserRole.CUSTOMER),
 ]
 
-# Colour/size pairs cycled across the demo variants so the storefront option
-# API has something to render.
 VARIANT_OPTIONS: list[tuple[str, str]] = [
     ("Black", "S"),
     ("Ivory", "M"),
@@ -193,7 +182,6 @@ async def seed() -> None:
         tenants = TenantRepository(session)
         users = UserRepository(session)
 
-        # ------------------------------------------------------------ tenant
         tenant = await tenants.get_active_by_slug(slug)
         if tenant is None:
             tenant = Tenant(
@@ -218,7 +206,6 @@ async def seed() -> None:
         else:
             print(f"Domain already registered: {domain}")
 
-        # ------------------------------------------------------- tenant admin
         if await users.get_by_email(tenant_id=tenant.id, email=email) is None:
             await users.create(
                 tenant_id=tenant.id,
@@ -232,9 +219,6 @@ async def seed() -> None:
         else:
             print(f"Tenant admin already exists: {email}")
 
-        # ------------------------------------------------ shipping and tax
-        # What the storefront adds on top of the goods. Seeded once; an admin
-        # changes it through /admin/shipping and /admin/tax after that.
         if await session.scalar(
             select(ShippingSettings).where(ShippingSettings.tenant_id == tenant.id)
         ) is None:
@@ -269,7 +253,6 @@ async def seed() -> None:
 
         await session.commit()
 
-        # -------------------------------------------------------- categories
         categories_service = CategoryService(session, tenant.id)
         by_name: dict[str, Category] = {}
 
@@ -288,7 +271,6 @@ async def seed() -> None:
             created_categories += 1
         print(f"Categories: +{created_categories} (total {len(by_name)})")
 
-        # ----------------------------------------------------------- products
         products_service = ProductService(session, tenant.id)
         existing_products = {
             product.name: product
@@ -336,7 +318,6 @@ async def seed() -> None:
             created_products += 1
         print(f"Products: +{created_products} (total {len(existing_products)})")
 
-        # ----------------------------------------------------------- variants
         variants_service = VariantService(session, tenant.id)
         existing_skus = set(
             (
@@ -371,7 +352,6 @@ async def seed() -> None:
             created_variants += 1
         print(f"Variants: +{created_variants}")
 
-        # -------------------------------------------------------------- users
         user_service = UserService(session)
         created_users = 0
         for index, (local_part, name, role) in enumerate(USERS, start=1):

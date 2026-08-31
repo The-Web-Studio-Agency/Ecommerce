@@ -23,25 +23,12 @@ _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in PaymentProvid
 
 
 class Payment(Base, TimestampMixin):
-    """
-    What is owed on one order, and whether it has been collected.
-
-    Exactly one per order, written by checkout. Cash on delivery, so it is
-    PENDING from the moment the order is placed until the courier hands the
-    goods over and takes the money -- PAID once the order is delivered, FAILED
-    if it is cancelled first. Nothing else ever writes one, and a partial
-    unique index makes a second PAID row for the same order impossible even if
-    something tried.
-
-    The amount is copied from the order. It is never read from the request, so
-    what the customer owes cannot be influenced by the browser.
-    """
+    """What is owed on one order, and whether it has been collected."""
 
     __tablename__ = "payments"
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_payments_tenant_id_id"),
-        # A payment cannot point at an order in another tenant.
         ForeignKeyConstraint(
             ["tenant_id", "order_id"],
             ["orders.tenant_id", "orders.id"],
@@ -51,8 +38,6 @@ class Payment(Base, TimestampMixin):
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
         CheckConstraint(f"provider IN ({_PROVIDER_VALUES})", name="provider_valid"),
         CheckConstraint("amount >= 0", name="amount_not_negative"),
-        # "An order is paid once" lives in the database, so two deliveries
-        # recorded at the same moment cannot both collect the cash.
         Index(
             "uq_payments_one_paid_per_order",
             "tenant_id",

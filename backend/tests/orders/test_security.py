@@ -1,10 +1,4 @@
-"""
-Isolation for orders and addresses.
-
-Two things must never leak: another customer's order inside the same tenant,
-and anything at all across tenants. Both have to read as "not found" rather
-than "forbidden", so an id cannot be probed for existence.
-"""
+"""Isolation for orders and addresses; anything else reads as not found."""
 
 from __future__ import annotations
 
@@ -37,9 +31,6 @@ async def _order_for(client, headers, variant_id, cart_route="/api/v1/cart"):
     )
     assert placed.status_code == 201, placed.text
     return placed.json()["data"]
-
-
-# ------------------------ ANOTHER CUSTOMER, SAME TENANT ---------------------
 
 
 async def test_another_customers_order_is_not_found(
@@ -78,9 +69,6 @@ async def test_each_customer_sees_only_their_own_order(
 
     assert numbers == [mine["order_number"]]
     assert theirs["order_number"] not in numbers
-
-
-# ----------------------------- ANOTHER TENANT -------------------------------
 
 
 async def test_an_order_from_another_tenant_is_not_found_for_a_customer(
@@ -150,12 +138,7 @@ async def test_an_address_from_another_tenant_is_not_found(
 async def test_an_address_from_another_tenant_cannot_be_delivered_to(
     client, other_client, address, other_tenant, other_admin_headers, make_user
 ):
-    """
-    An address id from the wrong tenant must not become a delivery snapshot.
-
-    The other tenant needs its own catalogue to have anything to check out at
-    all, which is what most of this test is building.
-    """
+    """An address id from the wrong tenant must not become a delivery snapshot."""
     buyer = await make_user(tenant=other_tenant, phone="+919822223005")
     headers = headers_for(buyer)
 
@@ -184,9 +167,6 @@ async def test_an_address_from_another_tenant_cannot_be_delivered_to(
     )
 
     assert response.status_code == 404
-
-
-# --------------------------------- INPUT ------------------------------------
 
 
 async def test_a_tenant_id_in_the_body_is_ignored(

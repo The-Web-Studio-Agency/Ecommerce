@@ -25,8 +25,6 @@ from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated
 from app.tenants.resolver import CurrentTenant
 
-# Public, unauthenticated. The tenant comes from the request hostname via
-# CurrentTenant -- a tenant id is never accepted from the client.
 router = APIRouter(prefix="/storefront", tags=["Storefront-Catalogue"])
 
 
@@ -161,8 +159,6 @@ async def get_variant(
     if variant.status != CatalogueStatus.ACTIVE.value:
         raise NotFoundError("Variant not found")
 
-    # A variant is only public while its parent product is, otherwise archiving
-    # a product would leave its variants individually readable.
     await ProductService(session, tenant.id).get_public(variant.product_id)
 
     return ok(storefront_variant(variant), message="Variant retrieved")

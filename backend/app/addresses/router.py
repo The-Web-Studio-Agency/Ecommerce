@@ -12,8 +12,6 @@ from app.core.database import get_db
 from app.core.responses import ApiResponse, ok
 from app.users.models import User
 
-# Customer-facing and authenticated. Both the tenant and the customer come from
-# the access token -- neither is ever read from the request.
 router = APIRouter(prefix="/addresses", tags=["Addresses"])
 
 

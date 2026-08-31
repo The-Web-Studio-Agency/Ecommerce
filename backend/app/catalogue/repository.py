@@ -32,8 +32,6 @@ class CategoryRepository(TenantScopedRepository[Category]):
         if active_only:
             stmt = stmt.where(Category.status == CatalogueStatus.ACTIVE.value)
         else:
-            # Admin listings hide archived categories by default; they are the
-            # soft-deleted ones and would otherwise clutter every picker.
             stmt = stmt.where(Category.status != CatalogueStatus.ARCHIVED.value)
 
         return stmt.order_by(Category.name)
@@ -43,12 +41,7 @@ class ProductRepository(TenantScopedRepository[Product]):
     model = Product
 
     def _live_price_subquery(self):
-        """
-        Cheapest sellable variant price for the product row being scanned.
-
-        Used for price sorting. Correlated so it stays a single query rather
-        than a lookup per product.
-        """
+        """Cheapest sellable variant price for the product, used for price sorting."""
         return (
             select(func.min(ProductVariant.price))
             .where(
@@ -75,8 +68,6 @@ class ProductRepository(TenantScopedRepository[Product]):
         stmt = self.base_select()
 
         if active_only:
-            # A product is public only when its category is public too,
-            # otherwise archiving a category would leave its products listed.
             stmt = stmt.join(
                 Category,
                 and_(
@@ -109,9 +100,6 @@ class ProductRepository(TenantScopedRepository[Product]):
             stmt = stmt.where(Product.is_featured.is_(featured))
 
         if min_price is not None or max_price is not None:
-            # "Has a sellable variant inside the range" -- an EXISTS rather than
-            # comparing against one aggregate, so a product with a cheap and an
-            # expensive variant matches either bound.
             conditions = [
                 ProductVariant.tenant_id == Product.tenant_id,
                 ProductVariant.product_id == Product.id,
@@ -128,7 +116,6 @@ class ProductRepository(TenantScopedRepository[Product]):
     def _order_by(self, sort: ProductSort):
         price = self._live_price_subquery()
         clauses = {
-            # id breaks ties so pagination stays stable across pages.
             ProductSort.NEWEST: (Product.created_at.desc(), Product.id),
             ProductSort.NAME_ASC: (Product.name.asc(), Product.id),
             ProductSort.NAME_DESC: (Product.name.desc(), Product.id),
@@ -140,13 +127,7 @@ class ProductRepository(TenantScopedRepository[Product]):
     async def has_products_in_category(
         self, category_id: UUID, *, include_archived: bool = False
     ) -> bool:
-        """
-        Whether the category still holds products that matter.
-
-        Archived products are excluded by default: they are soft-deleted, so
-        counting them would mean a category could never be retired once it had
-        ever held anything.
-        """
+        """Whether the category still holds products, archived ones excluded."""
         conditions = [Product.category_id == category_id]
         if not include_archived:
             conditions.append(Product.status != CatalogueStatus.ARCHIVED.value)
@@ -154,12 +135,7 @@ class ProductRepository(TenantScopedRepository[Product]):
         return await self.find_one(*conditions) is not None
 
     async def lock(self, product_id: UUID) -> UUID | None:
-        """
-        Take a row lock on the product.
-
-        Mutating a product's image set is serialised through this lock, so two
-        concurrent deletes cannot each see two images and each remove one.
-        """
+        """Take a row lock on the product, serialising mutations to its image set."""
         return await self.session.scalar(
             select(Product.id)
             .where(Product.tenant_id == self.tenant_id, Product.id == product_id)
@@ -237,13 +213,7 @@ class ProductImageRepository(TenantScopedRepository[ProductImage]):
     async def clear_primary(
         self, product_id: UUID, *, exclude_id: UUID | None = None
     ) -> None:
-        """
-        Demote the product's current primary image.
-
-        A single UPDATE rather than loading the set and flipping flags in
-        Python: it touches only the row that needs it, and the partial unique
-        index catches anything that slips past a race.
-        """
+        """Demote the product's current primary image in a single UPDATE."""
         conditions = [
             ProductImage.tenant_id == self.tenant_id,
             ProductImage.product_id == product_id,
@@ -259,14 +229,7 @@ class ProductImageRepository(TenantScopedRepository[ProductImage]):
 
 
 class InventoryRepository(TenantScopedRepository[InventoryItem]):
-    """
-    Stock changes are expressed as conditional UPDATEs.
-
-    Every mutation is a single statement whose WHERE clause carries the
-    precondition, so PostgreSQL evaluates it under the row lock the UPDATE
-    already takes. A rowcount of 0 means the precondition failed -- there is no
-    read-then-write window for a concurrent order to slip into.
-    """
+    """Stock changes as conditional UPDATEs; a rowcount of 0 means it was refused."""
 
     model = InventoryItem
 
@@ -287,7 +250,6 @@ class InventoryRepository(TenantScopedRepository[InventoryItem]):
         return (result.rowcount or 0) == 1
 
     async def set_available(self, variant_id: UUID, quantity: int) -> bool:
-        # Refuses to drop stock below what is already promised to open orders.
         return await self._apply(
             variant_id,
             InventoryItem.reserved_quantity <= quantity,

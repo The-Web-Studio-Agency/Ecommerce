@@ -52,12 +52,7 @@ class CartItemRepository(TenantScopedRepository[CartItem]):
     async def list_with_catalogue(
         self, cart_id: UUID
     ) -> list[tuple[CartItem, ProductVariant, Product]]:
-        """
-        Every cart line with the variant and product it points at.
-
-        One join rather than a lookup per item, so rendering a cart costs a
-        fixed number of queries however many lines it has.
-        """
+        """Every cart line joined to the variant and product it points at, in one query."""
         stmt = (
             select(CartItem, ProductVariant, Product)
             .join(

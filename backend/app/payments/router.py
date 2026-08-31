@@ -16,17 +16,9 @@ from app.payments.service import PaymentService
 from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 
-# Customer-facing, and read-only. Cash on delivery is the only way to pay, so
-# there is nothing to start: checkout writes the payment and the order
-# lifecycle settles it.
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
-# Reading payments for the shop. Also read-only -- cash is recorded by marking
-# the order delivered, never by editing a payment directly.
 admin_router = APIRouter(prefix="/admin/payments", tags=["Admin-Payments"])
-
-
-# ------------------------------ CUSTOMER ------------------------------------
 
 
 @router.get(
@@ -44,9 +36,6 @@ async def get_my_payment(
         user.id, payment_id
     )
     return ok(payment_read(payment, tenant.currency), message="Payment retrieved")
-
-
-# -------------------------------- ADMIN -------------------------------------
 
 
 @admin_router.get(

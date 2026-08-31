@@ -21,8 +21,6 @@ class PaymentStatus(str, Enum):
     REFUNDED = "REFUNDED"
 
 
-# Which status an order may move to next. A plain dictionary rather than a
-# state machine: reading it top to bottom tells you the whole policy.
 ALLOWED_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.PENDING: frozenset(
         {OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED}
@@ -30,7 +28,6 @@ ALLOWED_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.CONFIRMED: frozenset({OrderStatus.PROCESSING, OrderStatus.CANCELLED}),
     OrderStatus.PROCESSING: frozenset({OrderStatus.SHIPPED, OrderStatus.CANCELLED}),
     OrderStatus.SHIPPED: frozenset({OrderStatus.DELIVERED}),
-    # End states. A delivered order needs a returns module, not a status change.
     OrderStatus.DELIVERED: frozenset(),
     OrderStatus.CANCELLED: frozenset(),
 }
@@ -38,6 +35,4 @@ ALLOWED_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
 MAX_ORDER_NUMBER_LENGTH = 32
 ORDER_NUMBER_PREFIX = "ORD-"
 
-# Order numbers start here so the very first one reads as ORD-100001 rather
-# than ORD-1.
 ORDER_NUMBER_START = 100001

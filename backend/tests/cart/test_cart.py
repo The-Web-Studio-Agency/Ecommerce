@@ -1,8 +1,4 @@
-"""
-Cart: viewing, adding, updating, removing and clearing.
-
-Every test follows the same shape: setup, one action, then assertions.
-"""
+"""Cart: viewing, adding, updating, removing and clearing."""
 
 from __future__ import annotations
 
@@ -22,8 +18,6 @@ from tests.catalogue.factories import PRODUCTS, VARIANTS
 from tests.conftest import headers_for
 from tests.helpers import run_concurrently
 
-# ------------------------------ authentication ------------------------------
-
 
 @pytest.mark.parametrize(
     ("method", "path"),
@@ -41,9 +35,6 @@ async def test_staff_cannot_use_the_customer_cart(client, staff_headers):
     assert response.status_code == 403
 
 
-# --------------------------------- viewing ----------------------------------
-
-
 async def test_an_empty_cart_is_created_on_first_view(client, customer_auth):
     response = await client.get(CART, headers=customer_auth)
 
@@ -59,9 +50,6 @@ async def test_the_same_cart_is_returned_every_time(client, customer_auth):
     second = await client.get(CART, headers=customer_auth)
 
     assert first.json()["data"]["id"] == second.json()["data"]["id"]
-
-
-# ------------------------------- adding items -------------------------------
 
 
 async def test_a_variant_can_be_added(add_to_cart, customer_auth, variant):
@@ -95,9 +83,6 @@ async def test_adding_the_same_variant_twice_increases_the_quantity(
     body = response.json()["data"]
     assert len(body["items"]) == 1
     assert body["items"][0]["quantity"] == 5
-
-
-# ------------------------------ changing items ------------------------------
 
 
 async def test_quantity_can_be_updated(client, add_to_cart, customer_auth, variant):
@@ -134,9 +119,6 @@ async def test_clearing_empties_the_cart_but_keeps_it(
     body = response.json()["data"]
     assert body["items"] == []
     assert body["id"] == cart_id
-
-
-# -------------------------------- validation --------------------------------
 
 
 @pytest.mark.parametrize("quantity", [0, -1, -50])
@@ -215,9 +197,6 @@ async def test_updating_beyond_stock_leaves_the_quantity_alone(
     assert cart.json()["data"]["items"][0]["quantity"] == 1
 
 
-# -------------------------------- ownership ---------------------------------
-
-
 async def test_another_customer_cannot_update_your_item(
     client, add_to_cart, customer_auth, variant, make_user, tenant
 ):
@@ -284,9 +263,6 @@ async def test_a_token_is_rejected_on_another_tenants_host(
     assert response.status_code == 401
 
 
-# --------------------------------- pricing ----------------------------------
-
-
 async def test_the_subtotal_uses_the_database_price(
     add_to_cart, customer_auth, variant
 ):
@@ -324,9 +300,6 @@ async def test_a_price_change_shows_in_an_existing_cart(
     assert response.json()["data"]["items"][0]["unit_price"] == "1499.00"
 
 
-# -------------------------------- inventory ---------------------------------
-
-
 async def test_adding_to_a_cart_does_not_reserve_stock(
     add_to_cart, customer_auth, variant, session, tenant
 ):
@@ -348,9 +321,6 @@ async def test_two_customers_may_hold_the_same_stock(
     response = await add_to_cart(second, variant["id"], 8)
 
     assert response.status_code == 201
-
-
-# ------------------------------- concurrency --------------------------------
 
 
 async def test_adding_the_same_variant_at_once_makes_one_line(
