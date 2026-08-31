@@ -1,200 +1,94 @@
 import uuid
-from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
-    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
+    Sequence,
     String,
     UniqueConstraint,
     and_,
-    func,
-    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.catalogue.constants import (
-    MAX_ALT_TEXT_LENGTH,
-    MAX_BRAND_LENGTH,
-    MAX_DESCRIPTION_LENGTH,
-    MAX_IMAGE_URL_LENGTH,
+from app.addresses.models import (
+    MAX_CITY_LENGTH,
+    MAX_LINE_LENGTH,
     MAX_NAME_LENGTH,
-    MAX_OPTION_NAME_LENGTH,
-    MAX_OPTION_VALUE_LENGTH,
-    MAX_SEO_DESCRIPTION_LENGTH,
-    MAX_SEO_TITLE_LENGTH,
-    MAX_SHORT_DESCRIPTION_LENGTH,
+    MAX_POSTAL_CODE_LENGTH,
+)
+from app.catalogue.constants import (
+    MAX_NAME_LENGTH as MAX_PRODUCT_NAME_LENGTH,
+)
+from app.catalogue.constants import (
     MAX_SKU_LENGTH,
     PRICE_PRECISION,
     PRICE_SCALE,
-    CatalogueStatus,
-    InventoryReason,
 )
 from app.models.base import Base, TimestampMixin
+from app.orders.constants import (
+    MAX_ORDER_NUMBER_LENGTH,
+    ORDER_NUMBER_START,
+    OrderStatus,
+    PaymentStatus,
+)
+from app.payments.models import Payment
 
-_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CatalogueStatus)
-_REASON_VALUES = ", ".join(f"'{reason.value}'" for reason in InventoryReason)
+_ORDER_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in OrderStatus)
+_PAYMENT_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in PaymentStatus)
 
-
-class Category(Base, TimestampMixin):
-    __tablename__ = "categories"
-
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "id", name="uq_categories_tenant_id_id"),
-        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
-        CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
-        Index("ix_categories_tenant_id_status", "tenant_id", "status"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
-
-    description: Mapped[str | None] = mapped_column(
-        String(MAX_DESCRIPTION_LENGTH), nullable=True
-    )
-
-    status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default=CatalogueStatus.ACTIVE.value,
-    )
+# Customer-facing order numbers come from a Postgres sequence rather than a
+# "select max() + 1", so two checkouts running at the same time can never be
+# handed the same number. It is attached to the metadata, which means both
+# Alembic and the test suite's create_all know to build it.
+ORDER_NUMBER_SEQUENCE = Sequence(
+    "order_number_seq", start=ORDER_NUMBER_START, metadata=Base.metadata
+)
 
 
-class Product(Base, TimestampMixin):
-    __tablename__ = "products"
+class Order(Base, TimestampMixin):
+    """
+    One placed order.
+
+    Everything a customer needs to read this order back -- prices, product
+    names, the delivery address -- is copied onto the order and its items when
+    it is placed. Nothing here is looked up from the live catalogue, so a later
+    price change or address edit cannot rewrite history.
+    """
+
+    __tablename__ = "orders"
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "id", name="uq_products_tenant_id_id"),
+        UniqueConstraint("tenant_id", "id", name="uq_orders_tenant_id_id"),
+        UniqueConstraint("order_number", name="uq_orders_order_number"),
         ForeignKeyConstraint(
-            ["tenant_id", "category_id"],
-            ["categories.tenant_id", "categories.id"],
-            name="fk_products_tenant_category_categories",
-            ondelete="NO ACTION",
-        ),
-        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
-        CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
-        Index("ix_products_tenant_id_category_id", "tenant_id", "category_id"),
-        Index("ix_products_tenant_id_status", "tenant_id", "status"),
-        Index("ix_products_tenant_id_is_featured", "tenant_id", "is_featured"),
-        Index("ix_products_tenant_id_brand", "tenant_id", "brand"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
-
-    short_description: Mapped[str | None] = mapped_column(
-        String(MAX_SHORT_DESCRIPTION_LENGTH), nullable=True
-    )
-
-    description: Mapped[str | None] = mapped_column(
-        String(MAX_DESCRIPTION_LENGTH), nullable=True
-    )
-
-    brand: Mapped[str | None] = mapped_column(String(MAX_BRAND_LENGTH), nullable=True)
-
-    status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default=CatalogueStatus.DRAFT.value,
-    )
-
-    is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-    seo_title: Mapped[str | None] = mapped_column(
-        String(MAX_SEO_TITLE_LENGTH), nullable=True
-    )
-
-    seo_description: Mapped[str | None] = mapped_column(
-        String(MAX_SEO_DESCRIPTION_LENGTH), nullable=True
-    )
-
-    images: Mapped[list["ProductImage"]] = relationship(
-        "ProductImage",
-        primaryjoin=lambda: and_(
-            Product.id == ProductImage.product_id,
-            Product.tenant_id == ProductImage.tenant_id,
-        ),
-        foreign_keys=lambda: [ProductImage.product_id, ProductImage.tenant_id],
-        order_by=lambda: (ProductImage.sort_order, ProductImage.created_at),
-        lazy="selectin",
-        viewonly=True,
-    )
-
-    options: Mapped[list["ProductOption"]] = relationship(
-        "ProductOption",
-        primaryjoin=lambda: and_(
-            Product.id == ProductOption.product_id,
-            Product.tenant_id == ProductOption.tenant_id,
-        ),
-        foreign_keys=lambda: [ProductOption.product_id, ProductOption.tenant_id],
-        order_by=lambda: (ProductOption.position, ProductOption.name),
-        lazy="selectin",
-        viewonly=True,
-    )
-
-    variants: Mapped[list["ProductVariant"]] = relationship(
-        "ProductVariant",
-        primaryjoin=lambda: and_(
-            Product.id == ProductVariant.product_id,
-            Product.tenant_id == ProductVariant.tenant_id,
-        ),
-        foreign_keys=lambda: [ProductVariant.product_id, ProductVariant.tenant_id],
-        order_by=lambda: ProductVariant.sku,
-        lazy="selectin",
-        viewonly=True,
-    )
-
-
-class ProductOption(Base, TimestampMixin):
-    """A dimension a product varies along, such as Color or Size."""
-
-    __tablename__ = "product_options"
-
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "id", name="uq_product_options_tenant_id_id"),
-        UniqueConstraint(
-            "tenant_id", "product_id", "name", name="uq_product_options_tenant_product_name"
-        ),
-        ForeignKeyConstraint(
-            ["tenant_id", "product_id"],
-            ["products.tenant_id", "products.id"],
-            name="fk_product_options_tenant_product_products",
+            ["tenant_id", "customer_id"],
+            ["users.tenant_id", "users.id"],
+            name="fk_orders_tenant_customer_users",
             ondelete="CASCADE",
         ),
-        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
-        CheckConstraint("position >= 0", name="position_not_negative"),
-        Index("ix_product_options_tenant_id_product_id", "tenant_id", "product_id"),
+        CheckConstraint(f"status IN ({_ORDER_STATUS_VALUES})", name="status_valid"),
+        CheckConstraint(
+            f"payment_status IN ({_PAYMENT_STATUS_VALUES})", name="payment_status_valid"
+        ),
+        CheckConstraint("subtotal >= 0", name="subtotal_not_negative"),
+        CheckConstraint("shipping_amount >= 0", name="shipping_not_negative"),
+        CheckConstraint("tax_amount >= 0", name="tax_not_negative"),
+        # The total is never stored independently of its parts, so a bug that
+        # miscalculates one of them is a database error rather than a wrong
+        # number on an invoice.
+        CheckConstraint(
+            "total_amount = subtotal + shipping_amount + tax_amount",
+            name="total_is_subtotal_plus_shipping_plus_tax",
+        ),
+        Index("ix_orders_tenant_id_customer_id", "tenant_id", "customer_id"),
+        Index("ix_orders_tenant_id_status", "tenant_id", "status"),
+        Index("ix_orders_tenant_id_payment_status", "tenant_id", "payment_status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -207,162 +101,137 @@ class ProductOption(Base, TimestampMixin):
         nullable=False,
     )
 
-    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    name: Mapped[str] = mapped_column(String(MAX_OPTION_NAME_LENGTH), nullable=False)
-
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-
-class ProductVariant(Base, TimestampMixin):
-    __tablename__ = "product_variants"
-
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "id", name="uq_product_variants_tenant_id_id"),
-        UniqueConstraint("tenant_id", "sku", name="uq_product_variants_tenant_sku"),
-        ForeignKeyConstraint(
-            ["tenant_id", "product_id"],
-            ["products.tenant_id", "products.id"],
-            name="fk_product_variants_tenant_product_products",
-            ondelete="CASCADE",
-        ),
-        CheckConstraint("sku = upper(sku)", name="sku_is_uppercase"),
-        CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
-        CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
-        CheckConstraint("price >= 0", name="price_not_negative"),
-        Index("ix_product_variants_tenant_id_product_id", "tenant_id", "product_id"),
+    # What the customer quotes at you on the phone. The UUID stays the primary
+    # key; this is the identifier that appears in the API and in emails.
+    order_number: Mapped[str] = mapped_column(
+        String(MAX_ORDER_NUMBER_LENGTH), nullable=False
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=OrderStatus.PENDING.value
     )
 
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
+    payment_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=PaymentStatus.PENDING.value
     )
 
-    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-
-    sku: Mapped[str] = mapped_column(String(MAX_SKU_LENGTH), nullable=False)
-
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
-
-    price: Mapped[Decimal] = mapped_column(
+    subtotal: Mapped[Decimal] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
 
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=CatalogueStatus.DRAFT.value
+    shipping_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
 
-    option_values: Mapped[list["ProductVariantOption"]] = relationship(
-        "ProductVariantOption",
-        primaryjoin=lambda: and_(
-            ProductVariant.id == ProductVariantOption.variant_id,
-            ProductVariant.tenant_id == ProductVariantOption.tenant_id,
-        ),
-        foreign_keys=lambda: [
-            ProductVariantOption.variant_id,
-            ProductVariantOption.tenant_id,
-        ],
-        lazy="selectin",
-        viewonly=True,
+    # What the tenant's tax rate worked out to at the moment of purchase. It
+    # is stored, not recalculated, so changing the rate tomorrow cannot rewrite
+    # what this customer was charged today.
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
 
-    inventory: Mapped["InventoryItem | None"] = relationship(
-        "InventoryItem",
+    total_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
+    )
+
+    # ---- delivery address, copied from the customer's address at checkout ----
+
+    delivery_name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
+
+    delivery_phone: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    delivery_address_line_1: Mapped[str] = mapped_column(
+        String(MAX_LINE_LENGTH), nullable=False
+    )
+
+    delivery_address_line_2: Mapped[str | None] = mapped_column(
+        String(MAX_LINE_LENGTH), nullable=True
+    )
+
+    delivery_city: Mapped[str] = mapped_column(String(MAX_CITY_LENGTH), nullable=False)
+
+    delivery_state: Mapped[str] = mapped_column(String(MAX_CITY_LENGTH), nullable=False)
+
+    delivery_postal_code: Mapped[str] = mapped_column(
+        String(MAX_POSTAL_CODE_LENGTH), nullable=False
+    )
+
+    delivery_country: Mapped[str] = mapped_column(
+        String(MAX_CITY_LENGTH), nullable=False
+    )
+
+    # What is owed on this order and whether it has been collected. One
+    # payment per order -- checkout writes it, and the status changes settle
+    # it. Loaded the same way as the items, so reading an order never costs a
+    # second round trip.
+    payment: Mapped["Payment | None"] = relationship(
+        "Payment",
         primaryjoin=lambda: and_(
-            ProductVariant.id == InventoryItem.variant_id,
-            ProductVariant.tenant_id == InventoryItem.tenant_id,
+            Order.id == Payment.order_id,
+            Order.tenant_id == Payment.tenant_id,
         ),
-        foreign_keys=lambda: [InventoryItem.variant_id, InventoryItem.tenant_id],
-        lazy="selectin",
+        foreign_keys=lambda: [Payment.order_id, Payment.tenant_id],
         uselist=False,
+        lazy="selectin",
+        viewonly=True,
+    )
+
+    # selectin loading: one extra query per page of orders rather than one per
+    # order, which is what keeps the order list off an N+1.
+    items: Mapped[list["OrderItem"]] = relationship(
+        "OrderItem",
+        primaryjoin=lambda: and_(
+            Order.id == OrderItem.order_id,
+            Order.tenant_id == OrderItem.tenant_id,
+        ),
+        foreign_keys=lambda: [OrderItem.order_id, OrderItem.tenant_id],
+        order_by=lambda: OrderItem.created_at,
+        lazy="selectin",
         viewonly=True,
     )
 
 
-class ProductVariantOption(Base, TimestampMixin):
-    """One option value for one variant -- "Color = Black"."""
+class OrderItem(Base, TimestampMixin):
+    """
+    One line of an order, with the product details frozen at purchase time.
 
-    __tablename__ = "product_variant_options"
+    product_id and variant_id are kept so an admin can still jump to the
+    catalogue entry, but nothing in the response is read from them. If the
+    product is renamed or repriced tomorrow, this row is unaffected.
+    """
+
+    __tablename__ = "order_items"
 
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id",
-            "variant_id",
-            "option_id",
-            name="uq_product_variant_options_tenant_variant_option",
+        # One line per variant per order -- the same variant twice would be a
+        # checkout bug, not a legitimate order.
+        UniqueConstraint("order_id", "variant_id", name="uq_order_items_order_variant"),
+        ForeignKeyConstraint(
+            ["tenant_id", "order_id"],
+            ["orders.tenant_id", "orders.id"],
+            name="fk_order_items_tenant_order_orders",
+            ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "variant_id"],
             ["product_variants.tenant_id", "product_variants.id"],
-            name="fk_product_variant_options_tenant_variant_product_variants",
+            name="fk_order_items_tenant_variant_product_variants",
             ondelete="CASCADE",
         ),
-        ForeignKeyConstraint(
-            ["tenant_id", "option_id"],
-            ["product_options.tenant_id", "product_options.id"],
-            name="fk_product_variant_options_tenant_option_product_options",
-            ondelete="CASCADE",
-        ),
-        CheckConstraint("length(trim(value)) > 0", name="value_not_blank"),
-        Index("ix_product_variant_options_tenant_id_option_id", "tenant_id", "option_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-
-    option_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-
-    value: Mapped[str] = mapped_column(String(MAX_OPTION_VALUE_LENGTH), nullable=False)
-
-    option: Mapped["ProductOption"] = relationship(
-        "ProductOption",
-        primaryjoin=lambda: and_(
-            ProductVariantOption.option_id == ProductOption.id,
-            ProductVariantOption.tenant_id == ProductOption.tenant_id,
-        ),
-        foreign_keys=lambda: [
-            ProductVariantOption.option_id,
-            ProductVariantOption.tenant_id,
-        ],
-        lazy="selectin",
-        viewonly=True,
-    )
-
-
-class ProductImage(Base, TimestampMixin):
-    __tablename__ = "product_images"
-
-    __table_args__ = (
         ForeignKeyConstraint(
             ["tenant_id", "product_id"],
             ["products.tenant_id", "products.id"],
-            name="fk_product_images_tenant_product_products",
+            name="fk_order_items_tenant_product_products",
             ondelete="CASCADE",
         ),
-        Index("ix_product_images_tenant_id_product_id", "tenant_id", "product_id"),
-        CheckConstraint("length(trim(url)) > 0", name="image_url_not_blank"),
-        CheckConstraint("sort_order >= 0", name="image_sort_order_valid"),
-        Index(
-            "uq_product_images_one_primary_per_product",
-            "tenant_id",
-            "product_id",
-            unique=True,
-            postgresql_where=text("is_primary"),
+        CheckConstraint("quantity > 0", name="quantity_positive"),
+        CheckConstraint("unit_price >= 0", name="unit_price_not_negative"),
+        CheckConstraint(
+            "subtotal = unit_price * quantity", name="subtotal_is_price_times_quantity"
         ),
+        Index("ix_order_items_tenant_id_order_id", "tenant_id", "order_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -374,103 +243,31 @@ class ProductImage(Base, TimestampMixin):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
+
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
-    url: Mapped[str] = mapped_column(String(MAX_IMAGE_URL_LENGTH), nullable=False)
+    # ---- snapshot of the catalogue at the moment the order was placed ----
 
-    alt_text: Mapped[str | None] = mapped_column(
-        String(MAX_ALT_TEXT_LENGTH), nullable=True
+    product_name: Mapped[str] = mapped_column(
+        String(MAX_PRODUCT_NAME_LENGTH), nullable=False
     )
 
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-
-class InventoryItem(Base, TimestampMixin):
-    """Stock for one variant; sellable stock is available minus reserved."""
-
-    __tablename__ = "inventory_items"
-
-    __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "variant_id", name="uq_inventory_items_tenant_variant"
-        ),
-        ForeignKeyConstraint(
-            ["tenant_id", "variant_id"],
-            ["product_variants.tenant_id", "product_variants.id"],
-            name="fk_inventory_items_tenant_variant_product_variants",
-            ondelete="CASCADE",
-        ),
-        CheckConstraint("available_quantity >= 0", name="available_not_negative"),
-        CheckConstraint("reserved_quantity >= 0", name="reserved_not_negative"),
-        CheckConstraint(
-            "reserved_quantity <= available_quantity", name="reserved_within_available"
-        ),
-        CheckConstraint("low_stock_threshold >= 0", name="threshold_not_negative"),
+    variant_name: Mapped[str] = mapped_column(
+        String(MAX_PRODUCT_NAME_LENGTH), nullable=False
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    sku: Mapped[str] = mapped_column(String(MAX_SKU_LENGTH), nullable=False)
+
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
 
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-
-    available_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    reserved_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    low_stock_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-
-class InventoryMovement(Base):
-    """Append-only record of every stock change."""
-
-    __tablename__ = "inventory_movements"
-
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["tenant_id", "variant_id"],
-            ["product_variants.tenant_id", "product_variants.id"],
-            name="fk_inventory_movements_tenant_variant_product_variants",
-            ondelete="CASCADE",
-        ),
-        CheckConstraint(f"reason IN ({_REASON_VALUES})", name="reason_valid"),
-        Index(
-            "ix_inventory_movements_tenant_id_variant_id_created_at",
-            "tenant_id",
-            "variant_id",
-            "created_at",
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-
-    delta: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    reason: Mapped[str] = mapped_column(String(20), nullable=False)
-
-    reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
-
-    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    subtotal: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )

@@ -12,7 +12,6 @@ class ReviewService:
         self.repository = repository
 
     async def create_review(self, user_id: uuid.UUID, tenant_id: uuid.UUID, data: ReviewCreate) -> Review:
-        # Enforce that the user must have purchased the product and it must be delivered
         is_verified = await self.repository.check_user_purchased_product(user_id, data.product_id)
         if not is_verified:
             raise HTTPException(
@@ -20,7 +19,6 @@ class ReviewService:
                 detail="You can only review products that have been delivered to you."
             )
 
-        # Check if user already reviewed this product
         existing_reviews, _ = await self.repository.get_product_reviews(data.product_id, skip=0, limit=100)
         if any(r.user_id == user_id for r in existing_reviews):
             raise HTTPException(
@@ -59,7 +57,7 @@ class ReviewService:
             rating_distribution=distribution
         )
 
-    async def update_review(self, review_id: int, user_id: uuid.UUID, data: ReviewUpdate) -> Review:
+    async def update_review(self, review_id: uuid.UUID, user_id: uuid.UUID, data: ReviewUpdate) -> Review:
         review = await self.repository.get_by_id(review_id)
         if not review:
             raise HTTPException(status_code=404, detail="Review not found.")
@@ -77,12 +75,11 @@ class ReviewService:
 
         return await self.repository.update(review)
 
-    async def delete_review(self, review_id: int, user_id: uuid.UUID) -> None:
+    async def delete_review(self, review_id: uuid.UUID, user_id: uuid.UUID) -> None:
         review = await self.repository.get_by_id(review_id)
         if not review:
             raise HTTPException(status_code=404, detail="Review not found.")
 
-        # Strict rule: Only the customer who wrote it can delete it. Admins cannot touch it.
         if review.user_id != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to delete this review.")
 

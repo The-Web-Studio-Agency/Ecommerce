@@ -25,7 +25,6 @@ async def create_review(
     tenant: CurrentTenant,
     service: ReviewService = Depends(get_review_service)
 ):
-    # Pass user.id and tenant.id from the authenticated context
     return await service.create_review(user_id=current_user.id, tenant_id=tenant.id, data=data)
 
 
@@ -40,7 +39,6 @@ async def get_product_reviews(
     return reviews
 
 
-
 @router.get("/product/{product_id}/summary", response_model=RatingSummaryResponse)
 async def get_product_rating_summary(
     product_id: UUID,
@@ -51,7 +49,7 @@ async def get_product_rating_summary(
 
 @router.patch("/{review_id}", response_model=ReviewResponse)
 async def update_review(
-    review_id: int,
+    review_id: UUID,
     data: ReviewUpdate,
     current_user: CurrentUser,
     service: ReviewService = Depends(get_review_service)
@@ -61,7 +59,7 @@ async def update_review(
 
 @router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_review(
-    review_id: int,
+    review_id: UUID,
     current_user: CurrentUser,
     service: ReviewService = Depends(get_review_service)
 ):

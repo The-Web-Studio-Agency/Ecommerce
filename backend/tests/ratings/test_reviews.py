@@ -4,6 +4,8 @@ Ratings & Reviews: authentication, verified delivered purchases, updates, constr
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from tests.ratings.conftest import REVIEWS, CUSTOMERS
 from tests.conftest import headers_for
@@ -67,13 +69,13 @@ async def test_customer_can_update_their_review_after_long_time(
     client, customer_auth
 ):
     """Verify that a customer can patch their rating, title, or comment anytime."""
-    # Assuming a review ID 1 exists and belongs to customer_auth
+    # Assuming a review with this id exists and belongs to customer_auth
     response = await client.patch(
-        f"{REVIEWS}/1",
+        f"{REVIEWS}/{uuid4()}",
         json={"rating": 4, "comment": "Updating my thoughts after months of use."},
         headers=customer_auth,
     )
-    # If review 1 isn't pre-seeded in this test context, expect 404 or test with a created review fixture.
+    # If the review isn't pre-seeded in this test context, expect 404 or test with a created review fixture.
     assert response.status_code in (200, 404)
 
 
@@ -84,13 +86,14 @@ async def test_another_customer_cannot_edit_or_delete_your_review(
     client, customer_auth, make_user, tenant
 ):
     intruder = headers_for(await make_user(tenant=tenant, phone=CUSTOMERS["intruder"]))
+    review_id = uuid4()
 
     response = await client.patch(
-        f"{REVIEWS}/1", json={"rating": 1}, headers=intruder
+        f"{REVIEWS}/{review_id}", json={"rating": 1}, headers=intruder
     )
     assert response.status_code in (403, 404)
 
-    response_del = await client.delete(f"{REVIEWS}/1", headers=intruder)
+    response_del = await client.delete(f"{REVIEWS}/{review_id}", headers=intruder)
     assert response_del.status_code in (403, 404)
 
 
@@ -98,7 +101,7 @@ async def test_admin_cannot_touch_customer_reviews(
     client, admin_headers
 ):
     """Admins should not have permission to delete or alter customer reviews directly."""
-    response = await client.delete(f"{REVIEWS}/1", headers=admin_headers)
+    response = await client.delete(f"{REVIEWS}/{uuid4()}", headers=admin_headers)
     # Should be forbidden or unauthorized since only the customer can manage their review
     assert response.status_code in (403, 401, 404)
 

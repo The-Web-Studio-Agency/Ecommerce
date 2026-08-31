@@ -14,7 +14,7 @@ class ReviewImageCreate(ReviewImageBase):
 
 
 class ReviewImageResponse(ReviewImageBase):
-    id: int
+    id: uuid.UUID
     created_at: datetime
 
     class Config:
@@ -37,10 +37,10 @@ class ReviewUpdate(BaseModel):
 
 
 class ReviewResponse(BaseModel):
-    id: int
+    id: uuid.UUID
     tenant_id: uuid.UUID
-    product_id: uuid.UUID
-    user_id: uuid.UUID
+    product_id: Optional[uuid.UUID] = None
+    user_id: Optional[uuid.UUID] = None
     order_id: Optional[uuid.UUID] = None
     rating: int
     title: Optional[str] = None
@@ -59,4 +59,4 @@ class RatingSummaryResponse(BaseModel):
     product_id: uuid.UUID
     average_rating: float
     total_reviews: int
-    rating_distribution: dict[int, int]  # e.g., {1: count, 2: count, ... 5: count}
+    rating_distribution: dict[int, int]
