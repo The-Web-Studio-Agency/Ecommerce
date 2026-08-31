@@ -17,6 +17,10 @@ from app.payments.models import Payment
 from app.pricing.models import ShippingSettings, TaxSettings
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
+from app.ratings.models import Review, ReviewImage
+
+# Include them in your master application registry package imports:
+__all__.extend(["Review", "ReviewImage"])
 
 __all__ = [
     "AdminAuthChallenge",
@@ -42,4 +46,6 @@ __all__ = [
     "Tenant",
     "TenantDomain",
     "User",
+    "Review",
+    "ReviewImage"
 ]
