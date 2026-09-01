@@ -7,11 +7,12 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.core.money import money
 from app.core.pagination import PageParams
 from app.coupons.constants import DiscountType
+from app.coupons.exceptions import ValidationError
 from app.coupons.models import Coupon, CouponUsage
 from app.coupons.repository import CouponRepository, CouponUsageRepository
 from app.coupons.schemas import CouponCreate, CouponUpdate
