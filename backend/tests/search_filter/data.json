@@ -1,0 +1,16 @@
+{
+    "routes": {
+      "search": "/api/v1/storefront/search-products",
+      "products": "/api/v1/catalogue/products"
+    },
+    "variant": {
+      "sku": "SRCH-SKU-BASE",
+      "name": "Standard Variant",
+      "price": "999.00",
+      "status": "ACTIVE",
+      "initial_quantity": 10,
+      "options": [
+        { "name": "Color", "value": "Default" }
+      ]
+    }
+  }
