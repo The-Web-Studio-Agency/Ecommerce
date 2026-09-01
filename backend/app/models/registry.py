@@ -17,6 +17,7 @@ from app.payments.models import Payment
 from app.pricing.models import ShippingSettings, TaxSettings
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
+from app.coupons.models import Coupon, CouponUsage
 
 __all__ = [
     "AdminAuthChallenge",
@@ -25,6 +26,8 @@ __all__ = [
     "Cart",
     "CartItem",
     "Category",
+    "Coupon",
+    "CouponUsage",
     "InventoryItem",
     "InventoryMovement",
     "Order",
