@@ -17,8 +17,11 @@ from app.payments.models import Payment
 from app.pricing.models import ShippingSettings, TaxSettings
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
-from app.ratings.models import Review, ReviewImage
-
+from app.ratings.models import ProductRatingSummary, Review, ReviewImage
+from app.ratings.models import ReviewArchiveReason, ReviewStatus
+# Registers the before_flush listener that keeps reviews in sync with
+# product archive/reactivate -- see app/ratings/events.py.
+import app.ratings.events  # noqa: F401
 # Include them in your master application registry package imports:
 
 
@@ -47,5 +50,8 @@ __all__ = [
     "TenantDomain",
     "User",
     "Review",
-    "ReviewImage"
+    "ReviewImage",
+    "ProductRatingSummary",
+    "ReviewStatus",
+    "ReviewArchiveReason",
 ]

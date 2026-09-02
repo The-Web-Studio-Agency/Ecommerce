@@ -3,7 +3,8 @@
     "customers": {
       "owner": "+919811110001",
       "intruder": "+919811110002",
-      "shopper": "+919811110006"
+      "shopper": "+919811110006",
+      "deletable": "+919811110007"
     },
     "review": {
       "rating": 5,
