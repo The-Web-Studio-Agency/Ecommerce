@@ -16,6 +16,8 @@ from app.payments.router import admin_router as payments_admin_router
 from app.payments.router import router as payments_router
 from app.pricing.router import shipping_router, tax_router
 from app.users.router import router as users_router
+from app.dashboard.router import router as dashboard_router
+
 
 api_router = APIRouter()
 
@@ -39,3 +41,5 @@ api_router.include_router(payments_admin_router)
 
 api_router.include_router(shipping_router)
 api_router.include_router(tax_router)
+
+api_router.include_router(dashboard_router)
