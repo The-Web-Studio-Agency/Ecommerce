@@ -106,14 +106,41 @@ class DashboardService:
         ).group_by(Order.status)
         status_counts = {row[0]: row[1] for row in (await self.session.execute(status_stmt)).all()}
 
+        # All orders regardless of status -- distinct from sales.total_order_count,
+        # which only counts completed (processing/shipped/delivered) orders.
+        total_orders_count = (await self.session.scalar(
+            select(func.count(Order.id)).where(Order.tenant_id == self.tenant_id)
+        )) or 0
+
+        # There is no "RETURNED" order status in this domain -- a return only
+        # ever shows up as its payment being refunded, so that is the source
+        # of truth for "returned orders" here.
+        returned_orders_count = (await self.session.scalar(
+            select(func.count(func.distinct(Order.id)))
+            .select_from(Order)
+            .join(Payment, Payment.order_id == Order.id)
+            .where(
+                Order.tenant_id == self.tenant_id,
+                Payment.status == PaymentStatus.REFUNDED,
+            )
+        )) or 0
+
         orders_summary = {
+            "total": total_orders_count,
             "pending": status_counts.get(OrderStatus.PENDING, 0),
             "processing": status_counts.get(OrderStatus.PROCESSING, 0),
             "shipped": status_counts.get(OrderStatus.SHIPPED, 0),
             "delivered": status_counts.get(OrderStatus.DELIVERED, 0),
             "cancelled": status_counts.get(OrderStatus.CANCELLED, 0),
+            "returned": returned_orders_count,
             "other": sum(v for k, v in status_counts.items() if k not in {s.value for s in OrderStatus}),
         }
+
+        # Total Products
+        total_products_count = (await self.session.scalar(
+            select(func.count(Product.id)).where(Product.tenant_id == self.tenant_id)
+        )) or 0
+        products_overview = {"total": total_products_count}
 
         # Inventory Overview via ProductVariant and Product
         inv_stmt = select(InventoryItem, ProductVariant, Product).join(
@@ -216,6 +243,7 @@ class DashboardService:
         return {
             "sales": sales_overview,
             "orders": orders_summary,
+            "products": products_overview,
             "inventory": inventory_overview,
             "customers": customer_overview,
             "payments": payment_overview,

@@ -99,11 +99,45 @@ async def test_admin_dashboard_overview_success(
 
     assert data["sales"]["today"]["order_count"] >= 1
     assert Decimal(data["sales"]["today"]["revenue"]) >= Decimal("100.00")
+    assert data["orders"]["total"] >= 1
     assert data["orders"]["processing"] >= 1
+    assert data["products"]["total"] >= 1
     assert data["inventory"]["low_stock_count"] >= 1
     assert any(p["sku"] == low_stock_variant["sku"] for p in data["inventory"]["low_stock_products"])
     assert data["payments"]["paid_count"] >= 1
     assert len(data["recent_orders"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_dashboard_counts_returned_orders_from_refunded_payments(
+    client: AsyncClient,
+    admin_headers: dict,
+    session: AsyncSession,
+    tenant,
+    make_user,
+):
+    """There is no RETURNED order status -- a refunded payment is the signal."""
+    customer = await make_user(tenant=tenant)
+
+    order = await _make_order(
+        session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.REFUNDED
+    )
+    payment = Payment(
+        tenant_id=tenant.id,
+        order_id=order.id,
+        amount=Decimal("100.00"),
+        status=PaymentStatus.REFUNDED,
+    )
+    session.add(payment)
+    await session.commit()
+
+    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+
+    assert data["orders"]["returned"] >= 1
+    assert data["orders"]["total"] >= 1
+    assert data["payments"]["refunded_count"] >= 1
 
 
 @pytest.mark.asyncio

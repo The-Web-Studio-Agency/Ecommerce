@@ -28,11 +28,13 @@ class SalesOverview(BaseModel):
 
 
 class OrderStatusSummary(BaseModel):
+    total: int = 0
     pending: int = 0
     processing: int = 0
     shipped: int = 0
     delivered: int = 0
     cancelled: int = 0
+    returned: int = 0
     other: int = 0
 
 
@@ -56,6 +58,10 @@ class CustomerOverview(BaseModel):
     total: int
     new_today: int
     new_this_month: int
+
+
+class ProductsOverview(BaseModel):
+    total: int
 
 
 class PaymentOverview(BaseModel):
@@ -93,6 +99,7 @@ class TopSellingProductItem(BaseModel):
 class DashboardOverviewResponse(BaseModel):
     sales: SalesOverview
     orders: OrderStatusSummary
+    products: ProductsOverview
     inventory: InventoryOverview
     customers: CustomerOverview
     payments: PaymentOverview
