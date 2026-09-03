@@ -3,15 +3,33 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional, Tuple
 from app.catalogue.constants import CatalogueStatus
-from sqlalchemy import select, or_, desc, func
+from app.orders.constants import OrderStatus
+from sqlalchemy import select, or_, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.catalogue.models import Product, ProductVariant, Category
+from app.catalogue.models import Product, ProductVariant, ProductVariantOption, ProductOption, Category
+from app.orders.models import Order, OrderItem
+from app.ratings.models import Review
 from app.search_filter.models import SearchHistory
 
 class SearchFilterRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @staticmethod
+    def _has_option(option_name: str, value: str):
+        """EXISTS-style predicate: the variant carries a `option_name` option
+        (e.g. Color, Size, Gender) set to `value`. Variant option values live
+        on ProductVariantOption; the dimension's name lives one hop further,
+        on the ProductOption it points at. Both sides are admin-entered free
+        text, so matching is case-insensitive ("nike" must match "Nike")."""
+        return ProductVariant.option_values.any(
+            and_(
+                func.lower(ProductVariantOption.value) == value.lower(),
+                ProductVariantOption.option.has(func.lower(ProductOption.name) == option_name.lower()),
+            )
+        )
 
     async def discover_products(
         self,
@@ -29,12 +47,59 @@ class SearchFilterRepository:
         sort_by: str = "RECOMMENDED",
         page: int = 1,
         page_size: int = 10,
-    ) -> Tuple[List[Tuple[Product, object]], int]:
+    ) -> Tuple[List[Tuple[Product, object, object]], int]:
+
+        # Correlated scalar subqueries rather than extra joins: joining
+        # reviews/order_items directly alongside the variants join would
+        # cross-multiply rows per product (one row per variant x review x
+        # order_item), corrupting anything but MIN/AVG. Scalar subqueries
+        # sidestep that entirely and don't need to appear in GROUP BY --
+        # Postgres treats them as ordinary expressions, evaluated once per
+        # product row.
+        avg_rating = (
+            select(func.avg(Review.rating))
+            .where(
+                Review.tenant_id == Product.tenant_id,
+                Review.product_id == Product.id,
+                Review.is_approved.is_(True),
+            )
+            .correlate(Product)
+            .scalar_subquery()
+        )
+
+        popularity = (
+            select(func.coalesce(func.sum(OrderItem.quantity), 0))
+            .join(
+                Order,
+                and_(Order.tenant_id == OrderItem.tenant_id, Order.id == OrderItem.order_id),
+            )
+            .where(
+                OrderItem.tenant_id == Product.tenant_id,
+                OrderItem.product_id == Product.id,
+                Order.status != OrderStatus.CANCELLED.value,
+            )
+            .correlate(Product)
+            .scalar_subquery()
+        )
 
         stmt = (
-            select(Product, func.min(ProductVariant.price).label("price"))
-            .join(ProductVariant)
-            .where(Product.tenant_id == tenant_id, Product.status == CatalogueStatus.ACTIVE.value)
+            select(
+                Product,
+                func.min(ProductVariant.price).label("price"),
+                avg_rating.label("rating"),
+            )
+            .join(
+                ProductVariant,
+                and_(
+                    ProductVariant.tenant_id == Product.tenant_id,
+                    ProductVariant.product_id == Product.id,
+                ),
+            )
+            .where(
+                Product.tenant_id == tenant_id,
+                Product.status == CatalogueStatus.ACTIVE.value,
+                ProductVariant.status == CatalogueStatus.ACTIVE.value,
+            )
         )
 
         if search:
@@ -50,11 +115,8 @@ class SearchFilterRepository:
         if category_id:
             stmt = stmt.where(Product.category_id == category_id)
 
-        if gender:
-            stmt = stmt.where(Product.gender == gender)
-
         if brand:
-            stmt = stmt.where(Product.brand == brand)
+            stmt = stmt.where(func.lower(Product.brand) == brand.lower())
 
         if min_price is not None:
             stmt = stmt.where(ProductVariant.price >= min_price)
@@ -62,14 +124,26 @@ class SearchFilterRepository:
         if max_price is not None:
             stmt = stmt.where(ProductVariant.price <= max_price)
 
+        if gender:
+            stmt = stmt.where(self._has_option("Gender", gender))
+
         if color:
-            stmt = stmt.where(ProductVariant.options.any(name="Color", value=color))
+            stmt = stmt.where(self._has_option("Color", color))
 
         if size:
-            stmt = stmt.where(ProductVariant.options.any(name="Size", value=size))
+            stmt = stmt.where(self._has_option("Size", size))
 
-        # Group by product to avoid duplicate listings per variant match
+        # Group by the product's own primary key only: every other Product
+        # column, and both correlated scalar subqueries above, are
+        # functionally dependent on it, so Postgres allows selecting/
+        # filtering on them without listing each one here.
         stmt = stmt.group_by(Product.id)
+
+        if min_rating is not None:
+            stmt = stmt.having(avg_rating >= min_rating)
+
+        if max_rating is not None:
+            stmt = stmt.having(avg_rating <= max_rating)
 
         # Counting total matches
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -83,23 +157,86 @@ class SearchFilterRepository:
         elif sort_by == "NEWEST":
             stmt = stmt.order_by(desc(Product.created_at))
         else:
-            stmt = stmt.order_by(desc(Product.created_at)) # Default RECOMMENDED
+            # RECOMMENDED (default): most-ordered products first, newest as
+            # the tiebreaker for products with equal (often zero) orders.
+            stmt = stmt.order_by(desc(popularity), desc(Product.created_at))
 
         # Pagination
         offset = (page - 1) * page_size
         stmt = stmt.offset(offset).limit(page_size)
 
         result = await self.session.execute(stmt)
-        rows = [(product, price) for product, price in result.all()]
+        rows = [(product, price, rating) for product, price, rating in result.all()]
         return rows, total
+
+    async def get_variant_attributes(
+        self, tenant_id: uuid.UUID, product_ids: List[uuid.UUID]
+    ) -> dict[uuid.UUID, List[dict]]:
+        """The actual, per-variant option values (Color, Size, ...) for a set
+        of products -- straight off ProductVariant/ProductVariantOption, the
+        same rows the color/size filters already match against. Only ACTIVE
+        variants are included, matching discover_products' own visibility
+        rule."""
+        if not product_ids:
+            return {}
+
+        stmt = (
+            select(ProductVariant)
+            .options(
+                selectinload(ProductVariant.option_values).selectinload(ProductVariantOption.option)
+            )
+            .where(
+                ProductVariant.tenant_id == tenant_id,
+                ProductVariant.product_id.in_(product_ids),
+                ProductVariant.status == CatalogueStatus.ACTIVE.value,
+            )
+            .order_by(ProductVariant.created_at)
+        )
+        result = await self.session.scalars(stmt)
+
+        attributes: dict[uuid.UUID, List[dict]] = {pid: [] for pid in product_ids}
+        for variant in result.all():
+            options = {
+                option_value.option.name: option_value.value
+                for option_value in variant.option_values
+            }
+            attributes.setdefault(variant.product_id, []).append(
+                {"variant_id": variant.id, "options": options}
+            )
+        return attributes
 
     async def get_search_suggestions(self, tenant_id: uuid.UUID, query: str) -> List[str]:
         pattern = f"%{query}%"
-        
-        # Fetch matching product names, brands, and categories
-        product_names = select(Product.name).where(Product.tenant_id == tenant_id, Product.name.ilike(pattern)).limit(5)
-        brands = select(Product.brand).where(Product.tenant_id == tenant_id, Product.brand.ilike(pattern)).distinct().limit(5)
-        categories = select(Category.name).where(Category.tenant_id == tenant_id, Category.name.ilike(pattern)).limit(5)
+
+        # Fetch matching active product names, brands, and categories
+        product_names = (
+            select(Product.name)
+            .where(
+                Product.tenant_id == tenant_id,
+                Product.status == CatalogueStatus.ACTIVE.value,
+                Product.name.ilike(pattern)
+            )
+            .limit(5)
+        )
+        brands = (
+            select(Product.brand)
+            .where(
+                Product.tenant_id == tenant_id,
+                Product.status == CatalogueStatus.ACTIVE.value,
+                Product.brand.ilike(pattern)
+            )
+            .distinct()
+            .limit(5)
+        )
+        categories = (
+            select(Category.name)
+            .where(
+                Category.tenant_id == tenant_id,
+                Category.status == CatalogueStatus.ACTIVE.value,
+                Category.name.ilike(pattern)
+            )
+            .limit(5)
+        )
 
         p_res = await self.session.scalars(product_names)
         b_res = await self.session.scalars(brands)
@@ -111,13 +248,11 @@ class SearchFilterRepository:
     async def save_search_history(self, tenant_id: uuid.UUID, user_id: uuid.UUID, query: str):
         if not query.strip():
             return
-        
-        # Check if already exists recently to avoid duplicates, or just insert and maintain limit
+
         history_entry = SearchHistory(tenant_id=tenant_id, user_id=user_id, query=query.strip())
         self.session.add(history_entry)
         await self.session.commit()
 
-        # Maintain max 10 recent searches per user
         subquery = (
             select(SearchHistory.id)
             .where(SearchHistory.tenant_id == tenant_id, SearchHistory.user_id == user_id)
@@ -139,6 +274,5 @@ class SearchFilterRepository:
             .limit(10)
         )
         result = await self.session.scalars(stmt)
-        # return unique ordered list
         seen = set()
         return [q for q in result.all() if not (q in seen or seen.add(q))]

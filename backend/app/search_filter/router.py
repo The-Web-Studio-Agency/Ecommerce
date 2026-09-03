@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Literal, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,9 +31,14 @@ _SORT_ALIASES = {
     "price": "PRICE_LOW",
 }
 
+# Only these tokens are accepted -- anything else is a 422, not a silent
+# fallback to RECOMMENDED.
+SortOption = Literal["RECOMMENDED", "NEWEST", "price", "-price"]
+
 @router.get("/search-products", response_model=ApiResponse[list[ProductDiscoveryItem]])
 async def search_and_filter_storefront_products(
     tenant: CurrentTenant,
+    current_user: CurrentUser,
     q: Optional[str] = Query(None, description="Global search query"),
     category_id: Optional[uuid.UUID] = Query(None, description="Filter by category UUID"),
     gender: Optional[str] = Query(None, description="Filter by gender"),
@@ -41,10 +46,13 @@ async def search_and_filter_storefront_products(
     min_price: Optional[float] = Query(None, ge=0, description="Minimum price"),
     max_price: Optional[float] = Query(None, ge=0, description="Maximum price"),
     color: Optional[str] = Query(None, description="Filter by color"),
-    product_size: Optional[str] = Query(None, alias="size", description="Filter by product size"),
+    # A distinct query key from the page-size "size" param below -- the two
+    # used to share the name "size" via alias, so ?size=N was silently
+    # (mis)read as both a page-size AND a product-size filter at once.
+    product_size: Optional[str] = Query(None, description="Filter by product size"),
     min_rating: Optional[float] = Query(None, ge=1, le=5, description="Minimum rating"),
     max_rating: Optional[float] = Query(None, ge=1, le=5, description="Maximum rating"),
-    sort: str = Query("RECOMMENDED", description="Sorting option (RECOMMENDED, NEWEST, price, -price)"),
+    sort: SortOption = Query("RECOMMENDED", description="Sorting option (RECOMMENDED, NEWEST, price, -price)"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Page size limit"),
     service: SearchFilterService = Depends(get_search_filter_service)
@@ -67,6 +75,8 @@ async def search_and_filter_storefront_products(
         page_size=size,
     )
 
+    await service.record_search(tenant.id, current_user.id, q)
+
     return paginated(
         items=products,
         total_items=total,
@@ -88,5 +98,5 @@ async def get_recent_searches(
     current_user: CurrentUser,
     service: SearchFilterService = Depends(get_search_filter_service)
 ):
-    history = await service.log_and_get_history(tenant.id, current_user.id)
+    history = await service.get_history(tenant.id, current_user.id)
     return ok(history)
