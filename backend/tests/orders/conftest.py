@@ -103,14 +103,26 @@ async def address(save_address, customer_auth) -> dict:
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def place_order(client):
-    """Factory: `await place_order(headers, address_id)`."""
+    """Factory: `await place_order(headers, address_id, coupon_code=None)`."""
 
-    async def _place(headers, address_id):
-        return await client.post(
-            CHECKOUT, json={"address_id": str(address_id)}, headers=headers
-        )
+    async def _place(headers, address_id, coupon_code: str | None = None):
+        payload = {"address_id": str(address_id)}
+        if coupon_code is not None:
+            payload["coupon_code"] = coupon_code
+        return await client.post(CHECKOUT, json=payload, headers=headers)
 
     return _place
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def preview_checkout(client):
+    """Factory: `await preview_checkout(headers, coupon_code=None)`."""
+
+    async def _preview(headers, coupon_code: str | None = None):
+        params = {"coupon_code": coupon_code} if coupon_code is not None else {}
+        return await client.post(f"{CHECKOUT}/preview", params=params, headers=headers)
+
+    return _preview
 
 
 @pytest_asyncio.fixture(loop_scope="session")

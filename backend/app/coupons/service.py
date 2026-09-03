@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.logging import get_logger
-from app.core.money import money
+from app.core.money import ZERO, money
 from app.core.pagination import PageParams
 from app.coupons.constants import DiscountType
 from app.coupons.exceptions import ValidationError
@@ -115,14 +115,20 @@ class CouponService:
         return coupon
 
     async def delete(self, coupon_id: UUID) -> None:
+        """Soft delete: deactivates the coupon rather than removing the row,
+        so its CouponUsage history stays intact and the code can never be
+        reused by a new coupon (the unique constraint still sees it)."""
         coupon = await self.get(coupon_id)
-        await self.coupons.delete(coupon)
+        coupon.is_active = False
         await self.session.commit()
-        logger.info("coupons.deleted tenant_id=%s id=%s", self.tenant_id, coupon_id)
+        logger.info("coupons.deactivated tenant_id=%s id=%s", self.tenant_id, coupon_id)
 
-    async def validate_and_calculate(self, code: str, subtotal: Decimal, customer_id: UUID) -> tuple[Coupon, Decimal]:
-        """Validates a coupon code against subtotal and customer history, returning the computed discount."""
-        coupon = await self.coupons.get_by_code(code)
+    async def _validated_discount(self, coupon: Coupon | None, subtotal: Decimal, customer_id: UUID) -> Decimal:
+        """The rule engine shared by every entry point that needs to know
+        'is this coupon usable right now, and for how much' -- plain preview,
+        checkout preview, and the locked pre-redemption check all run the
+        exact same checks against whatever Coupon row they were handed, so
+        there is exactly one place these rules live."""
         if coupon is None or not coupon.is_active:
             raise NotFoundError("Invalid or inactive coupon code")
 
@@ -132,6 +138,9 @@ class CouponService:
         if coupon.expires_at and now > coupon.expires_at:
             raise ValidationError("This coupon has expired")
 
+        # NULL means unlimited -- only an actual configured limit (including
+        # 0, which is a real "block everything" setting, not "unlimited")
+        # is ever enforced.
         if coupon.usage_limit is not None and coupon.times_used >= coupon.usage_limit:
             raise ValidationError("This coupon has reached its usage limit")
 
@@ -151,26 +160,77 @@ class CouponService:
         else:
             discount = money(coupon.discount_value)
 
-        # Ensure discount does not exceed subtotal
-        if discount > subtotal:
-            discount = subtotal
+        # Never negative, never more than what's actually being bought.
+        discount = max(ZERO, min(discount, subtotal))
 
+        return discount
+
+    async def validate_and_calculate(self, code: str, subtotal: Decimal, customer_id: UUID) -> tuple[Coupon, Decimal]:
+        """Preview/apply path: validates a coupon code against subtotal and
+        customer history, returning the computed discount. Read-only --
+        never locks the row, never touches times_used or CouponUsage, so a
+        customer can call this as many times as they like without consuming
+        anything. See redeem_for_order for the path that actually spends it."""
+        coupon = await self.coupons.get_by_code(code)
+        discount = await self._validated_discount(coupon, subtotal, customer_id)
         return coupon, discount
 
-    async def record_usage(self, coupon_id: UUID, customer_id: UUID, order_id: UUID, discount_amount: Decimal) -> CouponUsage:
-        """Records a coupon redemption and increments the global usage counter."""
-        coupon = await self.get(coupon_id)
-        coupon.times_used += 1
+    async def lock_and_validate(self, code: str, subtotal: Decimal, customer_id: UUID) -> tuple[Coupon, Decimal]:
+        """The first half of actually spending a coupon: locks the coupon
+        row (SELECT ... FOR UPDATE) for the rest of the caller's
+        transaction, so two concurrent orders racing for the last slot
+        under a usage_limit serialize on this row instead of both reading a
+        stale times_used and both succeeding. Re-validates from that
+        freshly locked state -- the coupon may have been exhausted by
+        another order since it was first previewed.
 
+        Does not itself record anything: order placement needs the discount
+        amount before it can build the Order row, but needs that row's id
+        before it can record a CouponUsage against it. Call
+        record_redemption once the order exists, still inside the same
+        transaction the lock was taken in."""
+        coupon = await self.coupons.get_by_code_for_update(code)
+        discount = await self._validated_discount(coupon, subtotal, customer_id)
+        return coupon, discount
+
+    async def redeem_for_order(
+        self, code: str, subtotal: Decimal, customer_id: UUID, order_id: UUID
+    ) -> tuple[Coupon, Decimal]:
+        """Locks, re-validates, and records a redemption in one call --
+        lock_and_validate followed immediately by record_redemption, for
+        callers that already have an order_id up front. Still uncommitted:
+        the caller owns the transaction.
+
+        CouponUsage's own (tenant_id, order_id) unique constraint is a
+        second safety net: even if this were somehow called twice for the
+        same order, only one usage row could ever exist for it."""
+        coupon, discount = await self.lock_and_validate(code, subtotal, customer_id)
+        await self.record_redemption(coupon, customer_id, order_id, discount)
+        return coupon, discount
+
+    async def record_redemption(
+        self, coupon: Coupon, customer_id: UUID, order_id: UUID, discount_amount: Decimal
+    ) -> CouponUsage:
+        """The write side of a redemption, with no commit of its own -- both
+        record_usage (which commits standalone) and redeem_for_order (which
+        lets the caller's own transaction commit) build on this."""
+        coupon.times_used += 1
         usage = CouponUsage(
-            tenant_id=self.tenant_id,
             coupon_id=coupon.id,
             customer_id=customer_id,
             order_id=order_id,
             discount_amount=discount_amount,
             used_at=datetime.now(timezone.utc),
         )
-        await self.usages.add(usage)
+        return await self.usages.add(usage)
+
+    async def record_usage(self, coupon_id: UUID, customer_id: UUID, order_id: UUID, discount_amount: Decimal) -> CouponUsage:
+        """Records a coupon redemption and increments the global usage
+        counter, standalone and committed on its own. Kept for direct/manual
+        use; order placement uses redeem_for_order instead, which locks the
+        row and shares the order's own transaction."""
+        coupon = await self.get(coupon_id)
+        usage = await self.record_redemption(coupon, customer_id, order_id, discount_amount)
         await self.session.commit()
         logger.info("coupons.used coupon_id=%s customer_id=%s order_id=%s", coupon_id, customer_id, order_id)
         return usage
