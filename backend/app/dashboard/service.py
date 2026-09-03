@@ -57,6 +57,8 @@ class DashboardService:
         yest_orders, yest_rev = await get_sales_stats(yesterday_start, today_start)
 
         week_orders, week_rev = await get_sales_stats(week_start, now_utc)
+        prev_week_start = week_start - timedelta(days=7)
+        prev_week_orders, prev_week_rev = await get_sales_stats(prev_week_start, week_start)
 
         month_orders, month_rev = await get_sales_stats(month_start, now_utc)
         prev_month_orders, prev_month_rev = await get_sales_stats(prev_month_start, month_start)
@@ -83,8 +85,10 @@ class DashboardService:
             "week": {
                 "order_count": week_orders,
                 "revenue": week_rev,
-                "previous_order_count": 0,
-                "previous_revenue": Decimal("0.00"),
+                "previous_order_count": prev_week_orders,
+                "previous_revenue": prev_week_rev,
+                "order_count_change_pct": self._calculate_change_pct(week_orders, prev_week_orders),
+                "revenue_change_pct": self._calculate_change_pct(week_rev, prev_week_rev),
             },
             "month": {
                 "order_count": month_orders,
@@ -112,6 +116,16 @@ class DashboardService:
             select(func.count(Order.id)).where(Order.tenant_id == self.tenant_id)
         )) or 0
 
+        # Today's Orders -- every order created today, any status. Distinct
+        # from sales.today.order_count, which only counts completed sales.
+        today_orders_count = (await self.session.scalar(
+            select(func.count(Order.id)).where(
+                Order.tenant_id == self.tenant_id,
+                Order.created_at >= today_start,
+                Order.created_at < now_utc,
+            )
+        )) or 0
+
         # There is no "RETURNED" order status in this domain -- a return only
         # ever shows up as its payment being refunded, so that is the source
         # of truth for "returned orders" here.
@@ -127,6 +141,7 @@ class DashboardService:
 
         orders_summary = {
             "total": total_orders_count,
+            "today": today_orders_count,
             "pending": status_counts.get(OrderStatus.PENDING, 0),
             "processing": status_counts.get(OrderStatus.PROCESSING, 0),
             "shipped": status_counts.get(OrderStatus.SHIPPED, 0),

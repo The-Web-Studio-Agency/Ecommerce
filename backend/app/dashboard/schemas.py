@@ -29,6 +29,7 @@ class SalesOverview(BaseModel):
 
 class OrderStatusSummary(BaseModel):
     total: int = 0
+    today: int = 0
     pending: int = 0
     processing: int = 0
     shipped: int = 0
