@@ -36,8 +36,9 @@ def search_auth(search_shopper) -> dict[str, str]:
 async def search_test_catalogue(client, admin_headers):
     """Sets up a diverse catalogue for testing search, sort, and filters.
 
-    Each product carries distinct Gender/Color/Size options so attribute
-    filters have real, non-overlapping data to match against.
+    Each product carries a product-level gender and distinct Color/Size
+    variant options, so attribute filters have real, non-overlapping data
+    to match against.
     """
     category = await make_category(client, admin_headers, name="Apparel")
 
@@ -46,8 +47,8 @@ async def search_test_catalogue(client, admin_headers):
             "name": "Running Sneaker",
             "price": "1499.00",
             "brand": "Nike",
+            "gender": "MEN",
             "options": [
-                {"name": "Gender", "value": "Male"},
                 {"name": "Color", "value": "Black"},
                 {"name": "Size", "value": "M"},
             ],
@@ -56,8 +57,8 @@ async def search_test_catalogue(client, admin_headers):
             "name": "Cotton T-Shirt",
             "price": "499.00",
             "brand": "Puma",
+            "gender": "WOMEN",
             "options": [
-                {"name": "Gender", "value": "Female"},
                 {"name": "Color", "value": "White"},
                 {"name": "Size", "value": "S"},
             ],
@@ -66,8 +67,8 @@ async def search_test_catalogue(client, admin_headers):
             "name": "Formal Shirt",
             "price": "999.00",
             "brand": "Adidas",
+            "gender": "UNISEX",
             "options": [
-                {"name": "Gender", "value": "Unisex"},
                 {"name": "Color", "value": "Blue"},
                 {"name": "Size", "value": "L"},
             ],
@@ -77,7 +78,13 @@ async def search_test_catalogue(client, admin_headers):
     created = {}
     for item in product_data:
         prod = await make_product(
-            client, admin_headers, category["id"], name=item["name"], status="ACTIVE", brand=item["brand"]
+            client,
+            admin_headers,
+            category["id"],
+            name=item["name"],
+            status="ACTIVE",
+            brand=item["brand"],
+            gender=item["gender"],
         )
         payload = sample(DATA, "variant")
         payload["sku"] = f"SRCH-SKU-{item['name'][:3].upper()}"

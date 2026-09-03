@@ -167,6 +167,7 @@ class ProductService:
             description=data.description,
             brand=data.brand,
             status=data.status.value,
+            gender=data.gender.value if data.gender is not None else None,
             is_featured=data.is_featured,
             seo_title=data.seo_title,
             seo_description=data.seo_description,
@@ -260,6 +261,9 @@ class ProductService:
 
         if changes.get("status") is not None:
             changes["status"] = changes["status"].value
+
+        if changes.get("gender") is not None:
+            changes["gender"] = changes["gender"].value
 
         for field, value in changes.items():
             setattr(product, field, value)

@@ -66,6 +66,7 @@ class SearchFilterService:
                 id=product.id,
                 name=product.name,
                 brand=product.brand,
+                gender=product.gender,
                 category_id=product.category_id,
                 price=price,
                 min_price=price,

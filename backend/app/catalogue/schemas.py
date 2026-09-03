@@ -23,6 +23,7 @@ from app.catalogue.constants import (
     PRICE_SCALE,
     CatalogueStatus,
     InventoryReason,
+    ProductGender,
 )
 
 SKU_PATTERN = r"^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$"
@@ -287,6 +288,7 @@ class ProductCreate(BaseModel):
     description: str | None = Description
     brand: str | None = Field(default=None, max_length=MAX_BRAND_LENGTH)
     status: CatalogueStatus = CatalogueStatus.DRAFT
+    gender: ProductGender | None = None
     is_featured: bool = False
     seo_title: str | None = Field(default=None, max_length=MAX_SEO_TITLE_LENGTH)
     seo_description: str | None = Field(
@@ -318,6 +320,7 @@ class ProductUpdate(BaseModel):
     description: str | None = Description
     brand: str | None = Field(default=None, max_length=MAX_BRAND_LENGTH)
     status: CatalogueStatus | None = None
+    gender: ProductGender | None = None
     is_featured: bool | None = None
     seo_title: str | None = Field(default=None, max_length=MAX_SEO_TITLE_LENGTH)
     seo_description: str | None = Field(
@@ -340,6 +343,7 @@ class ProductRead(BaseModel):
     description: str | None
     brand: str | None
     status: CatalogueStatus
+    gender: ProductGender | None
     is_featured: bool
     seo_title: str | None
     seo_description: str | None

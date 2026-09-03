@@ -36,11 +36,13 @@ from app.catalogue.constants import (
     PRICE_SCALE,
     CatalogueStatus,
     InventoryReason,
+    ProductGender,
 )
 from app.models.base import Base, TimestampMixin
 
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CatalogueStatus)
 _REASON_VALUES = ", ".join(f"'{reason.value}'" for reason in InventoryReason)
+_GENDER_VALUES = ", ".join(f"'{gender.value}'" for gender in ProductGender)
 
 
 class Category(Base, TimestampMixin):
@@ -91,10 +93,12 @@ class Product(Base, TimestampMixin):
         ),
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
+        CheckConstraint(f"gender IS NULL OR gender IN ({_GENDER_VALUES})", name="gender_valid"),
         Index("ix_products_tenant_id_category_id", "tenant_id", "category_id"),
         Index("ix_products_tenant_id_status", "tenant_id", "status"),
         Index("ix_products_tenant_id_is_featured", "tenant_id", "is_featured"),
         Index("ix_products_tenant_id_brand", "tenant_id", "brand"),
+        Index("ix_products_tenant_id_gender", "tenant_id", "gender"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -128,6 +132,11 @@ class Product(Base, TimestampMixin):
         nullable=False,
         default=CatalogueStatus.DRAFT.value,
     )
+
+    # Product-level attribute (not a variant or category one). Nullable --
+    # gender isn't meaningful for every product line, and defaulting every
+    # existing/ungendered product to a specific value would misclassify it.
+    gender: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 

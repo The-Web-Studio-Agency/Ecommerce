@@ -93,21 +93,23 @@ async def test_autocomplete_suggestions_endpoint(client, search_auth, search_tes
 
 
 async def test_gender_filter_returns_only_matching_products(client, search_auth, search_test_catalogue):
-    response = await client.get(SEARCH, params={"gender": "Female"}, headers=search_auth)
+    response = await client.get(SEARCH, params={"gender": "WOMEN"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
     body = response.json()["data"]
     assert len(body) == 1
     assert body[0]["name"] == "Cotton T-Shirt"
+    assert body[0]["gender"] == "WOMEN"
 
 
 async def test_gender_filter_excludes_non_matching_products(client, search_auth, search_test_catalogue):
-    response = await client.get(SEARCH, params={"gender": "Unisex"}, headers=search_auth)
+    response = await client.get(SEARCH, params={"gender": "UNISEX"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
     body = response.json()["data"]
     assert len(body) == 1
     assert body[0]["name"] == "Formal Shirt"
+    assert body[0]["gender"] == "UNISEX"
 
 
 async def test_color_filter_does_not_500_and_filters_correctly(client, search_auth, search_test_catalogue):
@@ -138,7 +140,7 @@ async def test_brand_filter_is_case_insensitive(client, search_auth, search_test
 
 
 async def test_gender_color_size_filters_are_case_insensitive(client, search_auth, search_test_catalogue):
-    response = await client.get(SEARCH, params={"gender": "female"}, headers=search_auth)
+    response = await client.get(SEARCH, params={"gender": "women"}, headers=search_auth)
     assert response.status_code == 200, response.text
     assert len(response.json()["data"]) == 1
     assert response.json()["data"][0]["name"] == "Cotton T-Shirt"
@@ -147,6 +149,22 @@ async def test_gender_color_size_filters_are_case_insensitive(client, search_aut
     assert response.status_code == 200, response.text
     assert len(response.json()["data"]) == 1
     assert response.json()["data"][0]["name"] == "Running Sneaker"
+
+
+async def test_gender_filter_excludes_products_without_a_gender(
+    client, search_auth, search_multi_variant_product
+):
+    """search_multi_variant_product's "Graphic Hoodie" has no gender set --
+    it must never match a gender filter, only appear when gender is omitted."""
+    response = await client.get(SEARCH, params={"gender": "MEN"}, headers=search_auth)
+    assert response.status_code == 200, response.text
+    assert all(item["name"] != "Graphic Hoodie" for item in response.json()["data"])
+
+    response = await client.get(SEARCH, params={"q": "Graphic Hoodie"}, headers=search_auth)
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert len(body) == 1
+    assert body[0]["gender"] is None
 
 
 # -------------------------------- rating filter -------------------------------
@@ -238,7 +256,7 @@ async def test_combined_search_filters_sort_and_pagination(client, search_auth, 
         SEARCH,
         params={
             "q": "Shirt",
-            "gender": "Unisex",
+            "gender": "UNISEX",
             "color": "Blue",
             "product_size": "L",
             "min_price": "500",
@@ -316,9 +334,11 @@ async def test_variant_attributes_reflect_the_filtered_matching_variant(
     assert len(body) == 1
     assert body[0]["name"] == "Running Sneaker"
 
+    assert body[0]["gender"] == "MEN"
+
     variants = body[0]["variants"]
     assert len(variants) == 1
-    assert variants[0]["options"] == {"Gender": "Male", "Color": "Black", "Size": "M"}
+    assert variants[0]["options"] == {"Color": "Black", "Size": "M"}
 
 
 async def test_single_variant_product_exposes_one_variant_entry(

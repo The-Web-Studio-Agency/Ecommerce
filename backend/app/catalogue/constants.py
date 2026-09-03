@@ -9,6 +9,15 @@ class CatalogueStatus(str, Enum):
     ARCHIVED = "ARCHIVED"
 
 
+class ProductGender(str, Enum):
+    """Who a product is marketed for -- a product-level attribute, not a
+    variant or category one."""
+
+    MEN = "MEN"
+    WOMEN = "WOMEN"
+    UNISEX = "UNISEX"
+
+
 class ProductSort(str, Enum):
     """Sort orders the storefront may ask for."""
 

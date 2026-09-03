@@ -125,7 +125,9 @@ class SearchFilterRepository:
             stmt = stmt.where(ProductVariant.price <= max_price)
 
         if gender:
-            stmt = stmt.where(self._has_option("Gender", gender))
+            # Product-level attribute, not a variant option -- unlike
+            # Color/Size, gender lives directly on Product.
+            stmt = stmt.where(func.lower(Product.gender) == gender.lower())
 
         if color:
             stmt = stmt.where(self._has_option("Color", color))

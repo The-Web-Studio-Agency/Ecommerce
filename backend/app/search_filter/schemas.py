@@ -22,6 +22,7 @@ class ProductDiscoveryItem(BaseModel):
     id: uuid.UUID
     name: str
     brand: Optional[str] = None
+    gender: Optional[str] = None
     category_id: uuid.UUID
     price: Optional[Decimal] = None
     min_price: Optional[Decimal] = None
