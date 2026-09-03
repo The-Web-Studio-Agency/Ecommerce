@@ -39,7 +39,7 @@ class OrderStatusSummary(BaseModel):
     other: int = 0
 
 
-class InventoryProductItem(BaseModel):
+class InventoryVariantItem(BaseModel):
     product_id: UUID
     product_name: str
     variant_id: UUID | None = None
@@ -51,8 +51,8 @@ class InventoryProductItem(BaseModel):
 class InventoryOverview(BaseModel):
     low_stock_count: int
     out_of_stock_count: int
-    low_stock_products: list[InventoryProductItem]
-    out_of_stock_products: list[InventoryProductItem]
+    low_stock_variants: list[InventoryVariantItem]
+    out_of_stock_variants: list[InventoryVariantItem]
 
 
 class CustomerOverview(BaseModel):

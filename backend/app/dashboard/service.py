@@ -4,7 +4,7 @@ from datetime import datetime, time, timezone, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, select, desc
+from sqlalchemy import and_, func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.models import Product, ProductVariant, InventoryItem
@@ -24,8 +24,9 @@ class DashboardService:
         self.tenant_id = tenant_id
 
     def _calculate_change_pct(self, current: Decimal | int, previous: Decimal | int) -> float | None:
+        # Growth from a zero baseline is undefined -- not 100%, not 0%.
         if previous == 0:
-            return None if current == 0 else 100.0
+            return None
         diff = float(current) - float(previous)
         return round((diff / float(previous)) * 100.0, 2)
 
@@ -167,14 +168,14 @@ class DashboardService:
         )
         inv_rows = (await self.session.execute(inv_stmt)).all()
 
-        low_stock_products = []
-        out_of_stock_products = []
+        low_stock_variants = []
+        out_of_stock_variants = []
 
         for item, variant, prod in inv_rows:
             sellable = item.available_quantity - item.reserved_quantity
             threshold = item.low_stock_threshold or 5
 
-            prod_item = {
+            variant_item = {
                 "product_id": prod.id,
                 "product_name": prod.name,
                 "variant_id": variant.id,
@@ -184,15 +185,15 @@ class DashboardService:
             }
 
             if sellable <= 0:
-                out_of_stock_products.append(prod_item)
+                out_of_stock_variants.append(variant_item)
             elif sellable <= threshold:
-                low_stock_products.append(prod_item)
+                low_stock_variants.append(variant_item)
 
         inventory_overview = {
-            "low_stock_count": len(low_stock_products),
-            "out_of_stock_count": len(out_of_stock_products),
-            "low_stock_products": low_stock_products[:10],
-            "out_of_stock_products": out_of_stock_products[:10],
+            "low_stock_count": len(low_stock_variants),
+            "out_of_stock_count": len(out_of_stock_variants),
+            "low_stock_variants": low_stock_variants[:10],
+            "out_of_stock_variants": out_of_stock_variants[:10],
         }
 
         # Customer Overview
@@ -234,7 +235,7 @@ class DashboardService:
 
         # Recent Orders
         recent_stmt = select(Order, User).outerjoin(
-            User, Order.customer_id == User.id
+            User, and_(Order.customer_id == User.id, Order.tenant_id == User.tenant_id)
         ).where(
             Order.tenant_id == self.tenant_id
         ).order_by(

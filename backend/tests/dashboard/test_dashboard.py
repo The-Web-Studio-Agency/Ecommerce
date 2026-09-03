@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -115,7 +115,7 @@ async def test_admin_dashboard_overview_success(
     assert data["orders"]["processing"] >= 1
     assert data["products"]["total"] >= 1
     assert data["inventory"]["low_stock_count"] >= 1
-    assert any(p["sku"] == low_stock_variant["sku"] for p in data["inventory"]["low_stock_products"])
+    assert any(p["sku"] == low_stock_variant["sku"] for p in data["inventory"]["low_stock_variants"])
     assert data["payments"]["paid_count"] >= 1
     assert len(data["recent_orders"]) >= 1
 
@@ -273,3 +273,133 @@ async def test_week_over_week_comparison_calculates_counts_revenue_and_pct(
         * 100.0,
         2,
     )
+
+
+@pytest.mark.asyncio
+async def test_inventory_overview_uses_variant_level_field_names(
+    client: AsyncClient,
+    admin_headers: dict,
+    new_variant,
+):
+    """Inventory is tracked per variant/SKU -- response keys must say so."""
+    low_stock_variant = await new_variant(initial_quantity=1, low_stock_threshold=5)
+    out_of_stock_variant = await new_variant(initial_quantity=0, low_stock_threshold=5)
+
+    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    inventory = response.json()["data"]["inventory"]
+
+    assert "low_stock_variants" in inventory
+    assert "out_of_stock_variants" in inventory
+    assert "low_stock_products" not in inventory
+    assert "out_of_stock_products" not in inventory
+    assert any(v["sku"] == low_stock_variant["sku"] for v in inventory["low_stock_variants"])
+    assert any(v["sku"] == out_of_stock_variant["sku"] for v in inventory["out_of_stock_variants"])
+
+
+@pytest.mark.asyncio
+async def test_recent_orders_shows_customer_email_when_set(
+    client: AsyncClient,
+    admin_headers: dict,
+    session: AsyncSession,
+    tenant,
+    make_user,
+):
+    customer = await make_user(tenant=tenant, email="shopper@example.com")
+    await _make_order(
+        session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.PAID
+    )
+    await session.commit()
+
+    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    recent_orders = response.json()["data"]["recent_orders"]
+
+    assert recent_orders[0]["customer_email"] == "shopper@example.com"
+
+
+@pytest.mark.asyncio
+async def test_recent_orders_customer_email_is_null_when_customer_has_no_email(
+    client: AsyncClient,
+    admin_headers: dict,
+    session: AsyncSession,
+    tenant,
+    make_user,
+):
+    """Customers sign up by phone/OTP only -- email is optional, so a null
+    here is legitimate, not a bug, when the customer never set one."""
+    customer = await make_user(tenant=tenant)  # no email passed
+    await _make_order(
+        session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.PAID
+    )
+    await session.commit()
+
+    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    recent_orders = response.json()["data"]["recent_orders"]
+
+    assert recent_orders[0]["customer_email"] is None
+
+
+@pytest.mark.asyncio
+async def test_change_pct_is_null_when_previous_period_is_zero(
+    client: AsyncClient,
+    admin_headers: dict,
+    session: AsyncSession,
+    tenant,
+    make_user,
+):
+    """Growth from a zero baseline is undefined -- must be null, not 100%."""
+    customer = await make_user(tenant=tenant)
+    # A completed order today; nothing placed yesterday, so today's
+    # "previous" period (yesterday) is 0 orders / 0 revenue.
+    await _make_order(
+        session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.PAID
+    )
+    await session.commit()
+
+    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    today = response.json()["data"]["sales"]["today"]
+
+    assert today["previous_order_count"] == 0
+    assert Decimal(today["previous_revenue"]) == Decimal("0.00")
+    assert today["order_count_change_pct"] is None
+    assert today["revenue_change_pct"] is None
+
+
+@pytest.mark.asyncio
+async def test_change_pct_is_calculated_normally_when_previous_period_is_nonzero(
+    client: AsyncClient,
+    admin_headers: dict,
+    session: AsyncSession,
+    tenant,
+    make_user,
+):
+    customer = await make_user(tenant=tenant)
+    now = datetime.now(timezone.utc)
+
+    # Yesterday at noon (safely inside [yesterday_start, today_start)
+    # regardless of what time "now" is): one completed order, 100.00.
+    yesterday_noon = datetime.combine(now.date() - timedelta(days=1), time(12, 0), tzinfo=timezone.utc)
+    await _make_order(
+        session,
+        tenant,
+        customer,
+        status=OrderStatus.DELIVERED,
+        payment_status=PaymentStatus.PAID,
+        created_at=yesterday_noon,
+    )
+    # Today: one completed order, 100.00.
+    await _make_order(
+        session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.PAID
+    )
+    await session.commit()
+
+    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    assert response.status_code == 200, response.text
+    today = response.json()["data"]["sales"]["today"]
+
+    assert today["previous_order_count"] == 1
+    assert today["order_count_change_pct"] == 0.0
+    assert today["revenue_change_pct"] == 0.0
