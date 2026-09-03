@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from typing import List, Optional, Tuple
 from app.catalogue.constants import CatalogueStatus
@@ -12,6 +13,16 @@ from app.catalogue.models import Product, ProductVariant, ProductVariantOption, 
 from app.orders.models import Order, OrderItem
 from app.ratings.models import Review
 from app.search_filter.models import SearchHistory
+
+# A word/number run, extracted after apostrophes are dropped -- so "Women's"
+# tokenizes to "Womens", the same as it does on the stored-text side (see
+# _token_matches), instead of splitting into an orphan "s" on the apostrophe.
+_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
+
+
+def _tokenize(query: str) -> List[str]:
+    return _TOKEN_PATTERN.findall(query.replace("'", ""))
+
 
 class SearchFilterRepository:
     def __init__(self, session: AsyncSession):
@@ -29,6 +40,33 @@ class SearchFilterRepository:
                 func.lower(ProductVariantOption.value) == value.lower(),
                 ProductVariantOption.option.has(func.lower(ProductOption.name) == option_name.lower()),
             )
+        )
+
+    @staticmethod
+    def _token_matches(token: str):
+        """Whether a single search token appears anywhere in one of this
+        product's searchable fields -- name, brand, short/long description,
+        SKU, or its Gender option value. Apostrophes are stripped from the
+        stored text the same way they were stripped from the token, so a
+        query token like "Womens" (from "Women's") still matches text that
+        actually reads "Women's"."""
+        pattern = f"%{token}%"
+
+        def _clean(column):
+            return func.replace(column, "'", "")
+
+        return or_(
+            _clean(Product.name).ilike(pattern),
+            _clean(Product.brand).ilike(pattern),
+            _clean(Product.short_description).ilike(pattern),
+            _clean(Product.description).ilike(pattern),
+            _clean(ProductVariant.sku).ilike(pattern),
+            ProductVariant.option_values.any(
+                and_(
+                    ProductVariantOption.option.has(func.lower(ProductOption.name) == "gender"),
+                    _clean(ProductVariantOption.value).ilike(pattern),
+                )
+            ),
         )
 
     async def discover_products(
@@ -103,14 +141,13 @@ class SearchFilterRepository:
         )
 
         if search:
-            search_pattern = f"%{search}%"
-            stmt = stmt.where(
-                or_(
-                    Product.name.ilike(search_pattern),
-                    Product.brand.ilike(search_pattern),
-                    ProductVariant.sku.ilike(search_pattern)
-                )
-            )
+            # Token/word matching, not one exact-phrase substring: every
+            # token in the query must appear SOMEWHERE across the product's
+            # searchable fields (not necessarily the same field), so "Women's
+            # dress" matches a product named "Women's Maxi Dress" even though
+            # that exact phrase never occurs verbatim.
+            for token in _tokenize(search):
+                stmt = stmt.where(self._token_matches(token))
 
         if category_id:
             stmt = stmt.where(Product.category_id == category_id)

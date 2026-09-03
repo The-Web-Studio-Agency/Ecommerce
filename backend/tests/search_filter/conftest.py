@@ -130,6 +130,70 @@ async def search_multi_variant_product(client, admin_headers):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
+async def search_token_matching_catalogue(client, admin_headers):
+    """Products whose relevant text is spread across name/description/
+    gender rather than concentrated in one field, and never contains the
+    full multi-word queries the token-matching tests search for verbatim --
+    proving those queries match on word tokens, not an exact phrase.
+
+    Also includes one deliberately unrelated product, to prove token
+    matching doesn't loosen into "return everything".
+    """
+    category = await make_category(client, admin_headers, name="Token Match Apparel")
+
+    product_data = [
+        {
+            "name": "Women's Maxi Dress",
+            "brand": "Zara",
+            "short_description": "Elegant women's dress for evening wear",
+            "gender": "Women",
+        },
+        {
+            "name": "Women's Casual Tops",
+            "brand": "Zara",
+            "short_description": "Comfortable women's tops for daily wear",
+            "gender": "Women",
+        },
+        {
+            "name": "Men's Casual T-Shirt",
+            "brand": "Zara",
+            "short_description": "Everyday men's clothes essential",
+            "gender": "Men",
+        },
+        {
+            "name": "Leather Wallet",
+            "brand": "Fossil",
+            "short_description": "Slim bifold wallet in genuine leather",
+            "gender": None,
+        },
+    ]
+
+    created = {}
+    for item in product_data:
+        prod = await make_product(
+            client,
+            admin_headers,
+            category["id"],
+            name=item["name"],
+            status="ACTIVE",
+            brand=item["brand"],
+            short_description=item["short_description"],
+        )
+        payload = sample(DATA, "variant")
+        payload["sku"] = f"TOK-SKU-{uuid4().hex[:8].upper()}"
+        payload["options"] = (
+            [{"name": "Gender", "value": item["gender"]}] if item["gender"] else []
+        )
+        response = await client.post(
+            f"{PRODUCTS}/{prod['id']}/variants", json=payload, headers=admin_headers
+        )
+        assert response.status_code == 201, response.text
+        created[item["name"]] = {"product": prod, "variant": response.json()["data"]}
+
+    return created
+
+
+@pytest_asyncio.fixture(loop_scope="session")
 async def search_ratings_and_orders(session, tenant, search_shopper, make_user, search_test_catalogue):
     """Gives the fixture catalogue real ratings and order history:
 
