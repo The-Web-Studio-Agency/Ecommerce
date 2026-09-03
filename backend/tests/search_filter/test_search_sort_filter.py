@@ -89,6 +89,96 @@ async def test_autocomplete_suggestions_endpoint(client, search_auth, search_tes
     assert any("Running" in suggestion["title"] for suggestion in body)
 
 
+# --------------------------- token/word global search ---------------------------
+
+
+async def test_search_womens_dress(client, search_auth, search_token_matching_catalogue):
+    """Neither "Women's Maxi Dress" nor any other field contains the exact
+    phrase "Women's dress" verbatim -- this only matches via the "Women's"
+    and "dress" tokens landing in different words of the product name."""
+    response = await client.get(SEARCH, params={"q": "Women's dress"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert len(body) == 1
+    assert body[0]["name"] == "Women's Maxi Dress"
+
+
+async def test_search_womens_maxi_dress(client, search_auth, search_token_matching_catalogue):
+    response = await client.get(SEARCH, params={"q": "Women's maxi dress"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert len(body) == 1
+    assert body[0]["name"] == "Women's Maxi Dress"
+
+
+async def test_search_womens_tops(client, search_auth, search_token_matching_catalogue):
+    response = await client.get(SEARCH, params={"q": "Women's tops"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert len(body) == 1
+    assert body[0]["name"] == "Women's Casual Tops"
+
+
+async def test_search_mens_clothes(client, search_auth, search_token_matching_catalogue):
+    """"clothes" appears only in the short_description, "men's" only in the
+    name -- proving tokens are matched across different fields, not just
+    within one."""
+    response = await client.get(SEARCH, params={"q": "men's clothes"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert len(body) == 1
+    assert body[0]["name"] == "Men's Casual T-Shirt"
+
+
+async def test_search_partial_word_matches(client, search_auth, search_token_matching_catalogue):
+    response = await client.get(SEARCH, params={"q": "Casual"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    names = {item["name"] for item in response.json()["data"]}
+    assert names == {"Women's Casual Tops", "Men's Casual T-Shirt"}
+
+
+async def test_search_is_case_insensitive_for_multi_word_queries(
+    client, search_auth, search_token_matching_catalogue
+):
+    response = await client.get(SEARCH, params={"q": "WOMEN'S MAXI DRESS"}, headers=search_auth)
+    assert response.status_code == 200, response.text
+    assert len(response.json()["data"]) == 1
+    assert response.json()["data"][0]["name"] == "Women's Maxi Dress"
+
+    response = await client.get(SEARCH, params={"q": "women's maxi dress"}, headers=search_auth)
+    assert response.status_code == 200, response.text
+    assert len(response.json()["data"]) == 1
+    assert response.json()["data"][0]["name"] == "Women's Maxi Dress"
+
+
+async def test_search_multi_word_query_does_not_return_unrelated_products(
+    client, search_auth, search_token_matching_catalogue
+):
+    """Every token must match somewhere -- "Leather Wallet" shares no word
+    with any of these queries and must never show up."""
+    for query in ("Women's dress", "Women's maxi dress", "Women's tops", "men's clothes"):
+        response = await client.get(SEARCH, params={"q": query}, headers=search_auth)
+        assert response.status_code == 200, response.text
+        names = {item["name"] for item in response.json()["data"]}
+        assert "Leather Wallet" not in names
+
+
+async def test_search_multi_word_query_with_no_matches_returns_empty(
+    client, search_auth, search_token_matching_catalogue
+):
+    """"dress" matches the Maxi Dress, but "spacesuit" matches nothing --
+    since every token must match, the whole query returns no results."""
+    response = await client.get(SEARCH, params={"q": "dress spacesuit"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"] == []
+
+
 # ----------------------------- attribute filters -----------------------------
 
 
