@@ -21,6 +21,14 @@ class CouponRepository(TenantScopedRepository[Coupon]):
         """Find a coupon by its unique code string within the tenant (case-insensitive search)."""
         return await self.find_one(func.upper(Coupon.code) == code.upper())
 
+    async def get_by_code_for_update(self, code: str) -> Coupon | None:
+        """Same lookup as get_by_code, but locks the row (SELECT ... FOR
+        UPDATE) for the rest of the caller's transaction -- used only when
+        actually redeeming a coupon, so concurrent redemptions of the same
+        code serialize instead of racing past each other's usage checks."""
+        stmt = self.base_select().where(func.upper(Coupon.code) == code.upper()).with_for_update()
+        return await self.session.scalar(stmt)
+
 
 class CouponUsageRepository(TenantScopedRepository[CouponUsage]):
     model = CouponUsage

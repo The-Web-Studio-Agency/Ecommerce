@@ -68,9 +68,11 @@ class Order(Base, TimestampMixin):
         CheckConstraint("subtotal >= 0", name="subtotal_not_negative"),
         CheckConstraint("shipping_amount >= 0", name="shipping_not_negative"),
         CheckConstraint("tax_amount >= 0", name="tax_not_negative"),
+        CheckConstraint("discount_amount >= 0", name="discount_not_negative"),
+        CheckConstraint("discount_amount <= subtotal", name="discount_not_more_than_subtotal"),
         CheckConstraint(
-            "total_amount = subtotal + shipping_amount + tax_amount",
-            name="total_is_subtotal_plus_shipping_plus_tax",
+            "total_amount = subtotal - discount_amount + shipping_amount + tax_amount",
+            name="total_matches_components",
         ),
         Index("ix_orders_tenant_id_customer_id", "tenant_id", "customer_id"),
         Index("ix_orders_tenant_id_status", "tenant_id", "status"),
@@ -103,6 +105,24 @@ class Order(Base, TimestampMixin):
 
     subtotal: Mapped[Decimal] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
+    )
+
+    # Snapshot of the coupon actually redeemed for this order, if any -- not
+    # a live reference to reconstruct from. coupon_id is single-column (not
+    # the usual composite tenant FK) since it only needs to survive the
+    # coupon itself being soft-deleted later, the same reasoning used
+    # elsewhere in this codebase for historical references; coupon_code is
+    # copied in case the coupon's own code is ever changed.
+    coupon_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("coupons.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    coupon_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False, default=0, server_default="0"
     )
 
     shipping_amount: Mapped[Decimal] = mapped_column(

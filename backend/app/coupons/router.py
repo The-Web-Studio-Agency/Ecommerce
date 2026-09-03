@@ -110,7 +110,7 @@ async def delete_coupon(
 )
 async def apply_coupon(
     data: CouponApplyRequest,
-    subtotal: Decimal = Query(..., description="Current cart subtotal"),
+    subtotal: Decimal = Query(..., ge=0, description="Current cart subtotal"),
     tenant: CurrentTenant = None, # type: ignore
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
