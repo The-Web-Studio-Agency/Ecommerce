@@ -1,5 +1,3 @@
-"""Fixtures for search, sort, and filter tests."""
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -34,12 +32,7 @@ def search_auth(search_shopper) -> dict[str, str]:
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def search_test_catalogue(client, admin_headers):
-    """Sets up a diverse catalogue for testing search, sort, and filters.
-
-    Each product carries a product-level gender and distinct Color/Size
-    variant options, so attribute filters have real, non-overlapping data
-    to match against.
-    """
+    
     category = await make_category(client, admin_headers, name="Apparel")
 
     product_data = [
@@ -102,13 +95,6 @@ async def search_test_catalogue(client, admin_headers):
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def search_multi_variant_product(client, admin_headers):
-    """One product with three variants across two colors and two sizes:
-
-    Color=Black/Size=S, Color=Black/Size=M, Color=Green/Size=S
-
-    Isolated from search_test_catalogue's single-variant products so
-    multi-variant assertions can't interfere with their price/rating tests.
-    """
     category = await make_category(client, admin_headers, name="Multi-Variant Apparel")
     product = await make_product(
         client, admin_headers, category["id"], name="Graphic Hoodie", status="ACTIVE", brand="Zeen"
@@ -138,14 +124,6 @@ async def search_multi_variant_product(client, admin_headers):
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def search_token_matching_catalogue(client, admin_headers):
-    """Products whose relevant text is spread across name/description/
-    gender rather than concentrated in one field, and never contains the
-    full multi-word queries the token-matching tests search for verbatim --
-    proving those queries match on word tokens, not an exact phrase.
-
-    Also includes one deliberately unrelated product, to prove token
-    matching doesn't loosen into "return everything".
-    """
     category = await make_category(client, admin_headers, name="Token Match Apparel")
 
     product_data = [
@@ -201,12 +179,6 @@ async def search_token_matching_catalogue(client, admin_headers):
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def search_ratings_and_orders(session, tenant, search_shopper, make_user, search_test_catalogue):
-    """Gives the fixture catalogue real ratings and order history:
-
-    - Cotton T-Shirt: reviews averaging 4.0, most popular (5 units ordered)
-    - Formal Shirt: reviews averaging 2.0, some popularity (2 units ordered)
-    - Running Sneaker: no reviews at all, no orders (least popular)
-    """
     catalogue = search_test_catalogue
 
     # A second reviewer: one review per (user, product) is enforced at the

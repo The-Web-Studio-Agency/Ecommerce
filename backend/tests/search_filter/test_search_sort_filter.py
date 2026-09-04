@@ -1,5 +1,3 @@
-"""Testing global search, attribute filtering, sorting, validation, and lifecycle rules."""
-
 from __future__ import annotations
 
 from tests.search_filter.conftest import SEARCH
@@ -93,9 +91,6 @@ async def test_autocomplete_suggestions_endpoint(client, search_auth, search_tes
 
 
 async def test_search_womens_dress(client, search_auth, search_token_matching_catalogue):
-    """Neither "Women's Maxi Dress" nor any other field contains the exact
-    phrase "Women's dress" verbatim -- this only matches via the "Women's"
-    and "dress" tokens landing in different words of the product name."""
     response = await client.get(SEARCH, params={"q": "Women's dress"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
@@ -123,9 +118,6 @@ async def test_search_womens_tops(client, search_auth, search_token_matching_cat
 
 
 async def test_search_mens_clothes(client, search_auth, search_token_matching_catalogue):
-    """"clothes" appears only in the short_description, "men's" only in the
-    name -- proving tokens are matched across different fields, not just
-    within one."""
     response = await client.get(SEARCH, params={"q": "men's clothes"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
@@ -159,8 +151,6 @@ async def test_search_is_case_insensitive_for_multi_word_queries(
 async def test_search_multi_word_query_does_not_return_unrelated_products(
     client, search_auth, search_token_matching_catalogue
 ):
-    """Every token must match somewhere -- "Leather Wallet" shares no word
-    with any of these queries and must never show up."""
     for query in ("Women's dress", "Women's maxi dress", "Women's tops", "men's clothes"):
         response = await client.get(SEARCH, params={"q": query}, headers=search_auth)
         assert response.status_code == 200, response.text
@@ -171,8 +161,7 @@ async def test_search_multi_word_query_does_not_return_unrelated_products(
 async def test_search_multi_word_query_with_no_matches_returns_empty(
     client, search_auth, search_token_matching_catalogue
 ):
-    """"dress" matches the Maxi Dress, but "spacesuit" matches nothing --
-    since every token must match, the whole query returns no results."""
+   
     response = await client.get(SEARCH, params={"q": "dress spacesuit"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
@@ -244,8 +233,7 @@ async def test_gender_color_size_filters_are_case_insensitive(client, search_aut
 async def test_gender_filter_excludes_products_without_a_gender(
     client, search_auth, search_multi_variant_product
 ):
-    """search_multi_variant_product's "Graphic Hoodie" has no gender set --
-    it must never match a gender filter, only appear when gender is omitted."""
+   
     response = await client.get(SEARCH, params={"gender": "MEN"}, headers=search_auth)
     assert response.status_code == 200, response.text
     assert all(item["name"] != "Graphic Hoodie" for item in response.json()["data"])
@@ -302,9 +290,6 @@ async def test_invalid_sort_parameter_is_rejected(client, search_auth, search_te
 
 
 async def test_recommended_sort_is_based_on_popularity(client, search_auth, search_ratings_and_orders):
-    # Default sort (RECOMMENDED): Cotton T-Shirt (5 units) outsells Formal
-    # Shirt (2 units) outsells Running Sneaker (0 -- its only order was
-    # cancelled and must not count).
     response = await client.get(SEARCH, headers=search_auth)
 
     assert response.status_code == 200, response.text
@@ -414,9 +399,7 @@ async def test_response_exposes_actual_variant_color_and_size_combinations(
 async def test_variant_attributes_reflect_the_filtered_matching_variant(
     client, search_auth, search_test_catalogue
 ):
-    """Preserves existing color-filter behavior: a product matches when ANY
-    of its variants has the requested color, and the response still shows
-    that variant's real options -- never inferred from name/brand/etc."""
+   
     response = await client.get(SEARCH, params={"color": "Black"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
