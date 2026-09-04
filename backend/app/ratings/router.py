@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -7,12 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_customer
 from app.core.database import get_db
-from app.core.pagination import PageParams, page_params
+from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
 from app.ratings.schemas import (
     RatingSummaryRead,
     ReviewCreate,
     ReviewModerate,
+    ReviewModerationQuery,
     ReviewRead,
     ReviewUpdate,
 )
@@ -48,7 +50,7 @@ async def create_review(
 async def list_product_reviews(
     product_id: UUID,
     tenant: CurrentTenant,
-    params: PageParams = Depends(page_params),
+    params: Annotated[PageParams, Query()],
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[ReviewRead]]:
     reviews, total = await ReviewService(session, tenant.id).list_for_product(
@@ -111,15 +113,12 @@ async def delete_review(
     summary="List reviews for moderation",
 )
 async def list_reviews_for_moderation(
-    is_approved: bool | None = Query(
-        default=None, description="Filter by approval state"
-    ),
-    params: PageParams = Depends(page_params),
+    params: Annotated[ReviewModerationQuery, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> ApiResponse[list[ReviewRead]]:
     reviews, total = await ReviewService(session, user.tenant_id).list_for_moderation(
-        params, is_approved=is_approved
+        params, is_approved=params.is_approved
     )
     return paginated(
         [ReviewRead.model_validate(review) for review in reviews],

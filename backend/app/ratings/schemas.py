@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.pagination import PageParams
+from app.core.schemas import PartialUpdate, StrictModel
 from app.ratings.constants import (
     MAX_ALT_TEXT_LENGTH,
     MAX_COMMENT_LENGTH,
@@ -16,7 +18,7 @@ from app.ratings.constants import (
 )
 
 
-class ReviewImageCreate(BaseModel):
+class ReviewImageCreate(StrictModel):
     image_url: str = Field(max_length=MAX_IMAGE_URL_LENGTH)
     alt_text: str | None = Field(default=None, max_length=MAX_ALT_TEXT_LENGTH)
 
@@ -30,7 +32,7 @@ class ReviewImageRead(BaseModel):
     created_at: datetime
 
 
-class ReviewCreate(BaseModel):
+class ReviewCreate(StrictModel):
     product_id: uuid.UUID
     rating: int = Field(ge=MIN_RATING, le=MAX_RATING)
     title: str | None = Field(default=None, max_length=MAX_TITLE_LENGTH)
@@ -40,7 +42,7 @@ class ReviewCreate(BaseModel):
     )
 
 
-class ReviewUpdate(BaseModel):
+class ReviewUpdate(PartialUpdate):
     """What an author may change. Approval is a moderator's call, not theirs."""
 
     rating: int | None = Field(default=None, ge=MIN_RATING, le=MAX_RATING)
@@ -48,8 +50,16 @@ class ReviewUpdate(BaseModel):
     comment: str | None = Field(default=None, max_length=MAX_COMMENT_LENGTH)
 
 
-class ReviewModerate(BaseModel):
+class ReviewModerate(StrictModel):
     is_approved: bool
+
+
+class ReviewModerationQuery(PageParams):
+    """The moderation listing filter, on top of the usual page controls."""
+
+    is_approved: bool | None = Field(
+        default=None, description="Filter by approval state"
+    )
 
 
 class ReviewRead(BaseModel):

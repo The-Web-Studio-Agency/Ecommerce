@@ -72,7 +72,7 @@ async def test_reviewing_another_tenants_product_is_refused(
 
 
 async def test_author_cannot_approve_their_own_review(client, admin_headers, buyer_auth, review):
-    """is_approved is a moderator's switch; sending it as the author must not flip it."""
+    """is_approved is a moderator's switch; the author's payload may not carry it."""
     hidden = await client.patch(
         f"{ADMIN_REVIEWS}/{review['id']}",
         json={"is_approved": False},
@@ -86,9 +86,14 @@ async def test_author_cannot_approve_their_own_review(client, admin_headers, buy
         headers=buyer_auth,
     )
 
-    assert response.status_code == 200, response.text
-    assert response.json()["data"]["rating"] == 5
-    assert response.json()["data"]["is_approved"] is False
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["details"][0]["field"] == "is_approved"
+
+    # The rejected request changed nothing, approval included.
+    listed = await client.get(ADMIN_REVIEWS, headers=admin_headers)
+    stored = listed.json()["data"][0]
+    assert stored["is_approved"] is False
+    assert stored["rating"] == 4
 
 
 async def test_creating_a_review_requires_authentication(client, reviewable_product):
