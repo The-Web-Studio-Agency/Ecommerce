@@ -1,3 +1,5 @@
+"""Admin dashboard API tests."""
+
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta, timezone
@@ -12,19 +14,18 @@ from app.orders.constants import OrderStatus
 from app.orders.models import Order, OrderItem
 from app.payments.constants import PaymentStatus
 from app.payments.models import Payment
+from tests.helpers import load_data
+
+
+DATA = load_data(__file__)
+
+DASHBOARD = DATA["routes"]["dashboard"]
+SALES_TREND = DATA["routes"]["sales_trend"]
+TOP_PRODUCTS = DATA["routes"]["top_products"]
 
 
 def _delivery_fields() -> dict:
-    """Required, non-catalogue fields every Order row needs."""
-    return {
-        "delivery_name": "Dashboard Tester",
-        "delivery_phone": "+919876500000",
-        "delivery_address_line_1": "1 Test Street",
-        "delivery_city": "Testville",
-        "delivery_state": "TS",
-        "delivery_postal_code": "100001",
-        "delivery_country": "IN",
-    }
+    return DATA["order"]
 
 
 async def _make_order(
@@ -37,6 +38,7 @@ async def _make_order(
     created_at: datetime | None = None,
 ) -> Order:
     subtotal = Decimal("100.00")
+
     order = Order(
         tenant_id=tenant.id,
         customer_id=customer.id,
@@ -49,8 +51,10 @@ async def _make_order(
         total_amount=subtotal,
         **_delivery_fields(),
     )
+
     if created_at is not None:
         order.created_at = created_at
+
     session.add(order)
     await session.flush()
     return order
@@ -58,8 +62,7 @@ async def _make_order(
 
 @pytest.mark.asyncio
 async def test_dashboard_authorization_guards(client: AsyncClient, customer_headers: dict):
-    # Customer should be forbidden from accessing admin dashboard
-    response = await client.get("/api/v1/admin/dashboard", headers=customer_headers)
+    response = await client.get(DASHBOARD, headers=customer_headers)
     assert response.status_code == 403
 
 
@@ -74,8 +77,6 @@ async def test_admin_dashboard_overview_success(
     new_variant,
 ):
     customer = await make_user(tenant=tenant)
-
-    # A near-empty variant to trigger the low-stock overview.
     low_stock_variant = await new_variant(initial_quantity=2, low_stock_threshold=5)
 
     order = await _make_order(
@@ -104,7 +105,7 @@ async def test_admin_dashboard_overview_success(
     session.add(payment)
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     data = response.json()["data"]
 
@@ -128,7 +129,6 @@ async def test_dashboard_counts_returned_orders_from_refunded_payments(
     tenant,
     make_user,
 ):
-    """There is no RETURNED order status -- a refunded payment is the signal."""
     customer = await make_user(tenant=tenant)
 
     order = await _make_order(
@@ -143,7 +143,7 @@ async def test_dashboard_counts_returned_orders_from_refunded_payments(
     session.add(payment)
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     data = response.json()["data"]
 
@@ -181,16 +181,14 @@ async def test_dashboard_sales_trend_and_top_products(
     session.add(item)
     await session.commit()
 
-    trend_res = await client.get("/api/v1/admin/dashboard/sales-trend?days=7", headers=staff_headers)
+    trend_res = await client.get(f"{SALES_TREND}?days=7", headers=staff_headers)
     assert trend_res.status_code == 200, trend_res.text
     assert len(trend_res.json()["data"]) >= 1
 
-    top_res = await client.get("/api/v1/admin/dashboard/top-products?days=7&limit=5", headers=staff_headers)
+    top_res = await client.get(f"{TOP_PRODUCTS}?days=7&limit=5", headers=staff_headers)
     assert top_res.status_code == 200, top_res.text
     top_items = top_res.json()["data"]
     assert len(top_items) >= 1
-    # Product.name is what get_top_products groups by -- "Summer Dress" is
-    # catalogue's default product sample name (see tests/catalogue/data.json).
     assert top_items[0]["product_name"] == "Summer Dress"
     assert top_items[0]["quantity_sold"] == 3
 
@@ -203,17 +201,14 @@ async def test_todays_orders_counts_every_status_but_sales_today_stays_completed
     tenant,
     make_user,
 ):
-    """orders.today counts all orders placed today regardless of status;
-    sales.today.order_count must stay unchanged -- completed sales only."""
     customer = await make_user(tenant=tenant)
 
-    # PENDING/unpaid -- not a "completed sale", but still placed today.
     await _make_order(
         session, tenant, customer, status=OrderStatus.PENDING, payment_status=PaymentStatus.PENDING
     )
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     data = response.json()["data"]
 
@@ -232,7 +227,6 @@ async def test_week_over_week_comparison_calculates_counts_revenue_and_pct(
     customer = await make_user(tenant=tenant)
     now = datetime.now(timezone.utc)
 
-    # Current week window (last 7 days): two completed orders, 100.00 each.
     for _ in range(2):
         await _make_order(
             session,
@@ -243,7 +237,6 @@ async def test_week_over_week_comparison_calculates_counts_revenue_and_pct(
             created_at=now - timedelta(days=2),
         )
 
-    # Previous week window (7-14 days ago): one completed order, 100.00.
     await _make_order(
         session,
         tenant,
@@ -254,7 +247,7 @@ async def test_week_over_week_comparison_calculates_counts_revenue_and_pct(
     )
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     week = response.json()["data"]["sales"]["week"]
 
@@ -262,8 +255,6 @@ async def test_week_over_week_comparison_calculates_counts_revenue_and_pct(
     assert week["previous_order_count"] >= 1
     assert Decimal(week["revenue"]) >= Decimal("200.00")
     assert Decimal(week["previous_revenue"]) >= Decimal("100.00")
-    # 2 vs 1 -> +100%; both figures are computed the same way sales.month
-    # already does, reusing PeriodMetric's change-pct fields.
     assert week["order_count_change_pct"] == round(
         (week["order_count"] - week["previous_order_count"]) / week["previous_order_count"] * 100.0, 2
     )
@@ -281,11 +272,10 @@ async def test_inventory_overview_uses_variant_level_field_names(
     admin_headers: dict,
     new_variant,
 ):
-    """Inventory is tracked per variant/SKU -- response keys must say so."""
     low_stock_variant = await new_variant(initial_quantity=1, low_stock_threshold=5)
     out_of_stock_variant = await new_variant(initial_quantity=0, low_stock_threshold=5)
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     inventory = response.json()["data"]["inventory"]
 
@@ -311,7 +301,7 @@ async def test_recent_orders_shows_customer_email_when_set(
     )
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     recent_orders = response.json()["data"]["recent_orders"]
 
@@ -326,15 +316,13 @@ async def test_recent_orders_customer_email_is_null_when_customer_has_no_email(
     tenant,
     make_user,
 ):
-    """Customers sign up by phone/OTP only -- email is optional, so a null
-    here is legitimate, not a bug, when the customer never set one."""
-    customer = await make_user(tenant=tenant)  # no email passed
+    customer = await make_user(tenant=tenant)
     await _make_order(
         session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.PAID
     )
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     recent_orders = response.json()["data"]["recent_orders"]
 
@@ -349,16 +337,13 @@ async def test_change_pct_is_null_when_previous_period_is_zero(
     tenant,
     make_user,
 ):
-    """Growth from a zero baseline is undefined -- must be null, not 100%."""
     customer = await make_user(tenant=tenant)
-    # A completed order today; nothing placed yesterday, so today's
-    # "previous" period (yesterday) is 0 orders / 0 revenue.
     await _make_order(
         session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.PAID
     )
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     today = response.json()["data"]["sales"]["today"]
 
@@ -379,8 +364,6 @@ async def test_change_pct_is_calculated_normally_when_previous_period_is_nonzero
     customer = await make_user(tenant=tenant)
     now = datetime.now(timezone.utc)
 
-    # Yesterday at noon (safely inside [yesterday_start, today_start)
-    # regardless of what time "now" is): one completed order, 100.00.
     yesterday_noon = datetime.combine(now.date() - timedelta(days=1), time(12, 0), tzinfo=timezone.utc)
     await _make_order(
         session,
@@ -390,13 +373,12 @@ async def test_change_pct_is_calculated_normally_when_previous_period_is_nonzero
         payment_status=PaymentStatus.PAID,
         created_at=yesterday_noon,
     )
-    # Today: one completed order, 100.00.
     await _make_order(
         session, tenant, customer, status=OrderStatus.DELIVERED, payment_status=PaymentStatus.PAID
     )
     await session.commit()
 
-    response = await client.get("/api/v1/admin/dashboard", headers=admin_headers)
+    response = await client.get(DASHBOARD, headers=admin_headers)
     assert response.status_code == 200, response.text
     today = response.json()["data"]["sales"]["today"]
 
