@@ -1,57 +1,52 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.search_filter.constants import SearchSort
+
+
+@dataclass(frozen=True)
+class ProductFilters:
+    """Everything the storefront may narrow a product search by."""
+
+    search: str | None = None
+    category_id: uuid.UUID | None = None
+    gender: str | None = None
+    brand: str | None = None
+    min_price: Decimal | None = None
+    max_price: Decimal | None = None
+    color: str | None = None
+    size: str | None = None
+    min_rating: float | None = None
+    max_rating: float | None = None
+    sort: SearchSort = SearchSort.RECOMMENDED
+
 
 class VariantAttributes(BaseModel):
-    variant_id: uuid.UUID
-    options: Dict[str, str] = Field(default_factory=dict)
-
     model_config = ConfigDict(from_attributes=True)
+
+    variant_id: uuid.UUID
+    options: dict[str, str] = Field(default_factory=dict)
 
 
 class ProductDiscoveryItem(BaseModel):
-    id: uuid.UUID
-    name: str
-    brand: Optional[str] = None
-    gender: Optional[str] = None
-    category_id: uuid.UUID
-    price: Optional[Decimal] = None
-    min_price: Optional[Decimal] = None
-    max_price: Optional[Decimal] = None
-    rating: Optional[float] = None
-    variants: List[VariantAttributes] = Field(default_factory=list)
-
     model_config = ConfigDict(from_attributes=True)
 
-
-class PaginatedDiscoveryResponse(BaseModel):
-    items: List[ProductDiscoveryItem]
-    total: int
-    page: int
-    size: int
-    pages: int
+    id: uuid.UUID
+    name: str
+    brand: str | None = None
+    gender: str | None = None
+    category_id: uuid.UUID
+    price: Decimal | None = None
+    min_price: Decimal | None = None
+    max_price: Decimal | None = None
+    rating: float | None = None
+    variants: list[VariantAttributes] = Field(default_factory=list)
 
 
 class SuggestionItem(BaseModel):
     title: str
-
-
-class SearchSuggestionsResponse(BaseModel):
-    suggestions: List[str]
-
-
-class SearchHistoryItem(BaseModel):
-    id: uuid.UUID
-    query: str
-    created_at: str
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class SearchHistoryResponse(BaseModel):
-    history: List[str]

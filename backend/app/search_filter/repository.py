@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import re
-import uuid
-from typing import List, Optional, Tuple
+from datetime import datetime, timezone
+from decimal import Decimal
+from uuid import UUID
 
-from sqlalchemy import and_, desc, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy import Select, and_, case, delete, desc, func, or_, select, union
+from sqlalchemy.orm import aliased, selectinload
 
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import (
@@ -16,26 +16,38 @@ from app.catalogue.models import (
     ProductVariant,
     ProductVariantOption,
 )
+from app.core.pagination import PageParams
+from app.core.repository import TenantScopedRepository, escape_like
 from app.orders.constants import OrderStatus
 from app.orders.models import Order, OrderItem
 from app.ratings.models import Review
+from app.search_filter.constants import (
+    COLOR_OPTION,
+    MAX_HISTORY_ENTRIES,
+    MAX_SUGGESTIONS,
+    SIZE_OPTION,
+    SearchSort,
+)
 from app.search_filter.models import SearchHistory
+from app.search_filter.schemas import ProductFilters
 
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
 
+DiscoveryRow = tuple[Product, Decimal | None, Decimal | None, float | None]
 
-def _tokenize(query: str) -> List[str]:
+
+def tokenize(query: str) -> list[str]:
+    """Words a query is matched by; apostrophes are dropped, as they are in the data."""
     return _TOKEN_PATTERN.findall(query.replace("'", ""))
 
 
-class SearchFilterRepository:
-    def __init__(self, session: AsyncSession):
-        self.session = session
+class SearchFilterRepository(TenantScopedRepository[SearchHistory]):
+    model = SearchHistory
 
     @staticmethod
-    def _has_option(option_name: str, value: str):
+    def _option_matches(variant, option_name: str, value: str):
         """Build a case-insensitive variant option predicate."""
-        return ProductVariant.option_values.any(
+        return variant.option_values.any(
             and_(
                 func.lower(ProductVariantOption.value) == value.lower(),
                 ProductVariantOption.option.has(
@@ -44,41 +56,61 @@ class SearchFilterRepository:
             )
         )
 
+    def _has_matching_variant(self, filters: ProductFilters):
+        """One live variant must satisfy every variant-level filter at once.
+
+        An EXISTS rather than a narrowed join: the join feeds min()/max(), so
+        filtering it would make the reported price range describe the surviving
+        variants instead of the product the card is for.
+        """
+        variant = aliased(ProductVariant)
+
+        conditions = []
+        if filters.min_price is not None:
+            conditions.append(variant.price >= filters.min_price)
+        if filters.max_price is not None:
+            conditions.append(variant.price <= filters.max_price)
+        if filters.color:
+            conditions.append(
+                self._option_matches(variant, COLOR_OPTION, filters.color)
+            )
+        if filters.size:
+            conditions.append(self._option_matches(variant, SIZE_OPTION, filters.size))
+
+        if not conditions:
+            return None
+
+        return (
+            select(1)
+            .where(
+                variant.tenant_id == Product.tenant_id,
+                variant.product_id == Product.id,
+                variant.status == CatalogueStatus.ACTIVE.value,
+                *conditions,
+            )
+            .correlate(Product)
+            .exists()
+        )
+
     @staticmethod
     def _token_matches(token: str):
         """Build a predicate for a searchable product token."""
-        pattern = f"%{token}%"
+        pattern = f"%{escape_like(token)}%"
 
         def _clean(column):
             return func.replace(column, "'", "")
 
         return or_(
-            _clean(Product.name).ilike(pattern),
-            _clean(Product.brand).ilike(pattern),
-            _clean(Product.short_description).ilike(pattern),
-            _clean(Product.description).ilike(pattern),
-            _clean(ProductVariant.sku).ilike(pattern),
-            _clean(Product.gender).ilike(pattern),
+            _clean(Product.name).ilike(pattern, escape="\\"),
+            _clean(Product.brand).ilike(pattern, escape="\\"),
+            _clean(Product.short_description).ilike(pattern, escape="\\"),
+            _clean(Product.description).ilike(pattern, escape="\\"),
+            _clean(ProductVariant.sku).ilike(pattern, escape="\\"),
+            _clean(Product.gender).ilike(pattern, escape="\\"),
         )
 
-    async def discover_products(
-        self,
-        tenant_id: uuid.UUID,
-        search: Optional[str] = None,
-        category_id: Optional[uuid.UUID] = None,
-        gender: Optional[str] = None,
-        brand: Optional[str] = None,
-        min_price: Optional[float] = None,
-        max_price: Optional[float] = None,
-        color: Optional[str] = None,
-        size: Optional[str] = None,
-        min_rating: Optional[float] = None,
-        max_rating: Optional[float] = None,
-        sort_by: str = "RECOMMENDED",
-        page: int = 1,
-        page_size: int = 10,
-    ) -> Tuple[List[Tuple[Product, object, object]], int]:
-        avg_rating = (
+    def _average_rating(self):
+        return (
             select(func.avg(Review.rating))
             .where(
                 Review.tenant_id == Product.tenant_id,
@@ -89,7 +121,8 @@ class SearchFilterRepository:
             .scalar_subquery()
         )
 
-        popularity = (
+    def _units_sold(self):
+        return (
             select(func.coalesce(func.sum(OrderItem.quantity), 0))
             .join(
                 Order,
@@ -107,11 +140,14 @@ class SearchFilterRepository:
             .scalar_subquery()
         )
 
+    def _discovery_select(self, filters: ProductFilters, average_rating) -> Select | None:
+        """The filtered, grouped statement, or None when the query can match nothing."""
         stmt = (
             select(
                 Product,
-                func.min(ProductVariant.price).label("price"),
-                avg_rating.label("rating"),
+                func.min(ProductVariant.price).label("min_price"),
+                func.max(ProductVariant.price).label("max_price"),
+                average_rating.label("rating"),
             )
             .join(
                 ProductVariant,
@@ -121,78 +157,77 @@ class SearchFilterRepository:
                 ),
             )
             .where(
-                Product.tenant_id == tenant_id,
+                Product.tenant_id == self.tenant_id,
                 Product.status == CatalogueStatus.ACTIVE.value,
                 ProductVariant.status == CatalogueStatus.ACTIVE.value,
             )
         )
 
-        if search:
-            for token in _tokenize(search):
+        if filters.search:
+            tokens = tokenize(filters.search)
+            if not tokens:
+                return None
+            for token in tokens:
                 stmt = stmt.where(self._token_matches(token))
 
-        if category_id:
-            stmt = stmt.where(Product.category_id == category_id)
+        if filters.category_id:
+            stmt = stmt.where(Product.category_id == filters.category_id)
 
-        if brand:
-            stmt = stmt.where(func.lower(Product.brand) == brand.lower())
+        if filters.brand:
+            stmt = stmt.where(func.lower(Product.brand) == filters.brand.lower())
 
-        if min_price is not None:
-            stmt = stmt.where(ProductVariant.price >= min_price)
+        if filters.gender:
+            stmt = stmt.where(func.lower(Product.gender) == filters.gender.lower())
 
-        if max_price is not None:
-            stmt = stmt.where(ProductVariant.price <= max_price)
-
-        if gender:
-            
-            stmt = stmt.where(func.lower(Product.gender) == gender.lower())
-
-        if color:
-            stmt = stmt.where(self._has_option("Color", color))
-
-        if size:
-            stmt = stmt.where(self._has_option("Size", size))
+        matching_variant = self._has_matching_variant(filters)
+        if matching_variant is not None:
+            stmt = stmt.where(matching_variant)
 
         stmt = stmt.group_by(Product.id)
 
-        if min_rating is not None:
-            stmt = stmt.having(avg_rating >= min_rating)
+        if filters.min_rating is not None:
+            stmt = stmt.having(average_rating >= filters.min_rating)
 
-        if max_rating is not None:
-            stmt = stmt.having(avg_rating <= max_rating)
+        if filters.max_rating is not None:
+            stmt = stmt.having(average_rating <= filters.max_rating)
 
-        # Counting total matches
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = await self.session.scalar(count_stmt) or 0
+        return stmt
 
-        # Sorting
-        if sort_by == "PRICE_HIGH":
-            stmt = stmt.order_by(desc(func.max(ProductVariant.price)))
-        elif sort_by == "PRICE_LOW":
-            stmt = stmt.order_by(func.min(ProductVariant.price))
-        elif sort_by == "NEWEST":
-            stmt = stmt.order_by(desc(Product.created_at))
-        else:
-        
-            stmt = stmt.order_by(desc(popularity), desc(Product.created_at))
+    def _ordered(self, stmt: Select, sort: SearchSort, units_sold) -> Select:
+        """Price sorts key off the price the card shows -- the cheapest live variant."""
+        from_price = func.min(ProductVariant.price)
 
-        # Pagination
-        offset = (page - 1) * page_size
-        stmt = stmt.offset(offset).limit(page_size)
+        if sort is SearchSort.PRICE_LOW:
+            return stmt.order_by(from_price, Product.created_at.desc())
+        if sort is SearchSort.PRICE_HIGH:
+            return stmt.order_by(desc(from_price), Product.created_at.desc())
+        if sort is SearchSort.NEWEST:
+            return stmt.order_by(desc(Product.created_at))
+        return stmt.order_by(desc(units_sold), desc(Product.created_at))
+
+    async def discover_products(
+        self, filters: ProductFilters, params: PageParams
+    ) -> tuple[list[DiscoveryRow], int]:
+        average_rating = self._average_rating()
+
+        stmt = self._discovery_select(filters, average_rating)
+        if stmt is None:
+            return [], 0
+
+        total = await self.session.scalar(
+            select(func.count()).select_from(stmt.subquery())
+        )
+
+        stmt = self._ordered(stmt, filters.sort, self._units_sold())
+        stmt = stmt.offset(params.offset).limit(params.limit)
 
         result = await self.session.execute(stmt)
-        rows = [
-            (product, price, rating)
-            for product, price, rating in result.all()
-        ]
-        return rows, total
+        return list(result.all()), int(total or 0)
 
-    async def get_variant_attributes(
-        self,
-        tenant_id: uuid.UUID,
-        product_ids: List[uuid.UUID],
-    ) -> dict[uuid.UUID, List[dict]]:
-        """Return active variant attributes for the given products."""
+    async def variant_attributes(
+        self, product_ids: list[UUID]
+    ) -> dict[UUID, list[dict]]:
+        """Active variant attributes for the given products, keyed by product."""
         if not product_ids:
             return {}
 
@@ -204,7 +239,7 @@ class SearchFilterRepository:
                 )
             )
             .where(
-                ProductVariant.tenant_id == tenant_id,
+                ProductVariant.tenant_id == self.tenant_id,
                 ProductVariant.product_id.in_(product_ids),
                 ProductVariant.status == CatalogueStatus.ACTIVE.value,
             )
@@ -212,9 +247,7 @@ class SearchFilterRepository:
         )
         result = await self.session.scalars(stmt)
 
-        attributes: dict[uuid.UUID, List[dict]] = {
-            pid: [] for pid in product_ids
-        }
+        attributes: dict[UUID, list[dict]] = {pid: [] for pid in product_ids}
         for variant in result.all():
             options = {
                 option_value.option.name: option_value.value
@@ -225,103 +258,74 @@ class SearchFilterRepository:
             )
         return attributes
 
-    async def get_search_suggestions(
-        self,
-        tenant_id: uuid.UUID,
-        query: str,
-    ) -> List[str]:
-        pattern = f"%{query}%"
+    async def suggestions(self, query: str) -> list[str]:
+        """Product names, brands and categories matching the query, prefixes first."""
+        term = escape_like(query.replace("'", ""))
+        contains = f"%{term}%"
 
-        # Fetch matching active product names, brands, and categories
-        product_names = (
-            select(Product.name)
-            .where(
-                Product.tenant_id == tenant_id,
-                Product.status == CatalogueStatus.ACTIVE.value,
-                Product.name.ilike(pattern),
+        def _clean(column):
+            return func.replace(column, "'", "")
+
+        def _matching(column, *conditions):
+            return select(column.label("title")).where(
+                *conditions, _clean(column).ilike(contains, escape="\\")
             )
-            .limit(5)
+
+        active_product = (
+            Product.tenant_id == self.tenant_id,
+            Product.status == CatalogueStatus.ACTIVE.value,
         )
 
-        brands = (
-            select(Product.brand)
-            .where(
-                Product.tenant_id == tenant_id,
-                Product.status == CatalogueStatus.ACTIVE.value,
-                Product.brand.ilike(pattern),
-            )
-            .distinct()
-            .limit(5)
-        )
-
-        categories = (
-            select(Category.name)
-            .where(
-                Category.tenant_id == tenant_id,
+        matches = union(
+            _matching(Product.name, *active_product),
+            _matching(Product.brand, *active_product),
+            _matching(
+                Category.name,
+                Category.tenant_id == self.tenant_id,
                 Category.status == CatalogueStatus.ACTIVE.value,
-                Category.name.ilike(pattern),
-            )
-            .limit(5)
-        )
+            ),
+        ).subquery()
 
-        p_res = await self.session.scalars(product_names)
-        b_res = await self.session.scalars(brands)
-        c_res = await self.session.scalars(categories)
-
-        suggestions = list(
-            set(list(p_res.all()) + list(b_res.all()) + list(c_res.all()))
-        )
-        return suggestions[:10]
-
-    async def save_search_history(
-        self,
-        tenant_id: uuid.UUID,
-        user_id: uuid.UUID,
-        query: str,
-    ):
-        if not query.strip():
-            return
-
-        history_entry = SearchHistory(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            query=query.strip(),
-        )
-        self.session.add(history_entry)
-        await self.session.commit()
-
-        subquery = (
-            select(SearchHistory.id)
-            .where(
-                SearchHistory.tenant_id == tenant_id,
-                SearchHistory.user_id == user_id,
-            )
-            .order_by(desc(SearchHistory.created_at))
-            .offset(10)
-        )
-
-        old_entries = await self.session.scalars(subquery)
-        for old_id in old_entries.all():
-            old_obj = await self.session.get(SearchHistory, old_id)
-            if old_obj:
-                await self.session.delete(old_obj)
-        await self.session.commit()
-
-    async def get_search_history(
-        self,
-        tenant_id: uuid.UUID,
-        user_id: uuid.UUID,
-    ) -> List[str]:
+        title = matches.c.title
+        starts_with = func.replace(title, "'", "").ilike(f"{term}%", escape="\\")
         stmt = (
-            select(SearchHistory.query)
-            .where(
-                SearchHistory.tenant_id == tenant_id,
-                SearchHistory.user_id == user_id,
-            )
-            .order_by(desc(SearchHistory.created_at))
-            .limit(10)
+            select(title)
+            .order_by(case((starts_with, 0), else_=1), title)
+            .limit(MAX_SUGGESTIONS)
         )
 
         result = await self.session.scalars(stmt)
-        seen = set()
-        return [q for q in result.all() if not (q in seen or seen.add(q))]
+        return list(result.all())
+
+    async def record_search(self, user_id: UUID, query: str) -> None:
+        """Store the phrase, or bump it if this shopper has searched it before."""
+        entry = await self.find_one(
+            SearchHistory.user_id == user_id, SearchHistory.query == query
+        )
+
+        if entry is None:
+            await self.add(SearchHistory(user_id=user_id, query=query))
+        else:
+            entry.searched_at = datetime.now(timezone.utc)
+            await self.session.flush()
+
+        stale = (
+            self.base_select()
+            .with_only_columns(SearchHistory.id)
+            .where(SearchHistory.user_id == user_id)
+            .order_by(desc(SearchHistory.searched_at))
+            .offset(MAX_HISTORY_ENTRIES)
+        )
+        await self.session.execute(
+            delete(SearchHistory).where(SearchHistory.id.in_(stale))
+        )
+
+    async def recent_searches(self, user_id: UUID) -> list[str]:
+        stmt = (
+            self.base_select()
+            .where(SearchHistory.user_id == user_id)
+            .order_by(desc(SearchHistory.searched_at))
+            .limit(MAX_HISTORY_ENTRIES)
+        )
+        result = await self.session.scalars(stmt)
+        return [entry.query for entry in result.all()]

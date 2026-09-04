@@ -1,6 +1,8 @@
 {
     "routes": {
       "search": "/api/v1/storefront/search-products",
+      "history": "/api/v1/storefront/search-history",
+      "suggestions": "/api/v1/storefront/search-suggestions",
       "products": "/api/v1/catalogue/products"
     },
     "variant": {

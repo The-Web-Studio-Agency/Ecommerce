@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.search_filter.conftest import SEARCH
+from tests.search_filter.conftest import HISTORY, SEARCH, SUGGESTIONS
 
 
 async def test_global_search_returns_matching_products(client, search_auth, search_test_catalogue):
@@ -79,7 +79,7 @@ async def test_pagination_validation_errors(client, search_auth, search_test_cat
 
 
 async def test_autocomplete_suggestions_endpoint(client, search_auth, search_test_catalogue):
-    response = await client.get("/api/v1/storefront/search-suggestions", params={"q": "Run"}, headers=search_auth)
+    response = await client.get(SUGGESTIONS, params={"q": "Run"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
     body = response.json()["data"]
@@ -359,7 +359,7 @@ async def test_search_history_records_and_returns_recent_searches(
     await client.get(SEARCH, params={"q": "Running"}, headers=search_auth)
     await client.get(SEARCH, params={"q": "Puma"}, headers=search_auth)
 
-    response = await client.get("/api/v1/storefront/search-history", headers=search_auth)
+    response = await client.get(HISTORY, headers=search_auth)
 
     assert response.status_code == 200, response.text
     history = response.json()["data"]
@@ -370,7 +370,7 @@ async def test_search_history_records_and_returns_recent_searches(
 
 
 async def test_search_history_requires_authentication(client, search_test_catalogue):
-    response = await client.get("/api/v1/storefront/search-history")
+    response = await client.get(HISTORY)
     assert response.status_code == 401
 
 
@@ -425,3 +425,185 @@ async def test_single_variant_product_exposes_one_variant_entry(
     assert len(body[0]["variants"]) == 1
     assert body[0]["variants"][0]["options"]["Color"] == "White"
     assert body[0]["variants"][0]["options"]["Size"] == "S"
+
+# ------------------------------ guest access -----------------------------------
+
+
+async def test_search_is_open_to_guests(client, search_test_catalogue):
+    response = await client.get(SEARCH, params={"q": "Running"})
+
+    assert response.status_code == 200, response.text
+    body = response.json()["data"]
+    assert len(body) == 1
+    assert "Running" in body[0]["name"]
+
+
+async def test_search_rejects_a_token_it_cannot_verify(client, search_test_catalogue):
+    response = await client.get(
+        SEARCH, params={"q": "Running"}, headers={"Authorization": "Bearer nonsense"}
+    )
+    assert response.status_code == 401
+
+
+# --------------------------- query sanitisation --------------------------------
+
+
+async def test_suggestion_wildcards_match_literally(client, search_test_catalogue):
+    """A bare % must not stand in for the whole catalogue."""
+    for wildcard in ("%", "_"):
+        response = await client.get(
+            SUGGESTIONS, params={"q": wildcard}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["data"] == []
+
+
+async def test_search_query_without_letters_or_digits_matches_nothing(
+    client, search_auth, search_test_catalogue
+):
+    response = await client.get(SEARCH, params={"q": "!!!"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"] == []
+    assert response.json()["meta"]["total_items"] == 0
+
+
+async def test_suggestions_are_ordered_deterministically(client, search_test_catalogue):
+    first = await client.get(SUGGESTIONS, params={"q": "a"})
+    second = await client.get(SUGGESTIONS, params={"q": "a"})
+
+    assert first.status_code == 200, first.text
+    assert first.json()["data"] == second.json()["data"]
+
+
+# --------------------------- price range and sorting ---------------------------
+
+
+async def test_response_exposes_the_variant_price_range(
+    client, search_auth, search_price_spread_catalogue
+):
+    response = await client.get(
+        SEARCH, params={"q": "Spreadwear", "sort": "price"}, headers=search_auth
+    )
+
+    assert response.status_code == 200, response.text
+    budget = response.json()["data"][0]
+    assert budget["name"] == "Budget Spreadwear Tee"
+    assert budget["price"] == "100.00"
+    assert budget["min_price"] == "100.00"
+    assert budget["max_price"] == "900.00"
+
+
+async def test_price_sort_keys_off_the_price_the_card_shows(
+    client, search_auth, search_price_spread_catalogue
+):
+    """Budget's dearest variant is the most expensive of the lot; its card is not."""
+    descending = await client.get(
+        SEARCH, params={"q": "Spreadwear", "sort": "-price"}, headers=search_auth
+    )
+    assert descending.status_code == 200, descending.text
+    assert [item["name"] for item in descending.json()["data"]] == [
+        "Premium Spreadwear Tee",
+        "Budget Spreadwear Tee",
+    ]
+
+    ascending = await client.get(
+        SEARCH, params={"q": "Spreadwear", "sort": "price"}, headers=search_auth
+    )
+    assert ascending.status_code == 200, ascending.text
+    assert [item["name"] for item in ascending.json()["data"]] == [
+        "Budget Spreadwear Tee",
+        "Premium Spreadwear Tee",
+    ]
+
+
+# -------------------------- search history retention ---------------------------
+
+
+async def test_repeated_search_is_stored_once(client, search_auth, search_test_catalogue):
+    for _ in range(3):
+        await client.get(SEARCH, params={"q": "Sneaker"}, headers=search_auth)
+
+    response = await client.get(HISTORY, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"].count("Sneaker") == 1
+
+
+async def test_history_keeps_only_the_ten_most_recent_searches(
+    client, search_auth, search_test_catalogue
+):
+    for index in range(12):
+        await client.get(SEARCH, params={"q": f"phrase{index}"}, headers=search_auth)
+
+    response = await client.get(HISTORY, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    history = response.json()["data"]
+    assert len(history) == 10
+    assert history[0] == "phrase11"
+    assert "phrase0" not in history
+    assert "phrase1" not in history
+
+
+async def test_history_is_private_to_the_shopper(
+    client, search_auth, second_shopper_auth, search_test_catalogue
+):
+    await client.get(SEARCH, params={"q": "OwnSearch"}, headers=search_auth)
+
+    response = await client.get(HISTORY, headers=second_shopper_auth)
+
+    assert response.status_code == 200, response.text
+    assert "OwnSearch" not in response.json()["data"]
+
+
+# ------------------------- filters vs the reported product ----------------------
+
+
+async def test_price_filter_does_not_narrow_the_reported_price_range(
+    client, search_auth, search_price_spread_catalogue
+):
+    """The card describes the product; the filter only decides that it appears."""
+    response = await client.get(
+        SEARCH, params={"q": "Spreadwear", "min_price": "500"}, headers=search_auth
+    )
+
+    assert response.status_code == 200, response.text
+    budget = next(
+        item for item in response.json()["data"] if item["name"].startswith("Budget")
+    )
+    assert budget["price"] == "100.00"
+    assert budget["min_price"] == "100.00"
+    assert budget["max_price"] == "900.00"
+    assert len(budget["variants"]) == 2
+
+
+async def test_variant_filters_must_be_met_by_one_variant(
+    client, search_auth, search_multi_variant_product
+):
+    """Green/S and Black/M exist; Green/M does not, so the pair matches nothing."""
+    matching = await client.get(
+        SEARCH, params={"color": "Green", "product_size": "S"}, headers=search_auth
+    )
+    assert matching.status_code == 200, matching.text
+    assert [item["name"] for item in matching.json()["data"]] == ["Graphic Hoodie"]
+
+    crossed = await client.get(
+        SEARCH, params={"color": "Green", "product_size": "M"}, headers=search_auth
+    )
+    assert crossed.status_code == 200, crossed.text
+    assert crossed.json()["data"] == []
+
+
+async def test_suggestions_ignore_apostrophes_the_way_search_does(
+    client, search_token_matching_catalogue
+):
+    """A phrase that finds products must also offer suggestions."""
+    suggestions = await client.get(SUGGESTIONS, params={"q": "Womens"})
+    assert suggestions.status_code == 200, suggestions.text
+    titles = [item["title"] for item in suggestions.json()["data"]]
+    assert "Women's Maxi Dress" in titles
+
+    results = await client.get(SEARCH, params={"q": "Womens"})
+    assert results.status_code == 200, results.text
+    assert len(results.json()["data"]) >= 1

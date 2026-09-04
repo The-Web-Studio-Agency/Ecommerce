@@ -17,6 +17,8 @@ from tests.helpers import load_data, sample
 DATA = load_data(__file__)
 
 SEARCH = DATA["routes"]["search"]
+HISTORY = DATA["routes"]["history"]
+SUGGESTIONS = DATA["routes"]["suggestions"]
 PRODUCTS = DATA["routes"]["products"]
 
 
@@ -253,3 +255,45 @@ async def search_ratings_and_orders(session, tenant, search_shopper, make_user, 
     await _place_order("Running Sneaker", 10, OrderStatus.CANCELLED.value)
 
     return catalogue
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def search_price_spread_catalogue(client, admin_headers):
+    """Two products whose cheapest and dearest variants disagree about the order."""
+    category = await make_category(client, admin_headers, name="Spread Apparel")
+
+    spread = {
+        "Budget Spreadwear Tee": ["100.00", "900.00"],
+        "Premium Spreadwear Tee": ["500.00", "600.00"],
+    }
+
+    created = {}
+    for name, prices in spread.items():
+        product = await make_product(
+            client,
+            admin_headers,
+            category["id"],
+            name=name,
+            status="ACTIVE",
+            brand="Spreadwear",
+        )
+        for price in prices:
+            payload = sample(DATA, "variant")
+            payload["sku"] = f"SPRD-{uuid4().hex[:8].upper()}"
+            payload["price"] = price
+            payload["options"] = [{"name": "Size", "value": price}]
+            response = await client.post(
+                f"{PRODUCTS}/{product['id']}/variants",
+                json=payload,
+                headers=admin_headers,
+            )
+            assert response.status_code == 201, response.text
+        created[name] = product
+
+    return created
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def second_shopper_auth(make_user, tenant):
+    shopper = await make_user(tenant=tenant, phone="+919822224003")
+    return headers_for(shopper)
