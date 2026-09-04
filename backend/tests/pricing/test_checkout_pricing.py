@@ -55,7 +55,7 @@ async def test_the_preview_reserves_nothing(
 
 
 async def test_the_frontend_cannot_override_shipping(
-    client, customer_auth, set_shipping, set_tax, fill_cart
+    client, customer_auth, set_shipping, set_tax, fill_cart, preview
 ):
     await set_shipping(free_shipping_minimum=None)
     await set_tax()
@@ -67,14 +67,14 @@ async def test_the_frontend_cannot_override_shipping(
         headers=customer_auth,
     )
 
-    assert response.status_code == 200, response.text
-    body = response.json()["data"]
+    assert response.status_code == 422
+    body = await preview()
     assert Decimal(body["shipping_amount"]) == Decimal("100.00")
     assert Decimal(body["subtotal"]) == Decimal("2000.00")
 
 
 async def test_the_frontend_cannot_override_tax(
-    client, customer_auth, set_shipping, set_tax, fill_cart
+    client, customer_auth, set_shipping, set_tax, fill_cart, preview
 ):
     await set_shipping(free_shipping_minimum=None)
     await set_tax()
@@ -86,23 +86,28 @@ async def test_the_frontend_cannot_override_tax(
         headers=customer_auth,
     )
 
-    assert response.status_code == 200, response.text
-    body = response.json()["data"]
+    assert response.status_code == 422
+    body = await preview()
     assert Decimal(body["tax_amount"]) == Decimal("378.00")
     assert Decimal(body["total_amount"]) == Decimal("2478.00")
 
 
-async def test_a_placed_order_ignores_amounts_in_the_body(
-    set_shipping, set_tax, fill_cart, place_order
+async def test_a_placed_order_rejects_amounts_in_the_body(
+    client, customer_auth, address, set_shipping, set_tax, fill_cart, place_order
 ):
     await set_shipping(free_shipping_minimum=None)
     await set_tax()
     await fill_cart(2)
 
-    order = await place_order(
-        subtotal="1.00", shipping_amount="0.00", tax_amount="0.00", total_amount="1.00"
+    response = await client.post(
+        CHECKOUT,
+        json={"address_id": address["id"], "subtotal": "1.00", "total_amount": "1.00"},
+        headers=customer_auth,
     )
 
+    assert response.status_code == 422
+
+    order = await place_order()
     assert Decimal(order["subtotal"]) == Decimal("2000.00")
     assert Decimal(order["shipping_amount"]) == Decimal("100.00")
     assert Decimal(order["tax_amount"]) == Decimal("378.00")

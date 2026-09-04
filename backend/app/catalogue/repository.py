@@ -15,12 +15,7 @@ from app.catalogue.models import (
     ProductVariant,
     ProductVariantOption,
 )
-from app.core.repository import TenantScopedRepository
-
-
-def _escape_like(term: str) -> str:
-    """Neutralise LIKE wildcards so a search term cannot widen its own match."""
-    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+from app.core.repository import TenantScopedRepository, escape_like
 
 
 class CategoryRepository(TenantScopedRepository[Category]):
@@ -85,7 +80,7 @@ class ProductRepository(TenantScopedRepository[Product]):
             stmt = stmt.where(Product.category_id == category_id)
 
         if search:
-            pattern = f"%{_escape_like(search.strip())}%"
+            pattern = f"%{escape_like(search.strip())}%"
             stmt = stmt.where(
                 or_(
                     Product.name.ilike(pattern, escape="\\"),

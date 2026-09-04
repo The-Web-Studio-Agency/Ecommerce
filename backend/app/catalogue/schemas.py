@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -23,7 +24,11 @@ from app.catalogue.constants import (
     PRICE_SCALE,
     CatalogueStatus,
     InventoryReason,
+    ProductGender,
+    ProductSort,
 )
+from app.core.pagination import PageParams
+from app.core.schemas import PartialUpdate, StrictModel
 
 SKU_PATTERN = r"^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$"
 
@@ -47,7 +52,19 @@ def _strip_optional(value: str | None) -> str | None:
     return value if value is None else value.strip()
 
 
-class CategoryCreate(BaseModel):
+def _require_url(value: str) -> str:
+    url = _reject_blank(value)
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("must be a valid http or https URL")
+    return url
+
+
+def _require_url_optional(value: str | None) -> str | None:
+    return value if value is None else _require_url(value)
+
+
+class CategoryCreate(StrictModel):
     name: str = Name
     description: str | None = Description
     status: CatalogueStatus = CatalogueStatus.ACTIVE
@@ -55,7 +72,7 @@ class CategoryCreate(BaseModel):
     _strip_name = field_validator("name")(_reject_blank)
 
 
-class CategoryUpdate(BaseModel):
+class CategoryUpdate(PartialUpdate):
     name: str | None = Field(default=None, min_length=1, max_length=MAX_NAME_LENGTH)
     description: str | None = Description
     status: CatalogueStatus | None = None
@@ -83,32 +100,32 @@ class CategoryStorefrontRead(BaseModel):
     description: str | None
 
 
-class ProductImageCreate(BaseModel):
+class ProductImageCreate(StrictModel):
     url: str = Field(min_length=1, max_length=MAX_IMAGE_URL_LENGTH)
     alt_text: str | None = Field(default=None, max_length=MAX_ALT_TEXT_LENGTH)
     sort_order: int = Field(default=0, ge=0)
     is_primary: bool = False
 
-    _strip_url = field_validator("url")(_reject_blank)
+    _check_url = field_validator("url")(_require_url)
     _strip_alt_text = field_validator("alt_text")(_strip_optional)
 
 
-class ProductImageUpdate(BaseModel):
+class ProductImageUpdate(PartialUpdate):
     url: str | None = Field(default=None, min_length=1, max_length=MAX_IMAGE_URL_LENGTH)
     alt_text: str | None = Field(default=None, max_length=MAX_ALT_TEXT_LENGTH)
     sort_order: int | None = Field(default=None, ge=0)
     is_primary: bool | None = None
 
-    _strip_url = field_validator("url")(_reject_blank_optional)
+    _check_url = field_validator("url")(_require_url_optional)
     _strip_alt_text = field_validator("alt_text")(_strip_optional)
 
 
-class ImageOrderItem(BaseModel):
+class ImageOrderItem(StrictModel):
     id: UUID
     sort_order: int = Field(ge=0)
 
 
-class ImageReorderPayload(BaseModel):
+class ImageReorderPayload(StrictModel):
     images: list[ImageOrderItem] = Field(min_length=1)
 
 
@@ -136,7 +153,7 @@ class ProductImageStorefrontRead(BaseModel):
     is_primary: bool
 
 
-class VariantOptionValue(BaseModel):
+class VariantOptionValue(StrictModel):
     """One dimension of a variant, e.g. name="Color", value="Black"."""
 
     name: str = Field(min_length=1, max_length=MAX_OPTION_NAME_LENGTH)
@@ -175,12 +192,12 @@ class InventoryStatus(InventoryRead):
     is_low_stock: bool
 
 
-class InventorySet(BaseModel):
+class InventorySet(StrictModel):
     available_quantity: int = Field(ge=0)
     note: str | None = Field(default=None, max_length=255)
 
 
-class InventoryAdjust(BaseModel):
+class InventoryAdjust(StrictModel):
     delta: int = Field(description="Signed change; negative removes stock")
     reason: InventoryReason = InventoryReason.ADJUSTMENT
     reference: str | None = Field(default=None, max_length=120)
@@ -194,7 +211,7 @@ class InventoryAdjust(BaseModel):
         return value
 
 
-class InventoryThreshold(BaseModel):
+class InventoryThreshold(StrictModel):
     low_stock_threshold: int = Field(ge=0)
 
 
@@ -209,7 +226,7 @@ class InventoryMovementRead(BaseModel):
     note: str | None
 
 
-class VariantCreate(BaseModel):
+class VariantCreate(StrictModel):
     sku: str = Sku
     name: str = Name
     price: Decimal = Price
@@ -234,7 +251,7 @@ class VariantCreate(BaseModel):
         return value
 
 
-class VariantUpdate(BaseModel):
+class VariantUpdate(PartialUpdate):
     sku: str | None = Field(
         default=None, min_length=1, max_length=MAX_SKU_LENGTH, pattern=SKU_PATTERN
     )
@@ -278,7 +295,7 @@ class VariantStorefrontRead(BaseModel):
     available_quantity: int
 
 
-class ProductCreate(BaseModel):
+class ProductCreate(StrictModel):
     category_id: UUID
     name: str = Name
     short_description: str | None = Field(
@@ -287,6 +304,7 @@ class ProductCreate(BaseModel):
     description: str | None = Description
     brand: str | None = Field(default=None, max_length=MAX_BRAND_LENGTH)
     status: CatalogueStatus = CatalogueStatus.DRAFT
+    gender: ProductGender | None = None
     is_featured: bool = False
     seo_title: str | None = Field(default=None, max_length=MAX_SEO_TITLE_LENGTH)
     seo_description: str | None = Field(
@@ -309,7 +327,7 @@ class ProductCreate(BaseModel):
         return value
 
 
-class ProductUpdate(BaseModel):
+class ProductUpdate(PartialUpdate):
     category_id: UUID | None = None
     name: str | None = Field(default=None, min_length=1, max_length=MAX_NAME_LENGTH)
     short_description: str | None = Field(
@@ -318,6 +336,7 @@ class ProductUpdate(BaseModel):
     description: str | None = Description
     brand: str | None = Field(default=None, max_length=MAX_BRAND_LENGTH)
     status: CatalogueStatus | None = None
+    gender: ProductGender | None = None
     is_featured: bool | None = None
     seo_title: str | None = Field(default=None, max_length=MAX_SEO_TITLE_LENGTH)
     seo_description: str | None = Field(
@@ -340,6 +359,7 @@ class ProductRead(BaseModel):
     description: str | None
     brand: str | None
     status: CatalogueStatus
+    gender: ProductGender | None
     is_featured: bool
     seo_title: str | None
     seo_description: str | None
@@ -385,3 +405,20 @@ class ProductStorefrontRead(BaseModel):
     price_from: Decimal | None = None
     price_to: Decimal | None = None
     in_stock: bool = False
+
+
+class ProductQuery(PageParams):
+    """Filters and sort the admin product listing accepts."""
+
+    category_id: UUID | None = None
+    search: str | None = Field(default=None, max_length=120)
+    brand: str | None = Field(default=None, max_length=150)
+    featured: bool | None = None
+    sort: ProductSort = ProductSort.NAME_ASC
+
+
+class StorefrontProductQuery(ProductQuery):
+    """The public listing filters, which add a price range."""
+
+    min_price: Decimal | None = Field(default=None, ge=0)
+    max_price: Decimal | None = Field(default=None, ge=0)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -7,12 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_customer, require_staff
 from app.core.database import get_db
-from app.core.pagination import PageParams, page_params
+from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
-from app.orders.constants import OrderStatus, PaymentStatus
 from app.orders.schemas import (
     CheckoutCreate,
     CheckoutPreview,
+    CheckoutPreviewCreate,
+    OrderQuery,
     OrderRead,
     OrderStatusUpdate,
     OrderSummaryRead,
@@ -34,18 +36,26 @@ admin_router = APIRouter(prefix="/admin/orders", tags=["Admin-Order_management"]
     response_model=ApiResponse[CheckoutPreview],
     summary="Price the cart before ordering",
 )
+
 async def preview_checkout(
     coupon_code: str | None = Query(
-        default=None, 
-        min_length=1, 
-        max_length=50, 
+        default=None,
+        min_length=1,
+        max_length=50,
         description="Optional coupon code to preview",
-        ),
+    ),
+    data: CheckoutPreviewCreate | None = None,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[CheckoutPreview]:
-    preview = await CheckoutService(session, user.tenant_id, user.id).preview(coupon_code)
+    preview = await CheckoutService(
+        session, user.tenant_id, user.id
+    ).preview(
+        address_id=data.address_id if data else None,
+        coupon_code=coupon_code,
+    )
     return ok(preview, message="Checkout preview")
+    
 
 
 @checkout_router.post(
@@ -73,7 +83,7 @@ async def place_order(
 )
 async def list_my_orders(
     tenant: CurrentTenant,
-    params: PageParams = Depends(page_params),
+    params: Annotated[PageParams, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[list[OrderSummaryRead]]:
@@ -129,20 +139,15 @@ async def get_my_order(
 )
 async def list_orders(
     tenant: CurrentTenant,
-    order_number: str | None = Query(
-        default=None, max_length=32, description="Match an order number"
-    ),
-    order_status: OrderStatus | None = Query(default=None, alias="status"),
-    payment_status: PaymentStatus | None = Query(default=None),
-    params: PageParams = Depends(page_params),
+    params: Annotated[OrderQuery, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[OrderSummaryRead]]:
     orders, total = await OrderService(session, user.tenant_id).list(
         params,
-        order_number=order_number,
-        status=order_status,
-        payment_status=payment_status,
+        order_number=params.order_number,
+        status=params.status,
+        payment_status=params.payment_status,
     )
     return paginated(
         [order_summary_read(order, tenant.currency) for order in orders],

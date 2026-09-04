@@ -169,8 +169,8 @@ async def test_an_address_from_another_tenant_cannot_be_delivered_to(
     assert response.status_code == 404
 
 
-async def test_a_tenant_id_in_the_body_is_ignored(
-    client, customer_auth, address, variant, add_to_cart, other_tenant
+async def test_a_tenant_id_in_the_body_is_rejected(
+    client, customer_auth, address, variant, add_to_cart, other_tenant, place_order
 ):
     await add_to_cart(customer_auth, variant["id"], 1)
 
@@ -180,8 +180,9 @@ async def test_a_tenant_id_in_the_body_is_ignored(
         headers=customer_auth,
     )
 
-    assert response.status_code == 201, response.text
+    assert response.status_code == 422
 
+    await place_order(customer_auth, address["id"])
     listing = await client.get(ORDERS, headers=customer_auth)
     assert listing.json()["meta"]["total_items"] == 1
 

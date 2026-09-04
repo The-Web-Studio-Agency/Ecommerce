@@ -16,6 +16,8 @@ from app.models.base import Base
 from app.orders.models import Order, OrderItem
 from app.payments.models import Payment
 from app.pricing.models import ShippingSettings, TaxSettings
+from app.ratings.models import Review, ReviewImage
+from app.search_filter.models import SearchHistory
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
 
@@ -40,6 +42,9 @@ __all__ = [
     "ProductVariant",
     "ProductVariantOption",
     "RefreshToken",
+    "Review",
+    "ReviewImage",
+    "SearchHistory",
     "ShippingSettings",
     "TaxSettings",
     "Tenant",

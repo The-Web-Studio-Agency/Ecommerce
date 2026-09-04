@@ -5,9 +5,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.auth.schemas import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
+from app.core.schemas import StrictModel
 
 
-class UserCreate(BaseModel):
+class UserCreate(StrictModel):
     email: EmailStr
     phone: str = Field(min_length=6, max_length=32)
     name: str | None = None

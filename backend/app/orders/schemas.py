@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.pagination import PageParams
+from app.core.schemas import StrictModel
 from app.orders.constants import OrderStatus, PaymentStatus
 from app.payments.schemas import PaymentRead
 
@@ -33,7 +35,7 @@ class CheckoutPreview(BaseModel):
     total_amount: Decimal
 
 
-class CheckoutCreate(BaseModel):
+class CheckoutCreate(StrictModel):
     """Which address to deliver to, and an optional coupon code -- the only
     things checkout accepts from the client. Everything priced (subtotal,
     discount, shipping, tax, total) is always computed server-side from the
@@ -41,6 +43,14 @@ class CheckoutCreate(BaseModel):
 
     address_id: UUID
     coupon_code: str | None = Field(default=None, min_length=1, max_length=50)
+    address_id: UUID
+    coupon_code: str | None = Field(default=None, min_length=1, max_length=50)
+
+
+class CheckoutPreviewCreate(StrictModel):
+    """An optional address to price the cart against, validated when it is sent."""
+
+    address_id: UUID | None = None
 
 
 class DeliveryAddressRead(BaseModel):
@@ -97,5 +107,13 @@ class OrderSummaryRead(BaseModel):
     created_at: datetime
 
 
-class OrderStatusUpdate(BaseModel):
+class OrderStatusUpdate(StrictModel):
     status: OrderStatus
+
+
+class OrderQuery(PageParams):
+    """Filters the admin order listing accepts."""
+
+    order_number: str | None = Field(default=None, max_length=32)
+    status: OrderStatus | None = None
+    payment_status: PaymentStatus | None = None

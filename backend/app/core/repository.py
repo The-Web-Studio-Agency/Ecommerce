@@ -14,6 +14,11 @@ from app.models.base import Base
 ModelT = TypeVar("ModelT", bound=Base)
 
 
+def escape_like(term: str) -> str:
+    """Neutralise LIKE wildcards so a search term cannot widen its own match."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class TenantScopedRepository(Generic[ModelT]):
     model: type[ModelT]
 

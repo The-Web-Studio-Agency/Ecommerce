@@ -32,6 +32,15 @@ async def test_an_image_can_be_added(client, admin_headers, product):
     assert response.json()["data"]["url"] == IMAGE["url"]
 
 
+async def test_an_invalid_url_is_rejected(client, admin_headers, product):
+    response = await client.post(
+        images_of(product["id"]), json={"url": "not-a-valid-url"}, headers=admin_headers
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "url"
+
+
 async def test_alt_text_can_be_updated(client, admin_headers, product_with_images):
     _product, images = await product_with_images(2)
 

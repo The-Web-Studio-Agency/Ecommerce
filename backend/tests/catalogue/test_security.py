@@ -177,7 +177,7 @@ async def test_the_same_sku_may_exist_in_two_tenants(
     assert response.status_code == 201
 
 
-async def test_a_tenant_id_in_the_body_is_ignored(
+async def test_a_tenant_id_in_the_body_is_rejected(
     client, admin_headers, other_tenant, tenant
 ):
     response = await client.post(
@@ -186,8 +186,11 @@ async def test_a_tenant_id_in_the_body_is_ignored(
         headers=admin_headers,
     )
 
-    assert response.status_code == 201
-    assert response.json()["data"]["tenant_id"] == str(tenant.id)
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "tenant_id"
+
+    clean = await client.post(CATEGORIES, json={"name": "Dresses"}, headers=admin_headers)
+    assert clean.json()["data"]["tenant_id"] == str(tenant.id)
 
 
 async def test_a_forged_tenant_claim_does_not_change_scope(
