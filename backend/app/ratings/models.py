@@ -39,7 +39,7 @@ class Review(Base, TimestampMixin):
             name="ck_reviews_rating_range",
         ),
         Index(
-            "uq_reviews_active_user_product",
+            "uq_tenant_user_product_review",
             "tenant_id",
             "user_id",
             "product_id",
@@ -47,12 +47,12 @@ class Review(Base, TimestampMixin):
             postgresql_where=text("status = 'ACTIVE'"),
         ),
         Index(
-            "ix_reviews_tenant_product",
+            "ix_reviews_tenant_id_product_id",
             "tenant_id",
             "product_id",
         ),
         Index(
-            "ix_reviews_tenant_user",
+            "ix_reviews_tenant_id_user_id",
             "tenant_id",
             "user_id",
         ),
@@ -62,7 +62,7 @@ class Review(Base, TimestampMixin):
             OR
             (status = 'ARCHIVED' AND archive_reason IS NOT NULL)
             """,
-            name="ck_reviews_archive_reason",
+            name="ck_reviews_archive_reason_matches_status",
         ),
     )
 
@@ -74,6 +74,10 @@ class Review(Base, TimestampMixin):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey(
+            "tenants.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
         index=True,
     )
@@ -111,7 +115,7 @@ class Review(Base, TimestampMixin):
     )
 
     title: Mapped[str | None] = mapped_column(
-        String(255),
+        String(150),
         nullable=True,
     )
 
@@ -137,6 +141,7 @@ class Review(Base, TimestampMixin):
         ),
         nullable=False,
         default=ReviewStatus.ACTIVE,
+        server_default="ACTIVE",
     )
 
     archive_reason: Mapped[ReviewArchiveReason | None] = mapped_column(
@@ -177,15 +182,16 @@ class ReviewImage(Base, TimestampMixin):
         UniqueConstraint(
             "tenant_id",
             "review_id",
-            name="uq_review_images_tenant_review",
+            name="uq_review_images_one_per_review",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "review_id"],
             ["reviews.tenant_id", "reviews.id"],
+            name="fk_review_images_tenant_review_reviews",
             ondelete="CASCADE",
         ),
         Index(
-            "ix_review_images_tenant_review",
+            "ix_review_images_tenant_id_review_id",
             "tenant_id",
             "review_id",
         ),
@@ -199,6 +205,10 @@ class ReviewImage(Base, TimestampMixin):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey(
+            "tenants.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
         index=True,
     )
@@ -209,7 +219,7 @@ class ReviewImage(Base, TimestampMixin):
     )
 
     image_url: Mapped[str] = mapped_column(
-        Text,
+        String(500),
         nullable=False,
     )
 
@@ -240,11 +250,6 @@ class ProductRatingSummary(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint(
             "tenant_id",
-            "id",
-            name="uq_product_rating_summaries_tenant_id_id",
-        ),
-        UniqueConstraint(
-            "tenant_id",
             "product_id",
             name="uq_product_rating_summaries_tenant_product",
         ),
@@ -258,6 +263,10 @@ class ProductRatingSummary(Base, TimestampMixin):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey(
+            "tenants.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
         index=True,
     )
@@ -265,6 +274,7 @@ class ProductRatingSummary(Base, TimestampMixin):
     product_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
+        index=True,
     )
 
     average_rating: Mapped[float] = mapped_column(

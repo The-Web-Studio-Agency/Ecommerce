@@ -26,7 +26,7 @@ class ReviewRepository:
         review_id: uuid.UUID,
         tenant_id: uuid.UUID,
     ) -> Review | None:
-        return await self.session.scalar(
+        stmt = (
             select(Review)
             .options(selectinload(Review.images))
             .filter(
@@ -35,6 +35,8 @@ class ReviewRepository:
                 Review.status == ReviewStatus.ACTIVE,
             )
         )
+        result = await self.session.scalars(stmt)
+        return result.first()
 
     async def get_by_user_and_product(
         self,
@@ -42,14 +44,14 @@ class ReviewRepository:
         user_id: uuid.UUID,
         product_id: uuid.UUID,
     ) -> Review | None:
-        return await self.session.scalar(
-            select(Review).filter(
-                Review.tenant_id == tenant_id,
-                Review.user_id == user_id,
-                Review.product_id == product_id,
-                Review.status == ReviewStatus.ACTIVE,
-            )
+        """Check whether the user already has an active review."""
+        stmt = select(Review).filter(
+            Review.tenant_id == tenant_id,
+            Review.user_id == user_id,
+            Review.product_id == product_id,
+            Review.status == ReviewStatus.ACTIVE,
         )
+        return await self.session.scalar(stmt)
 
     async def get_product_reviews(
         self,
@@ -58,30 +60,28 @@ class ReviewRepository:
         skip: int = 0,
         limit: int = 10,
     ) -> tuple[list[Review], int]:
-        count_query = select(func.count()).select_from(Review).filter(
+        base_query = select(Review).filter(
             Review.tenant_id == tenant_id,
             Review.product_id == product_id,
+            Review.is_approved == True,
             Review.status == ReviewStatus.ACTIVE,
-            Review.is_approved.is_(True),
         )
 
-        total = await self.session.scalar(count_query) or 0
+        count_stmt = select(func.count()).select_from(
+            base_query.subquery()
+        )
+        total = await self.session.scalar(count_stmt) or 0
 
-        query = (
-            select(Review)
+        stmt = (
+            base_query
             .options(selectinload(Review.images))
-            .filter(
-                Review.tenant_id == tenant_id,
-                Review.product_id == product_id,
-                Review.status == ReviewStatus.ACTIVE,
-                Review.is_approved.is_(True),
-            )
             .order_by(Review.created_at.desc())
             .offset(skip)
             .limit(limit)
         )
 
-        reviews = list((await self.session.scalars(query)).all())
+        result = await self.session.scalars(stmt)
+        reviews = list(result.all())
 
         return reviews, total
 
@@ -91,7 +91,8 @@ class ReviewRepository:
         product_id: uuid.UUID,
         tenant_id: uuid.UUID,
     ) -> uuid.UUID | None:
-        query = (
+        """Find the delivered order for this user's purchased product."""
+        stmt = (
             select(Order.id)
             .join(
                 OrderItem,
@@ -99,105 +100,97 @@ class ReviewRepository:
             )
             .filter(
                 Order.tenant_id == tenant_id,
-                Order.user_id == user_id,
-                Order.status == OrderStatus.DELIVERED,
+                Order.customer_id == user_id,
                 OrderItem.product_id == product_id,
+                Order.status == OrderStatus.DELIVERED,
             )
             .order_by(Order.created_at.desc())
             .limit(1)
         )
-
-        return await self.session.scalar(query)
+        return await self.session.scalar(stmt)
 
     async def get_rating_summary(
         self,
         product_id: uuid.UUID,
         tenant_id: uuid.UUID,
-    ) -> dict:
-        query = (
+    ) -> tuple[float, int, dict[int, int]]:
+        stmt = (
             select(
-                func.avg(Review.rating),
-                func.count(Review.id),
                 Review.rating,
+                func.count(Review.id),
             )
             .filter(
                 Review.tenant_id == tenant_id,
                 Review.product_id == product_id,
+                Review.is_approved == True,
                 Review.status == ReviewStatus.ACTIVE,
-                Review.is_approved.is_(True),
             )
             .group_by(Review.rating)
         )
 
-        rows = (await self.session.execute(query)).all()
+        result = await self.session.execute(stmt)
+        results = result.all()
 
         distribution = {i: 0 for i in range(1, 6)}
         total_reviews = 0
         total_score = 0
 
-        for average, count, rating in rows:
+        for rating, count in results:
             distribution[rating] = count
             total_reviews += count
             total_score += rating * count
 
-        return {
-            "average_rating": (
-                round(total_score / total_reviews, 2)
-                if total_reviews
-                else 0.0
-            ),
-            "total_reviews": total_reviews,
-            "rating_distribution": distribution,
-        }
+        avg_rating = (
+            round(total_score / total_reviews, 2)
+            if total_reviews > 0
+            else 0.0
+        )
+
+        return avg_rating, total_reviews, distribution
 
     async def get_maintained_summary(
         self,
         product_id: uuid.UUID,
         tenant_id: uuid.UUID,
     ) -> ProductRatingSummary | None:
-        return await self.session.scalar(
-            select(ProductRatingSummary).filter(
-                ProductRatingSummary.tenant_id == tenant_id,
-                ProductRatingSummary.product_id == product_id,
-            )
+        stmt = select(ProductRatingSummary).filter(
+            ProductRatingSummary.tenant_id == tenant_id,
+            ProductRatingSummary.product_id == product_id,
         )
+        return await self.session.scalar(stmt)
 
     async def refresh_rating_summary(
         self,
         product_id: uuid.UUID,
         tenant_id: uuid.UUID,
     ) -> None:
-        summary = await self.get_rating_summary(
-            product_id,
-            tenant_id,
+        """Recompute and upsert the maintained aggregate for one product."""
+        avg_rating, total_reviews, distribution = (
+            await self.get_rating_summary(
+                product_id,
+                tenant_id,
+            )
         )
 
-        values = {
-            "tenant_id": tenant_id,
-            "product_id": product_id,
-            "average_rating": summary["average_rating"],
-            "total_reviews": summary["total_reviews"],
-            "rating_1_count": summary["rating_distribution"][1],
-            "rating_2_count": summary["rating_distribution"][2],
-            "rating_3_count": summary["rating_distribution"][3],
-            "rating_4_count": summary["rating_distribution"][4],
-            "rating_5_count": summary["rating_distribution"][5],
-        }
+        values = dict(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            average_rating=avg_rating,
+            total_reviews=total_reviews,
+            rating_1_count=distribution[1],
+            rating_2_count=distribution[2],
+            rating_3_count=distribution[3],
+            rating_4_count=distribution[4],
+            rating_5_count=distribution[5],
+        )
 
         stmt = pg_insert(ProductRatingSummary).values(**values)
-
         stmt = stmt.on_conflict_do_update(
-            index_elements=[
-                "tenant_id",
-                "product_id",
-            ],
+            index_elements=["tenant_id", "product_id"],
             set_={
                 key: value
                 for key, value in values.items()
-                if key not in {
-                    "tenant_id",
-                    "product_id",
-                }
+                if key not in ("tenant_id", "product_id")
             },
         )
 
@@ -207,13 +200,15 @@ class ReviewRepository:
     async def create(
         self,
         review: Review,
-        images: list[ReviewImage] | None = None,
+        images: list[ReviewImage] = None,
     ) -> Review:
         self.session.add(review)
         await self.session.flush()
 
         if images:
-            self.session.add_all(images)
+            for img in images:
+                img.review_id = review.id
+                self.session.add(img)
 
         await self.session.commit()
         await self.session.refresh(review)
@@ -222,6 +217,9 @@ class ReviewRepository:
 
     async def update(self, review: Review) -> Review:
         await self.session.commit()
+
+        # Commit expires every attribute, not just images. Refreshing the
+        # complete review prevents MissingGreenlet during later serialization.
         await self.session.refresh(review)
 
         return review
@@ -232,73 +230,96 @@ class ReviewRepository:
         tenant_id: uuid.UUID,
         image: ReviewImage | None,
     ) -> None:
-        existing_image = await self.session.scalar(
-            select(ReviewImage).filter(
-                ReviewImage.tenant_id == tenant_id,
-                ReviewImage.review_id == review_id,
-            )
+        stmt = select(ReviewImage).filter(
+            ReviewImage.review_id == review_id,
+            ReviewImage.tenant_id == tenant_id,
         )
 
-        if existing_image:
+        result = await self.session.scalars(stmt)
+        existing_image = result.first()
+
+        if existing_image is not None:
             await self.session.delete(existing_image)
+
+            # Flush the DELETE before inserting the replacement so the
+            # one-image-per-review unique constraint is not violated.
             await self.session.flush()
 
-        if image:
+        if image is not None:
+            image.review_id = review_id
+            image.tenant_id = tenant_id
             self.session.add(image)
 
     async def get_admin_product_reviews(
         self,
         product_id: uuid.UUID,
         tenant_id: uuid.UUID,
-    ) -> list[Review]:
-        query = (
-            select(Review)
-            .options(selectinload(Review.images))
-            .filter(
-                Review.tenant_id == tenant_id,
-                Review.product_id == product_id,
-            )
-            .order_by(Review.created_at.desc())
+        skip: int = 0,
+        limit: int = 10,
+    ) -> tuple[list[Review], int]:
+        base_query = select(Review).filter(
+            Review.tenant_id == tenant_id,
+            Review.product_id == product_id,
         )
 
-        return list((await self.session.scalars(query)).all())
+        count_stmt = select(func.count()).select_from(
+            base_query.subquery()
+        )
+        total = await self.session.scalar(count_stmt) or 0
+
+        stmt = (
+            base_query
+            .options(selectinload(Review.images))
+            .order_by(Review.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.session.scalars(stmt)
+        reviews = list(result.all())
+
+        return reviews, total
 
     async def archive_active_reviews_for_product(
         self,
         product_id: uuid.UUID,
         tenant_id: uuid.UUID,
-    ) -> None:
-        reviews = (
-            await self.session.scalars(
-                select(Review).filter(
-                    Review.tenant_id == tenant_id,
-                    Review.product_id == product_id,
-                    Review.status == ReviewStatus.ACTIVE,
-                )
-            )
-        ).all()
+    ) -> list[Review]:
+        """Archive active reviews for an archived product."""
+        stmt = select(Review).filter(
+            Review.tenant_id == tenant_id,
+            Review.product_id == product_id,
+            Review.status == ReviewStatus.ACTIVE,
+        )
+
+        result = await self.session.scalars(stmt)
+        reviews = list(result.all())
 
         for review in reviews:
             review.status = ReviewStatus.ARCHIVED
             review.archive_reason = ReviewArchiveReason.PRODUCT_ARCHIVED
 
+        return reviews
+
     async def restore_product_archived_reviews_for_product(
         self,
         product_id: uuid.UUID,
         tenant_id: uuid.UUID,
-    ) -> None:
-        reviews = (
-            await self.session.scalars(
-                select(Review).filter(
-                    Review.tenant_id == tenant_id,
-                    Review.product_id == product_id,
-                    Review.status == ReviewStatus.ARCHIVED,
-                    Review.archive_reason
-                    == ReviewArchiveReason.PRODUCT_ARCHIVED,
-                )
-            )
-        ).all()
+    ) -> list[Review]:
+        """Restore reviews archived because the product was archived."""
+        stmt = select(Review).filter(
+            Review.tenant_id == tenant_id,
+            Review.product_id == product_id,
+            Review.status == ReviewStatus.ARCHIVED,
+            Review.archive_reason
+            == ReviewArchiveReason.PRODUCT_ARCHIVED,
+        )
+
+        result = await self.session.scalars(stmt)
+        reviews = list(result.all())
 
         for review in reviews:
             review.status = ReviewStatus.ACTIVE
             review.archive_reason = None
+
+        return reviews

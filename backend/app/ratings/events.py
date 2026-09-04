@@ -8,12 +8,8 @@ from sqlalchemy.orm import Session, attributes
 
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import Product
-from app.ratings.models import (
-    ProductRatingSummary,
-    Review,
-    ReviewArchiveReason,
-    ReviewStatus,
-)
+from app.ratings.constants import ReviewArchiveReason, ReviewStatus
+from app.ratings.models import ProductRatingSummary, Review
 
 
 _ACTIVE = CatalogueStatus.ACTIVE.value

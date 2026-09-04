@@ -57,12 +57,13 @@ async def list_product_reviews(
     limit: int = Query(10, ge=1, le=100),
     service: ReviewService = Depends(get_review_service),
 ) -> list[ReviewResponse]:
-    return await service.list_product_reviews(
+    reviews, _ = await service.list_product_reviews(
         product_id,
         tenant.id,
         skip,
         limit,
     )
+    return reviews
 
 
 @router.get(
@@ -90,10 +91,11 @@ async def list_admin_product_reviews(
     user=Depends(require_staff),
     service: ReviewService = Depends(get_review_service),
 ) -> list[ReviewResponse]:
-    return await service.list_admin_product_reviews(
+    reviews, _ = await service.list_admin_product_reviews(
         product_id,
         tenant.id,
     )
+    return reviews
 
 
 @router.get(
@@ -110,6 +112,7 @@ async def get_admin_product_rating_summary(
         product_id,
         tenant.id,
     )
+
 
 @router.patch(
     "/{review_id}",

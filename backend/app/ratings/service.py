@@ -34,7 +34,7 @@ class ReviewService:
         if not order_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only review products you have purchased and received.",
+                detail="You can only review products that have been delivered to you.",
             )
 
         existing_review = await self.repository.get_by_user_and_product(
@@ -46,7 +46,7 @@ class ReviewService:
         if existing_review:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You have already reviewed this product.",
+                detail="You have already submitted a review for this product.",
             )
 
         review = Review(
