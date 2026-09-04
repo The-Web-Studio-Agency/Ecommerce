@@ -58,8 +58,11 @@ class CheckoutService:
         self.shipping = ShippingService(session, tenant_id)
         self.tax = TaxService(session, tenant_id)
 
-    async def preview(self) -> CheckoutPreview:
+    async def preview(self, address_id: UUID | None = None) -> CheckoutPreview:
         """Price the cart without touching stock or creating anything."""
+        if address_id is not None:
+            await self._require_address(address_id)
+
         cart = await self._require_active_cart()
         items = await self._priced_items(cart)
         return await self._summary(items)

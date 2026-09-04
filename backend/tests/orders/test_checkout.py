@@ -42,6 +42,51 @@ async def test_a_preview_reserves_nothing(
     assert await _sellable(client, admin_headers, variant["id"]) == before
 
 
+async def test_a_preview_accepts_the_address_it_will_be_delivered_to(
+    client, customer_auth, address, variant, add_to_cart
+):
+    await add_to_cart(customer_auth, variant["id"], 2)
+
+    response = await client.post(
+        f"{CHECKOUT}/preview",
+        json={"address_id": address["id"]},
+        headers=customer_auth,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["subtotal"] == "1998.00"
+
+
+async def test_a_preview_refuses_an_address_that_does_not_exist(
+    client, customer_auth, variant, add_to_cart
+):
+    await add_to_cart(customer_auth, variant["id"], 2)
+
+    response = await client.post(
+        f"{CHECKOUT}/preview",
+        json={"address_id": str(uuid4())},
+        headers=customer_auth,
+    )
+
+    assert response.status_code == 404
+
+
+async def test_a_preview_refuses_another_customers_address(
+    client, customer_auth, make_user, tenant, save_address, variant, add_to_cart
+):
+    stranger = await make_user(tenant=tenant, phone=CUSTOMERS["intruder"])
+    theirs = await save_address(headers_for(stranger))
+    await add_to_cart(customer_auth, variant["id"], 2)
+
+    response = await client.post(
+        f"{CHECKOUT}/preview",
+        json={"address_id": theirs["id"]},
+        headers=customer_auth,
+    )
+
+    assert response.status_code == 404
+
+
 async def test_previewing_an_empty_cart_is_refused(client, customer_auth, tenant):
     response = await client.post(f"{CHECKOUT}/preview", headers=customer_auth)
 
@@ -258,7 +303,7 @@ async def test_stock_sold_out_after_adding_blocks_checkout(
 
 
 async def test_prices_are_never_taken_from_the_request(
-    client, customer_auth, address, variant, add_to_cart
+    client, customer_auth, address, variant, add_to_cart, place_order
 ):
     await add_to_cart(customer_auth, variant["id"], 1)
 
@@ -272,8 +317,9 @@ async def test_prices_are_never_taken_from_the_request(
         headers=customer_auth,
     )
 
-    assert response.status_code == 201, response.text
-    assert response.json()["data"]["total_amount"] == "999.00"
+    assert response.status_code == 422
+    placed = await place_order(customer_auth, address["id"])
+    assert placed.json()["data"]["total_amount"] == "999.00"
 
 
 async def test_a_failed_checkout_reserves_nothing(

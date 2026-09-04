@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalogue.constants import CatalogueStatus, ProductSort
+from app.catalogue.constants import CatalogueStatus
 from app.catalogue.schemas import (
     CategoryStorefrontRead,
     ProductStorefrontRead,
     ProductSummaryStorefrontRead,
+    StorefrontProductQuery,
     VariantStorefrontRead,
 )
 from app.catalogue.serializers import (
@@ -21,7 +22,7 @@ from app.catalogue.serializers import (
 from app.catalogue.service import CategoryService, ProductService, VariantService
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError
-from app.core.pagination import PageParams, page_params
+from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
 from app.tenants.resolver import CurrentTenant
 
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/storefront", tags=["Storefront-Catalogue"])
 )
 async def list_categories(
     tenant: CurrentTenant,
-    params: PageParams = Depends(page_params),
+    params: Annotated[PageParams, Query()],
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[CategoryStorefrontRead]]:
     categories, total = await CategoryService(session, tenant.id).list(
@@ -72,27 +73,18 @@ async def get_category(
 )
 async def list_products(
     tenant: CurrentTenant,
-    category_id: UUID | None = Query(default=None, description="Filter by category"),
-    search: str | None = Query(
-        default=None, max_length=120, description="Match product name or brand"
-    ),
-    brand: str | None = Query(default=None, max_length=150),
-    featured: bool | None = Query(default=None, description="Only featured products"),
-    min_price: Decimal | None = Query(default=None, ge=0),
-    max_price: Decimal | None = Query(default=None, ge=0),
-    sort: ProductSort = Query(default=ProductSort.NAME_ASC),
-    params: PageParams = Depends(page_params),
+    params: Annotated[StorefrontProductQuery, Query()],
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[ProductSummaryStorefrontRead]]:
     products, total = await ProductService(session, tenant.id).list(
         params,
-        category_id=category_id,
-        search=search,
-        brand=brand,
-        featured=featured,
-        min_price=min_price,
-        max_price=max_price,
-        sort=sort,
+        category_id=params.category_id,
+        search=params.search,
+        brand=params.brand,
+        featured=params.featured,
+        min_price=params.min_price,
+        max_price=params.max_price,
+        sort=params.sort,
         active_only=True,
     )
     return paginated(
@@ -128,7 +120,7 @@ async def get_product(
 async def list_variants(
     product_id: UUID,
     tenant: CurrentTenant,
-    params: PageParams = Depends(page_params),
+    params: Annotated[PageParams, Query()],
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[VariantStorefrontRead]]:
     await ProductService(session, tenant.id).get_public(product_id)

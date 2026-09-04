@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -7,10 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_customer, require_staff
 from app.core.database import get_db
-from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated
-from app.payments.constants import PaymentStatus
-from app.payments.schemas import PaymentRead
+from app.payments.schemas import PaymentQuery, PaymentRead
 from app.payments.serializers import payment_read
 from app.payments.service import PaymentService
 from app.tenants.resolver import CurrentTenant
@@ -45,14 +44,12 @@ async def get_my_payment(
 )
 async def list_payments(
     tenant: CurrentTenant,
-    order_id: UUID | None = Query(default=None, description="Payments for one order"),
-    payment_status: PaymentStatus | None = Query(default=None, alias="status"),
-    params: PageParams = Depends(page_params),
+    params: Annotated[PaymentQuery, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[PaymentRead]]:
     payments, total = await PaymentService(session, user.tenant_id).list(
-        params, order_id=order_id, status=payment_status
+        params, order_id=params.order_id, status=params.status
     )
     return paginated(
         [payment_read(payment, tenant.currency) for payment in payments],

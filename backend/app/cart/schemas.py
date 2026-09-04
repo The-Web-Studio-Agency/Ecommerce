@@ -5,15 +5,17 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.core.schemas import StrictModel
+
 MAX_ITEM_QUANTITY = 999
 
 
-class CartItemCreate(BaseModel):
+class CartItemCreate(StrictModel):
     variant_id: UUID
     quantity: int = Field(default=1, ge=1, le=MAX_ITEM_QUANTITY)
 
 
-class CartItemUpdate(BaseModel):
+class CartItemUpdate(StrictModel):
     quantity: int = Field(ge=1, le=MAX_ITEM_QUANTITY)
 
 

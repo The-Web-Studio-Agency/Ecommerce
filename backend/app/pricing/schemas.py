@@ -5,12 +5,13 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
+from app.core.schemas import StrictModel
 from app.pricing.constants import MAX_TAX_PERCENTAGE
 
 MAX_MONEY = Decimal(10) ** (PRICE_PRECISION - PRICE_SCALE) - Decimal("0.01")
 
 
-class ShippingSettingsUpdate(BaseModel):
+class ShippingSettingsUpdate(StrictModel):
     shipping_amount: Decimal = Field(ge=0, le=MAX_MONEY, decimal_places=PRICE_SCALE)
     free_shipping_minimum: Decimal | None = Field(
         default=None, ge=0, le=MAX_MONEY, decimal_places=PRICE_SCALE
@@ -24,7 +25,7 @@ class ShippingSettingsRead(BaseModel):
     is_active: bool
 
 
-class TaxSettingsUpdate(BaseModel):
+class TaxSettingsUpdate(StrictModel):
     tax_percentage: Decimal = Field(ge=0, le=MAX_TAX_PERCENTAGE, decimal_places=2)
     is_active: bool = True
 

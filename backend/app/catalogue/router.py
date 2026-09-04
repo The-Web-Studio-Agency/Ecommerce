@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_staff
-from app.catalogue.constants import ProductSort
 from app.catalogue.schemas import (
     CategoryCreate,
     CategoryRead,
@@ -21,6 +21,7 @@ from app.catalogue.schemas import (
     ProductImageCreate,
     ProductImageRead,
     ProductImageUpdate,
+    ProductQuery,
     ProductRead,
     ProductUpdate,
     VariantCreate,
@@ -36,7 +37,7 @@ from app.catalogue.service import (
     VariantService,
 )
 from app.core.database import get_db
-from app.core.pagination import PageParams, page_params
+from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
 from app.users.models import User
 
@@ -64,7 +65,7 @@ async def create_category(
     summary="List categories",
 )
 async def list_categories(
-    params: PageParams = Depends(page_params),
+    params: Annotated[PageParams, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[CategoryRead]]:
@@ -141,22 +142,17 @@ async def create_product(
     summary="List products",
 )
 async def list_products(
-    category_id: UUID | None = Query(default=None, description="Filter by category"),
-    search: str | None = Query(default=None, max_length=120),
-    brand: str | None = Query(default=None, max_length=150),
-    featured: bool | None = Query(default=None),
-    sort: ProductSort = Query(default=ProductSort.NAME_ASC),
-    params: PageParams = Depends(page_params),
+    params: Annotated[ProductQuery, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[ProductRead]]:
     products, total = await ProductService(session, user.tenant_id).list(
         params,
-        category_id=category_id,
-        search=search,
-        brand=brand,
-        featured=featured,
-        sort=sort,
+        category_id=params.category_id,
+        search=params.search,
+        brand=params.brand,
+        featured=params.featured,
+        sort=params.sort,
     )
     return paginated(
         [ProductRead.model_validate(p) for p in products],
@@ -232,7 +228,7 @@ async def create_variant(
 )
 async def list_variants(
     product_id: UUID,
-    params: PageParams = Depends(page_params),
+    params: Annotated[PageParams, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[VariantRead]]:
@@ -362,7 +358,7 @@ async def set_inventory_threshold(
 )
 async def list_inventory_movements(
     variant_id: UUID,
-    params: PageParams = Depends(page_params),
+    params: Annotated[PageParams, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[InventoryMovementRead]]:
