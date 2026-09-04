@@ -35,7 +35,12 @@ admin_router = APIRouter(prefix="/admin/orders", tags=["Admin-Order_management"]
     summary="Price the cart before ordering",
 )
 async def preview_checkout(
-    coupon_code: str | None = Query(default=None, min_length=1, max_length=50, description="Optional coupon code to preview"),
+    coupon_code: str | None = Query(
+        default=None, 
+        min_length=1, 
+        max_length=50, 
+        description="Optional coupon code to preview",
+        ),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[CheckoutPreview]:

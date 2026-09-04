@@ -11,13 +11,13 @@ from app.catalogue.models import (
     ProductVariant,
     ProductVariantOption,
 )
+from app.coupons.models import Coupon, CouponUsage
 from app.models.base import Base
 from app.orders.models import Order, OrderItem
 from app.payments.models import Payment
 from app.pricing.models import ShippingSettings, TaxSettings
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
-from app.coupons.models import Coupon, CouponUsage
 
 __all__ = [
     "AdminAuthChallenge",

@@ -17,7 +17,6 @@ from app.coupons.models import Coupon, CouponUsage
 from app.coupons.repository import CouponRepository, CouponUsageRepository
 from app.coupons.schemas import CouponCreate, CouponUpdate
 
-
 logger = get_logger("coupons")
 
 COUPON_NOT_FOUND = "Coupon not found"

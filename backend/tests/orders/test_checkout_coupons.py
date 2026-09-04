@@ -1,7 +1,3 @@
-"""Coupons integrated into checkout and order placement: application never
-consumes a coupon, only a successfully placed order does -- and exactly
-once, even under concurrency."""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -10,6 +6,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.coupons.models import Coupon, CouponUsage
@@ -398,10 +395,12 @@ async def test_duplicate_redemption_for_the_same_order_is_prevented(
 ):
     """CouponUsage's (tenant_id, order_id) unique constraint is the backstop
     even if something tried to redeem twice for one order."""
+    from uuid import uuid4
+    
     from app.coupons.service import CouponService
     from app.orders.constants import OrderStatus
     from app.payments.constants import PaymentStatus
-    from uuid import uuid4
+   
 
     customer = await make_user(tenant=tenant, phone="+919822229201")
     coupon = await _make_coupon(session, tenant, code="ONEORDERONLY")
@@ -431,7 +430,7 @@ async def test_duplicate_redemption_for_the_same_order_is_prevented(
     service = CouponService(session, tenant.id)
     await service.record_usage(coupon.id, customer.id, order.id, Decimal("10.00"))
 
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         await service.record_usage(coupon.id, customer.id, order.id, Decimal("10.00"))
 
 

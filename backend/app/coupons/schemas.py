@@ -15,9 +15,23 @@ MAX_MONEY = Decimal(10) ** (PRICE_PRECISION - PRICE_SCALE) - Decimal("0.01")
 class CouponCreate(BaseModel):
     code: str = Field(min_length=1, max_length=50)
     discount_type: DiscountType
-    discount_value: Decimal = Field(gt=0, le=MAX_MONEY, decimal_places=PRICE_SCALE)
-    min_order_amount: Decimal | None = Field(default=None, ge=0, le=MAX_MONEY, decimal_places=PRICE_SCALE)
-    max_discount_amount: Decimal | None = Field(default=None, ge=0, le=MAX_MONEY, decimal_places=PRICE_SCALE)
+    discount_value: Decimal = Field(
+        gt=0,
+        le=MAX_MONEY, 
+        decimal_places=PRICE_SCALE,
+        )
+    min_order_amount: Decimal | None = Field(
+        default=None, 
+        ge=0, 
+        le=MAX_MONEY, 
+        decimal_places=PRICE_SCALE,
+        )
+    max_discount_amount: Decimal | None = Field(
+        default=None, 
+        ge=0, 
+        le=MAX_MONEY, 
+        decimal_places=PRICE_SCALE,
+        )
     starts_at: datetime | None = None
     expires_at: datetime | None = None
     usage_limit: int | None = Field(default=None, ge=0)
@@ -27,9 +41,22 @@ class CouponCreate(BaseModel):
 
 class CouponUpdate(BaseModel):
     discount_type: DiscountType | None = None
-    discount_value: Decimal | None = Field(default=None, gt=0, le=MAX_MONEY, decimal_places=PRICE_SCALE)
-    min_order_amount: Decimal | None = Field(default=None, ge=0, le=MAX_MONEY, decimal_places=PRICE_SCALE)
-    max_discount_amount: Decimal | None = Field(default=None, ge=0, le=MAX_MONEY, decimal_places=PRICE_SCALE)
+    discount_value: Decimal | None = Field(
+        default=None, 
+        gt=0, 
+        le=MAX_MONEY, 
+        decimal_places=PRICE_SCALE)
+    min_order_amount: Decimal | None = Field(
+        default=None, 
+        ge=0, 
+        le=MAX_MONEY, 
+        decimal_places=PRICE_SCALE,
+        )
+    max_discount_amount: Decimal | None = Field(
+        default=None, 
+        ge=0, le=MAX_MONEY, 
+        decimal_places=PRICE_SCALE,
+        )
     starts_at: datetime | None = None
     expires_at: datetime | None = None
     usage_limit: int | None = Field(default=None, ge=0)

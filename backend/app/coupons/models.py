@@ -57,7 +57,12 @@ class Coupon(Base, TimestampMixin):
             "per_customer_usage_limit IS NULL OR per_customer_usage_limit >= 0",
             name="per_customer_usage_limit_not_negative",
         ),
-        CheckConstraint("times_used >= 0", name="times_used_not_negative"),
+        CheckConstraint("times_used >= 0", name="times_used_not_negative",
+        ),
+        CheckConstraint(
+            "code=upper(code)",
+            name="coupon_code_uppercase",
+        )
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
