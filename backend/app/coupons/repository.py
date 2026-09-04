@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import Select, func
+from sqlalchemy import Select, func, select
 
 from app.core.repository import TenantScopedRepository
 from app.coupons.models import Coupon, CouponUsage

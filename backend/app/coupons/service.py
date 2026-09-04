@@ -7,20 +7,21 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.core.money import ZERO, money
 from app.core.pagination import PageParams
 from app.coupons.constants import DiscountType
-from app.coupons.exceptions import ValidationError
 from app.coupons.models import Coupon, CouponUsage
 from app.coupons.repository import CouponRepository, CouponUsageRepository
 from app.coupons.schemas import CouponCreate, CouponUpdate
+from app.pricing.constants import PERCENT
 
 logger = get_logger("coupons")
 
 COUPON_NOT_FOUND = "Coupon not found"
 SAVE_FAILED = "Unable to save coupon, please try again"
+
 
 
 class CouponService:
@@ -54,12 +55,7 @@ class CouponService:
         if existing is not None:
             raise ConflictError("A coupon with this code already exists")
 
-        if data.discount_type == DiscountType.PERCENTAGE and data.discount_value > 100:
-            raise ValidationError("Percentage discount cannot exceed 100")
-
-        if data.starts_at and data.expires_at and data.starts_at >= data.expires_at:
-            raise ValidationError("Start date must be earlier than expiry date")
-
+        
         try:
             coupon = Coupon(
                 code=code_upper,
@@ -88,35 +84,50 @@ class CouponService:
 
     async def update(self, coupon_id: UUID, data: CouponUpdate) -> Coupon:
         coupon = await self.get(coupon_id)
+        update=data.model_dump(exclude_unset=True)
+        proposed={
+            "code": coupon.code,
+            "discount_type": coupon.discount_type,
+            "discount_value": coupon.discount_value,
+            "min_order_amount": coupon.min_order_amount,
+            "max_discount_amount": coupon.max_discount_amount,
+            "starts_at": coupon.starts_at,
+            "expires_at": coupon.expires_at,
+            "usage_limit": coupon.usage_limit,
+            "per_customer_usage_limit": coupon.per_customer_usage_limit,
+            "is_active": coupon.is_active,
+        }
+        proposed.update(update)
+        validated=CouponCreate.model_validate(proposed)
 
-        if data.discount_type is not None:
-            coupon.discount_type = data.discount_type.value
-        if data.discount_value is not None:
-            coupon.discount_value = data.discount_value
-        if data.min_order_amount is not None:
-            coupon.min_order_amount = data.min_order_amount
-        if data.max_discount_amount is not None:
-            coupon.max_discount_amount = data.max_discount_amount
-        if data.starts_at is not None:
-            coupon.starts_at = data.starts_at
-        if data.expires_at is not None:
-            coupon.expires_at = data.expires_at
-        if data.usage_limit is not None:
-            coupon.usage_limit = data.usage_limit
-        if data.per_customer_usage_limit is not None:
-            coupon.per_customer_usage_limit = data.per_customer_usage_limit
-        if data.is_active is not None:
-            coupon.is_active = data.is_active
+        if "discount_type" in update:
+            coupon.discount_type = validated.discount_type.value
 
-        if (
-            coupon.discount_type == DiscountType.PERCENTAGE.value
-            and coupon.discount_value > 100
-        ):
-            raise ValidationError("Percentage discount cannot exceed 100")
+        if "discount_value" in update:
+            coupon.discount_value = validated.discount_value
+    
+        if "min_order_amount" in update:
+            coupon.min_order_amount = validated.min_order_amount
 
-        if coupon.starts_at and coupon.expires_at and coupon.starts_at >= coupon.expires_at:
-            raise ValidationError("Start date must be earlier than expiry date")
+        if "max_discount_amount" in update:
+            coupon.max_discount_amount = validated.max_discount_amount
 
+        if "starts_at" in update:
+            coupon.starts_at =validated.starts_at
+   
+        if "expires_at" in update:
+            coupon.expires_at = validated.expires_at
+     
+        if "usage_limit" in update:
+            coupon.usage_limit =validated.usage_limit
+
+        if "per_customer_usage_limit" in update:
+            coupon.per_customer_usage_limit =validated.per_customer_usage_limit
+
+        if "is_active" in update:
+            coupon.is_active =validated.is_active
+
+        
         try:
             await self.session.commit()
         except IntegrityError as exc:
@@ -160,7 +171,6 @@ class CouponService:
         # NULL means unlimited -- only an actual configured limit 
         # 0, which is a real "block everything" setting, not "unlimited")
 
-
         #if coupon.usage_limit is not None and coupon.times_used >= coupon.usage_limit:
             #raise ValidationError("This coupon has reached its usage limit")
 
@@ -180,7 +190,7 @@ class CouponService:
             )
 
         if coupon.discount_type == DiscountType.PERCENTAGE.value:
-            raw_discount = subtotal * coupon.discount_value / Decimal(100)
+            raw_discount = subtotal * coupon.discount_value / PERCENT
             if (
                 coupon.max_discount_amount is not None
                 and raw_discount > coupon.max_discount_amount

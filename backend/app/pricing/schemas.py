@@ -4,10 +4,9 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
+from app.catalogue.constants import PRICE_SCALE
+from app.core.money import MAX_MONEY
 from app.pricing.constants import MAX_TAX_PERCENTAGE
-
-MAX_MONEY = Decimal(10) ** (PRICE_PRECISION - PRICE_SCALE) - Decimal("0.01")
 
 
 class ShippingSettingsUpdate(BaseModel):

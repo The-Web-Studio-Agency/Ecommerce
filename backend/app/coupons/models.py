@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import uuid
@@ -10,6 +9,8 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     Integer,
     Numeric,
     String,
@@ -24,13 +25,13 @@ from app.models.base import Base, TimestampMixin
 
 _DISCOUNT_TYPE_VALUES = ", ".join(f"'{t.value}'" for t in DiscountType)
 
-
 class Coupon(Base, TimestampMixin):
     """Discount vouchers usable during checkout."""
 
     __tablename__ = "coupons"
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_coupons_tenant_id_id"),
         UniqueConstraint("tenant_id", "code", name="uq_coupons_tenant_id_code"),
         CheckConstraint(
             f"discount_type IN ({_DISCOUNT_TYPE_VALUES})",
@@ -62,7 +63,12 @@ class Coupon(Base, TimestampMixin):
         CheckConstraint(
             "code=upper(code)",
             name="coupon_code_uppercase",
-        )
+        ),
+        CheckConstraint(
+            "starts_at IS NULL OR expires_at IS NULL OR starts_at < expires_at",
+            name="starts_before_expires"
+        ),
+        Index("tenant_id","created_at",name="ix_coupons_tenant_id_created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -117,6 +123,12 @@ class CouponUsage(Base, TimestampMixin):
     __tablename__ = "coupon_usages"
 
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "coupon_id"],
+            ["coupons.tenant_id", "coupons.id"],
+            name="fk_coupon_usages_tenant_coupon_coupons",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint(
             "tenant_id",
             "order_id",
@@ -126,6 +138,7 @@ class CouponUsage(Base, TimestampMixin):
             "discount_amount >= 0",
             name="discount_amount_not_negative",
         ),
+        Index("tenant_id","coupon_id","customer_id",name="ix_coupon_usages_tenant_id_coupon_id_customer_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -141,7 +154,6 @@ class CouponUsage(Base, TimestampMixin):
 
     coupon_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("coupons.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

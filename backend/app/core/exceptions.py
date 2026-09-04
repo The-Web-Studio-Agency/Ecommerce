@@ -21,7 +21,11 @@ class AppError(Exception):
             self.error_code = error_code
         super().__init__(self.message)
 
-
+class ValidationError(AppError):
+    status_code = 400
+    error_code = "VALIDATION_ERROR"
+    default_message = "Request could not be validated"
+    
 class NotFoundError(AppError):
     status_code = 404
     error_code = "NOT_FOUND"

@@ -27,7 +27,6 @@ router = APIRouter(prefix="/coupons", tags=["Coupons"])
 
 admin_router = APIRouter(prefix="/admin/coupons", tags=["Admin-Coupons"])
 
-
 @admin_router.get(
     "",
     response_model=ApiResponse[list[CouponRead]],

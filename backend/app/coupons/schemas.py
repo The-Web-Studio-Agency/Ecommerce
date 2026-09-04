@@ -4,12 +4,11 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
+from app.catalogue.constants import PRICE_SCALE
+from app.core.money import MAX_MONEY
 from app.coupons.constants import DiscountType
-
-MAX_MONEY = Decimal(10) ** (PRICE_PRECISION - PRICE_SCALE) - Decimal("0.01")
 
 
 class CouponCreate(BaseModel):
@@ -38,6 +37,19 @@ class CouponCreate(BaseModel):
     per_customer_usage_limit: int | None = Field(default=None, ge=0)
     is_active: bool = True
 
+    @model_validator(mode="after")
+    def validate_coupon(self):
+        if(
+            self.discount_type == DiscountType.PERCENTAGE and self.discount_value > 100
+        ):
+            raise ValueError("Percentage discount value cannot exceed 100.")
+        if(
+            self.starts_at is not None 
+            and self.expires_at is not None 
+            and self.starts_at >= self.expires_at
+        ):
+            raise ValueError("Start date cannot be after expiration date.")
+        return self
 
 class CouponUpdate(BaseModel):
     discount_type: DiscountType | None = None
@@ -63,6 +75,19 @@ class CouponUpdate(BaseModel):
     per_customer_usage_limit: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
 
+    @model_validator(mode="after")
+    def validate_coupon(self):
+        if(
+            self.discount_type == DiscountType.PERCENTAGE and self.discount_value > 100
+        ):
+            raise ValueError("Percentage discount value cannot exceed 100.")
+        if(
+            self.starts_at is not None 
+            and self.expires_at is not None 
+            and self.starts_at >= self.expires_at
+        ):
+            raise ValueError("Start date cannot be after expiration date.")
+        return self
 
 class CouponRead(BaseModel):
     id: UUID
