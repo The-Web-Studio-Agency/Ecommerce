@@ -70,7 +70,7 @@ export default function Menus(){
             <li className={`has-mega-menu sub-menu-down auto-width menu-left ${state.openMenu === 0 ? 'open' : ''}`}                
                 onClick={() => dispatch({ type: 'toggleMenu', index: 0 })}
             >
-                <Link href="#"><span>Home</span><i className="fas fa-chevron-down tabindex" /></Link>
+                <Link href="#"><span>Home</span></Link>
                 <div className="mega-menu ">
                     <ul className="demo-menu mb-0">
                         <li>
