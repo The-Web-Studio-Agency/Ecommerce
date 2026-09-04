@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -10,7 +11,13 @@ from app.auth.dependencies import require_admin, require_customer, require_staff
 from app.core.database import get_db
 from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated
-from app.coupons.schemas import CouponApplyRequest, CouponApplyResponse, CouponCreate, CouponRead, CouponUpdate
+from app.coupons.schemas import (
+    CouponApplyRequest,
+    CouponApplyResponse,
+    CouponCreate,
+    CouponRead,
+    CouponUpdate,
+)
 from app.coupons.serializers import coupon_read
 from app.coupons.service import CouponService
 from app.tenants.resolver import CurrentTenant
@@ -103,6 +110,7 @@ async def delete_coupon(
     await CouponService(session, user.tenant_id).delete(coupon_id)
     return ok(None, message="Coupon deleted")
 
+
 @router.post(
     "/apply",
     response_model=ApiResponse[CouponApplyResponse],
@@ -110,19 +118,21 @@ async def delete_coupon(
 )
 async def apply_coupon(
     data: CouponApplyRequest,
+    tenant: CurrentTenant,
     subtotal: Decimal = Query(..., ge=0, description="Current cart subtotal"),
-    tenant: CurrentTenant = None, # type: ignore
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[CouponApplyResponse]:
-    coupon, discount = await CouponService(session, user.tenant_id).validate_and_calculate(
-        data.code, subtotal, user.id
-    )
+    coupon, discount = await CouponService(
+        session, user.tenant_id
+    ).validate_and_calculate(data.code, subtotal, user.id)
+
     return ok(
         CouponApplyResponse(
             code=coupon.code,
             discount_amount=discount,
-            currency=tenant.currency if tenant else "USD",
+            currency=tenant.currency,
         ),
         message="Coupon applied successfully",
     )
+
