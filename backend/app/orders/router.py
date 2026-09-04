@@ -36,15 +36,26 @@ admin_router = APIRouter(prefix="/admin/orders", tags=["Admin-Order_management"]
     response_model=ApiResponse[CheckoutPreview],
     summary="Price the cart before ordering",
 )
+
 async def preview_checkout(
+    coupon_code: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=50,
+        description="Optional coupon code to preview",
+    ),
     data: CheckoutPreviewCreate | None = None,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[CheckoutPreview]:
-    preview = await CheckoutService(session, user.tenant_id, user.id).preview(
-        data.address_id if data else None
+    preview = await CheckoutService(
+        session, user.tenant_id, user.id
+    ).preview(
+        address_id=data.address_id if data else None,
+        coupon_code=coupon_code,
     )
     return ok(preview, message="Checkout preview")
+    
 
 
 @checkout_router.post(
@@ -60,7 +71,7 @@ async def place_order(
     user: User = Depends(require_customer),
 ) -> ApiResponse[OrderRead]:
     order = await CheckoutService(session, user.tenant_id, user.id).place_order(
-        data.address_id
+        data.address_id, data.coupon_code
     )
     return ok(order_read(order, tenant.currency), message="Order placed")
 

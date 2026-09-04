@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
@@ -17,6 +18,8 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.core.money import ZERO, money
 from app.core.pagination import PageParams
+from app.coupons.models import Coupon
+from app.coupons.service import CouponService
 from app.orders.constants import (
     ALLOWED_TRANSITIONS,
     ORDER_NUMBER_PREFIX,
@@ -57,22 +60,31 @@ class CheckoutService:
         self.payments = PaymentRepository(session, tenant_id)
         self.shipping = ShippingService(session, tenant_id)
         self.tax = TaxService(session, tenant_id)
+        self.coupons = CouponService(session, tenant_id)
 
-    async def preview(self, address_id: UUID | None = None) -> CheckoutPreview:
+
+    async def preview(
+        self,
+        address_id: UUID | None = None,
+        coupon_code: str | None = None,
+    ) -> CheckoutPreview:
         """Price the cart without touching stock or creating anything."""
         if address_id is not None:
             await self._require_address(address_id)
 
         cart = await self._require_active_cart()
         items = await self._priced_items(cart)
-        return await self._summary(items)
+        subtotal = self._subtotal(items)
 
-    async def place_order(self, address_id: UUID) -> Order:
+        coupon, discount = await self._resolve_coupon(coupon_code, subtotal, for_update=False)
+        return await self._summary(items, subtotal, coupon, discount)
+
+    async def place_order(self, address_id: UUID, coupon_code: str | None = None) -> Order:
         """Create the order, its payment and its stock reservations in one transaction."""
         cart = await self._require_active_cart()
         address = await self._require_address(address_id)
         items = await self._priced_items(cart)
-        summary = await self._summary(items)
+        subtotal = self._subtotal(items)
 
         try:
             order_number = await self._next_order_number()
@@ -82,6 +94,14 @@ class CheckoutService:
                     item.variant_id, item.quantity, reference=order_number, commit=False
                 )
 
+            # Re-validated here, under lock, against the server-computed
+            # subtotal -- never the subtotal/discount an earlier preview
+            # call may have shown the customer. This is also the only place
+            # a coupon actually gets spent (times_used incremented,
+            # CouponUsage recorded); a plain preview never reaches this.
+            coupon, discount = await self._resolve_coupon(coupon_code, subtotal, for_update=True)
+            summary = await self._summary(items, subtotal, coupon, discount)
+
             order = Order(
                 tenant_id=self.tenant_id,
                 customer_id=self.customer_id,
@@ -89,6 +109,9 @@ class CheckoutService:
                 status=OrderStatus.PENDING.value,
                 payment_status=PaymentStatus.PENDING.value,
                 subtotal=summary.subtotal,
+                coupon_id=coupon.id if coupon else None,
+                coupon_code=coupon.code if coupon else None,
+                discount_amount=summary.discount_amount,
                 shipping_amount=summary.shipping_amount,
                 tax_amount=summary.tax_amount,
                 total_amount=summary.total_amount,
@@ -118,6 +141,14 @@ class CheckoutService:
                         quantity=item.quantity,
                         subtotal=item.subtotal,
                     )
+                )
+
+            if coupon is not None:
+                # No commit of its own -- shares this transaction, so a
+                # failure anywhere below (or above) rolls the redemption
+                # back along with the order itself.
+                await self.coupons.record_redemption(
+                    coupon, self.customer_id, order.id, discount
                 )
 
             self.session.add(
@@ -201,18 +232,47 @@ class CheckoutService:
 
         return items
 
-    async def _summary(self, items: list[CheckoutItem]) -> CheckoutPreview:
-        """Total the basket: goods, then delivery, then tax on both, then the total."""
-        subtotal = money(sum((item.subtotal for item in items), ZERO))
+    @staticmethod
+    def _subtotal(items: list[CheckoutItem]) -> Decimal:
+        return money(sum((item.subtotal for item in items), ZERO))
+
+    async def _resolve_coupon(
+        self, coupon_code: str | None, subtotal: Decimal, *, for_update: bool
+    ) -> tuple[Coupon | None, Decimal]:
+        """No code supplied: no coupon, no discount, existing behaviour
+        completely unchanged. Otherwise validates through CouponService --
+        `for_update=True` locks the row and is used only at actual order
+        placement; preview always uses the unlocked, read-only path."""
+        if not coupon_code:
+            return None, ZERO
+
+        if for_update:
+            return await self.coupons.lock_and_validate(coupon_code, subtotal, self.customer_id)
+        return await self.coupons.validate_and_calculate(coupon_code, subtotal, self.customer_id)
+
+    async def _summary(
+        self,
+        items: list[CheckoutItem],
+        subtotal: Decimal,
+        coupon: Coupon | None = None,
+        discount: Decimal = ZERO,
+    ) -> CheckoutPreview:
+        """Total the basket: goods minus any coupon discount, then delivery,
+        then tax on the discounted goods + delivery, then the total. This is
+        the one place that formula lives -- preview and place_order both
+        call it, so their numbers can never disagree."""
+        discounted_subtotal = subtotal - discount
         shipping = await self.shipping.calculate(subtotal)
-        tax = await self.tax.calculate(subtotal, shipping)
+        tax = await self.tax.calculate(discounted_subtotal, shipping)
 
         return CheckoutPreview(
             items=items,
             subtotal=subtotal,
+            coupon_code=coupon.code if coupon else None,
+            discount_amount=discount,
             shipping_amount=shipping,
             tax_amount=tax,
-            total_amount=subtotal + shipping + tax,
+            total_amount=discounted_subtotal + shipping + tax,
         )
 
     async def _next_order_number(self) -> str:

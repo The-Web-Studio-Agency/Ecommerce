@@ -161,7 +161,7 @@ async def test_search_multi_word_query_does_not_return_unrelated_products(
 async def test_search_multi_word_query_with_no_matches_returns_empty(
     client, search_auth, search_token_matching_catalogue
 ):
-   
+
     response = await client.get(SEARCH, params={"q": "dress spacesuit"}, headers=search_auth)
 
     assert response.status_code == 200, response.text
@@ -233,7 +233,7 @@ async def test_gender_color_size_filters_are_case_insensitive(client, search_aut
 async def test_gender_filter_excludes_products_without_a_gender(
     client, search_auth, search_multi_variant_product
 ):
-   
+
     response = await client.get(SEARCH, params={"gender": "MEN"}, headers=search_auth)
     assert response.status_code == 200, response.text
     assert all(item["name"] != "Graphic Hoodie" for item in response.json()["data"])
@@ -399,7 +399,7 @@ async def test_response_exposes_actual_variant_color_and_size_combinations(
 async def test_variant_attributes_reflect_the_filtered_matching_variant(
     client, search_auth, search_test_catalogue
 ):
-   
+
     response = await client.get(SEARCH, params={"color": "Black"}, headers=search_auth)
 
     assert response.status_code == 200, response.text

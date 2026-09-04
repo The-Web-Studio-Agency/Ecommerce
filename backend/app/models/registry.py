@@ -11,6 +11,7 @@ from app.catalogue.models import (
     ProductVariant,
     ProductVariantOption,
 )
+from app.coupons.models import Coupon, CouponUsage
 from app.models.base import Base
 from app.orders.models import Order, OrderItem
 from app.payments.models import Payment
@@ -27,6 +28,8 @@ __all__ = [
     "Cart",
     "CartItem",
     "Category",
+    "Coupon",
+    "CouponUsage",
     "InventoryItem",
     "InventoryMovement",
     "Order",

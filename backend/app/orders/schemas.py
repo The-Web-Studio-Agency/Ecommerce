@@ -28,15 +28,23 @@ class CheckoutItem(BaseModel):
 class CheckoutPreview(BaseModel):
     items: list[CheckoutItem]
     subtotal: Decimal
+    coupon_code: str | None = None
+    discount_amount: Decimal = Decimal("0.00")
     shipping_amount: Decimal
     tax_amount: Decimal
     total_amount: Decimal
 
 
 class CheckoutCreate(StrictModel):
-    """The only thing checkout accepts from the client: which address to deliver to."""
+    """Which address to deliver to, and an optional coupon code -- the only
+    things checkout accepts from the client. Everything priced (subtotal,
+    discount, shipping, tax, total) is always computed server-side from the
+    cart and coupon rules, never trusted from the request."""
 
     address_id: UUID
+    coupon_code: str | None = Field(default=None, min_length=1, max_length=50)
+    address_id: UUID
+    coupon_code: str | None = Field(default=None, min_length=1, max_length=50)
 
 
 class CheckoutPreviewCreate(StrictModel):
@@ -76,6 +84,8 @@ class OrderRead(BaseModel):
     payment_status: PaymentStatus
     items: list[OrderItemRead]
     subtotal: Decimal
+    coupon_code: str | None = None
+    discount_amount: Decimal = Decimal("0.00")
     shipping_amount: Decimal
     tax_amount: Decimal
     total_amount: Decimal

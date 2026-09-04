@@ -34,7 +34,7 @@ def search_auth(search_shopper) -> dict[str, str]:
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def search_test_catalogue(client, admin_headers):
-    
+
     category = await make_category(client, admin_headers, name="Apparel")
 
     product_data = [
