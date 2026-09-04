@@ -12,6 +12,7 @@ from app.auth.constants import UserRole
 from app.auth.security import decode_token
 from app.core.database import get_db
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
+from app.tenants.models import Tenant
 from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 from app.users.repository import UserRepository
@@ -19,15 +20,10 @@ from app.users.repository import UserRepository
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(
-    tenant: CurrentTenant,
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    session: AsyncSession = Depends(get_db),
+async def _authenticated_user(
+    tenant: Tenant, token: str, session: AsyncSession
 ) -> User:
-    if credentials is None or not credentials.credentials:
-        raise AuthenticationError("Not authenticated")
-
-    payload = decode_token(credentials.credentials, expected_type="access")
+    payload = decode_token(token, expected_type="access")
 
     if payload.tenant_id != str(tenant.id):
         raise AuthenticationError("Invalid authentication credentials")
@@ -44,7 +40,33 @@ async def get_current_user(
     return user
 
 
+async def get_current_user(
+    tenant: CurrentTenant,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    session: AsyncSession = Depends(get_db),
+) -> User:
+    if credentials is None or not credentials.credentials:
+        raise AuthenticationError("Not authenticated")
+
+    return await _authenticated_user(tenant, credentials.credentials, session)
+
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_user_optional(
+    tenant: CurrentTenant,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    session: AsyncSession = Depends(get_db),
+) -> User | None:
+    """The signed-in user, or None for a guest. A token that is sent must still be valid."""
+    if credentials is None or not credentials.credentials:
+        return None
+
+    return await _authenticated_user(tenant, credentials.credentials, session)
+
+
+CurrentUserOptional = Annotated[User | None, Depends(get_current_user_optional)]
 
 
 def _require_roles(*roles: UserRole) -> Callable[..., Coroutine[Any, Any, User]]:

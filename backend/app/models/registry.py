@@ -14,11 +14,11 @@ from app.catalogue.models import (
 from app.models.base import Base
 from app.orders.models import Order, OrderItem
 from app.payments.models import Payment
-from app.pricing.models import ShippingSettings
+from app.pricing.models import ShippingSettings, TaxSettings
 from app.ratings.models import Review, ReviewImage
+from app.search_filter.models import SearchHistory
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
-from app.search_filter.models import SearchHistory
 
 __all__ = [
     "AdminAuthChallenge",
@@ -41,8 +41,8 @@ __all__ = [
     "RefreshToken",
     "Review",
     "ReviewImage",
-    "ShippingSettings",
     "SearchHistory",
+    "ShippingSettings",
     "TaxSettings",
     "Tenant",
     "TenantDomain",
