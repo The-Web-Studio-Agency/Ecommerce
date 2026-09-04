@@ -44,13 +44,53 @@ async def test_a_category_can_be_updated(client, admin_headers, category):
     assert body["status"] == "DRAFT"
 
 
-async def test_an_empty_patch_changes_nothing(client, admin_headers, category):
+async def test_an_empty_patch_is_rejected(client, admin_headers, category):
     response = await client.patch(
         f"{CATEGORIES}/{category['id']}", json={}, headers=admin_headers
     )
 
-    assert response.status_code == 200
-    assert response.json()["data"] == category
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+async def test_an_unknown_field_is_rejected(client, admin_headers):
+    response = await client.post(
+        CATEGORIES,
+        json={"name": "Coats", "unknown_field": "some value"},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "unknown_field"
+
+
+async def test_an_unknown_query_parameter_is_rejected(client, admin_headers):
+    response = await client.get(f"{CATEGORIES}?limit=5", headers=admin_headers)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "limit"
+
+
+async def test_a_non_integer_page_size_is_rejected(client, admin_headers):
+    response = await client.get(f"{CATEGORIES}?page_size=hy", headers=admin_headers)
+
+    assert response.status_code == 422
+
+
+async def test_a_page_size_out_of_range_is_rejected(client, admin_headers):
+    response = await client.get(f"{CATEGORIES}?page_size=-5", headers=admin_headers)
+
+    assert response.status_code == 422
+
+
+async def test_deleting_a_category_twice_is_a_404(client, admin_headers, category):
+    await client.delete(f"{CATEGORIES}/{category['id']}", headers=admin_headers)
+
+    response = await client.delete(
+        f"{CATEGORIES}/{category['id']}", headers=admin_headers
+    )
+
+    assert response.status_code == 404
 
 
 async def test_deleting_a_category_archives_it(client, admin_headers, category):
@@ -204,6 +244,14 @@ async def test_deleting_a_product_archives_it_and_its_variants(
     assert response.status_code == 204
     after = await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
     assert after.json()["data"]["status"] == "ARCHIVED"
+
+
+async def test_deleting_a_product_twice_is_a_404(client, admin_headers, product):
+    await client.delete(f"{PRODUCTS}/{product['id']}", headers=admin_headers)
+
+    response = await client.delete(f"{PRODUCTS}/{product['id']}", headers=admin_headers)
+
+    assert response.status_code == 404
 
 
 async def test_a_product_cannot_be_created_without_images(
@@ -371,6 +419,14 @@ async def test_deleting_a_variant_archives_it(client, admin_headers, variant):
     assert response.status_code == 204
     after = await client.get(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
     assert after.json()["data"]["status"] == "ARCHIVED"
+
+
+async def test_deleting_a_variant_twice_is_a_404(client, admin_headers, variant):
+    await client.delete(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
+
+    response = await client.delete(f"{VARIANTS}/{variant['id']}", headers=admin_headers)
+
+    assert response.status_code == 404
 
 
 async def test_an_archived_product_cannot_take_new_variants(

@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.core.pagination import PageParams
 from app.payments.constants import PaymentProvider, PaymentStatus
 
 
@@ -19,3 +20,10 @@ class PaymentRead(BaseModel):
     status: PaymentStatus
     provider: PaymentProvider
     created_at: datetime
+
+
+class PaymentQuery(PageParams):
+    """Filters the admin payment listing accepts."""
+
+    order_id: UUID | None = None
+    status: PaymentStatus | None = None

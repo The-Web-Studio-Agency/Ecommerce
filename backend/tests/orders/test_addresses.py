@@ -17,6 +17,29 @@ async def test_an_address_is_saved_and_read_back(client, customer_auth):
     assert body["postal_code"] == "560025"
 
 
+async def test_an_indian_postal_code_must_be_six_digits(client, customer_auth):
+    response = await client.post(
+        ADDRESSES,
+        json=address_payload(postal_code="682001738233"),
+        headers=customer_auth,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "postal_code"
+
+
+async def test_a_postal_code_outside_india_is_not_held_to_the_pin_format(
+    client, customer_auth
+):
+    response = await client.post(
+        ADDRESSES,
+        json=address_payload(country="United Kingdom", postal_code="SW1A 1AA"),
+        headers=customer_auth,
+    )
+
+    assert response.status_code == 201
+
+
 async def test_the_first_address_becomes_the_default(client, make_user, tenant):
     user = await make_user(tenant=tenant, phone="+919822221001")
     headers = headers_for(user)

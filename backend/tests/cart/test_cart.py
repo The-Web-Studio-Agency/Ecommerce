@@ -273,7 +273,7 @@ async def test_the_subtotal_uses_the_database_price(
     assert body["subtotal"] == str(Decimal(variant["price"]) * 2)
 
 
-async def test_a_price_sent_by_the_client_is_ignored(
+async def test_a_price_sent_by_the_client_is_rejected(
     client, customer_auth, variant
 ):
     response = await client.post(
@@ -282,8 +282,8 @@ async def test_a_price_sent_by_the_client_is_ignored(
         headers=customer_auth,
     )
 
-    assert response.status_code == 201
-    assert response.json()["data"]["items"][0]["unit_price"] == variant["price"]
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "unit_price"
 
 
 async def test_a_price_change_shows_in_an_existing_cart(

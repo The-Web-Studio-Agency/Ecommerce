@@ -4,8 +4,10 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.pagination import PageParams
+from app.core.schemas import StrictModel
 from app.orders.constants import OrderStatus, PaymentStatus
 from app.payments.schemas import PaymentRead
 
@@ -31,10 +33,16 @@ class CheckoutPreview(BaseModel):
     total_amount: Decimal
 
 
-class CheckoutCreate(BaseModel):
+class CheckoutCreate(StrictModel):
     """The only thing checkout accepts from the client: which address to deliver to."""
 
     address_id: UUID
+
+
+class CheckoutPreviewCreate(StrictModel):
+    """An optional address to price the cart against, validated when it is sent."""
+
+    address_id: UUID | None = None
 
 
 class DeliveryAddressRead(BaseModel):
@@ -89,5 +97,13 @@ class OrderSummaryRead(BaseModel):
     created_at: datetime
 
 
-class OrderStatusUpdate(BaseModel):
+class OrderStatusUpdate(StrictModel):
     status: OrderStatus
+
+
+class OrderQuery(PageParams):
+    """Filters the admin order listing accepts."""
+
+    order_number: str | None = Field(default=None, max_length=32)
+    status: OrderStatus | None = None
+    payment_status: PaymentStatus | None = None

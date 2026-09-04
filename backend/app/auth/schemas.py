@@ -7,6 +7,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 
 from app.auth.constants import OTP_LENGTH
 from app.auth.phone import normalize_phone
+from app.core.schemas import StrictModel
 
 MAX_PASSWORD_LENGTH = 256
 MIN_PASSWORD_LENGTH = 8
@@ -20,34 +21,34 @@ NormalizedPhone = Annotated[
 OtpCode = Annotated[str, Field(min_length=OTP_LENGTH, max_length=OTP_LENGTH, pattern=r"^\d+$")]
 
 
-class OtpRequestPayload(BaseModel):
+class OtpRequestPayload(StrictModel):
     phone: NormalizedPhone
 
 
-class OtpVerifyPayload(BaseModel):
+class OtpVerifyPayload(StrictModel):
     phone: NormalizedPhone
     otp: OtpCode
 
 
-class PasswordLoginPayload(BaseModel):
+class PasswordLoginPayload(StrictModel):
     identifier: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
 
 
-class StaffOtpVerifyPayload(BaseModel):
+class StaffOtpVerifyPayload(StrictModel):
     verification_id: UUID
     otp: OtpCode
 
 
-class StaffLoginChallenge(BaseModel):
+class StaffLoginChallenge(StrictModel):
     verification_id: UUID
 
 
-class RefreshPayload(BaseModel):
+class RefreshPayload(StrictModel):
     refresh_token: str = Field(min_length=1)
 
 
-class LogoutPayload(BaseModel):
+class LogoutPayload(StrictModel):
     refresh_token: str = Field(min_length=1)
 
 

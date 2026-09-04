@@ -127,7 +127,7 @@ class CategoryService:
         category = await self.get(category_id)
 
         if category.status == CatalogueStatus.ARCHIVED.value:
-            return
+            raise NotFoundError(CATEGORY_NOT_FOUND)
 
         if await self.products.has_products_in_category(category.id):
             raise ConflictError("Category still has active products and cannot be deleted")
@@ -280,7 +280,7 @@ class ProductService:
         product = await self.get(product_id)
 
         if product.status == CatalogueStatus.ARCHIVED.value:
-            return
+            raise NotFoundError(PRODUCT_NOT_FOUND)
 
         product.status = CatalogueStatus.ARCHIVED.value
 
@@ -458,7 +458,7 @@ class VariantService:
         variant = await self.get(variant_id)
 
         if variant.status == CatalogueStatus.ARCHIVED.value:
-            return
+            raise NotFoundError(VARIANT_NOT_FOUND)
 
         variant.status = CatalogueStatus.ARCHIVED.value
         await self.session.commit()

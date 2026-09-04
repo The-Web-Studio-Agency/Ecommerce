@@ -76,14 +76,15 @@ async def test_a_negative_free_shipping_minimum_is_rejected(client, admin_header
     assert response.status_code == 422
 
 
-async def test_a_tenant_id_in_the_body_is_ignored(
-    client, admin_headers, other_tenant, set_shipping
-):
-    await set_shipping(tenant_id=str(other_tenant.id))
+async def test_a_tenant_id_in_the_body_is_rejected(client, admin_headers, other_tenant):
+    response = await client.put(
+        SHIPPING,
+        json=shipping_payload(tenant_id=str(other_tenant.id)),
+        headers=admin_headers,
+    )
 
-    response = await client.get(SHIPPING, headers=admin_headers)
-
-    assert Decimal(response.json()["data"]["shipping_amount"]) == Decimal("100.00")
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "tenant_id"
 
 
 async def test_shipping_settings_are_per_tenant(

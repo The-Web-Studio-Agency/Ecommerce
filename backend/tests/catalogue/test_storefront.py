@@ -229,3 +229,16 @@ async def test_a_product_id_from_another_tenant_is_not_found(other_client, publi
     response = await other_client.get(f"{STOREFRONT}/products/{product['id']}")
 
     assert response.status_code == 404
+
+
+async def test_an_unknown_query_parameter_is_rejected(client, tenant):
+    response = await client.get(f"{STOREFRONT}/products?page=1&limit=1000")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"][0]["field"] == "limit"
+
+
+async def test_a_page_size_above_the_maximum_is_rejected(client, tenant):
+    response = await client.get(f"{STOREFRONT}/products?page=1&page_size=1000")
+
+    assert response.status_code == 422
