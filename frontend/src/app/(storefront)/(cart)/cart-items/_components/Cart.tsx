@@ -3,12 +3,7 @@
 import { useCart, CartItem } from '@/context/CartContext';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
-
-type PromoMessage = {
-  type: 'success' | 'error';
-  text: string;
-} | null;
+import { useMemo } from 'react';
 
 // -----------------------------------
 // CURRENCY
@@ -28,6 +23,15 @@ function currency(n: number): string {
 // -----------------------------------
 
 function StockBadge({ stockCount }: { stockCount: number }) {
+  if (stockCount === 0) {
+    return (
+      <span className="cart-items-badge cart-items-badge--out">
+        <span className="cart-items-badge-dot" />
+        Stock Out
+      </span>
+    );
+  }
+
   if (stockCount > 10) {
     return (
       <span className="cart-items-badge cart-items-badge--in-stock">
@@ -147,11 +151,13 @@ function CartLineItem({
             </div>
 
             <div className="cart-items-actions">
-              <QuantityControl
-                quantity={item.quantity}
-                stockCount={item.stockCount}
-                onChange={quantity => onQtyChange(item.productId, item.color, item.size, quantity)}
-              />
+              {item.stockCount > 0 && (
+                <QuantityControl
+                  quantity={item.quantity}
+                  stockCount={item.stockCount}
+                  onChange={quantity => onQtyChange(item.productId, item.color, item.size, quantity)}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -184,12 +190,6 @@ function CartLineItem({
 // -----------------------------------
 
 export default function Cart() {
-  const [promo, setPromo] = useState('');
-
-  const [promoMsg, setPromoMsg] = useState<PromoMessage>(null);
-
-  const [discount, setDiscount] = useState(0);
-
   const { cartItems, updateQuantity, removeFromCart } = useCart();
 
   // -----------------------------------
@@ -229,40 +229,14 @@ export default function Cart() {
   // -----------------------------------
 
   const tax = useMemo(() => {
-    return (subtotal - discount) * 0.065;
-  }, [subtotal, discount]);
+    return subtotal * 0.065;
+  }, [subtotal]);
 
   // -----------------------------------
   // TOTAL
   // -----------------------------------
 
-  const total = Math.max(0, subtotal - discount) + tax;
-
-  // -----------------------------------
-  // PROMO
-  // -----------------------------------
-
-  const applyPromo = () => {
-    const code = promo.trim().toUpperCase();
-
-    if (!code) return;
-
-    if (code === 'ZEEN10') {
-      setDiscount(subtotal * 0.1);
-
-      setPromoMsg({
-        type: 'success',
-        text: '10% discount applied.',
-      });
-    } else {
-      setDiscount(0);
-
-      setPromoMsg({
-        type: 'error',
-        text: "That code isn't valid.",
-      });
-    }
-  };
+  const total = subtotal + tax;
 
   return (
     <div className="cart-items-page">
@@ -309,16 +283,6 @@ export default function Cart() {
               <span className="cart-items-summary-value">{currency(subtotal)}</span>
             </div>
 
-            {/* DISCOUNT */}
-
-            {discount > 0 && (
-              <div className="cart-items-summary-row">
-                <span>Discount</span>
-
-                <span className="cart-items-summary-value">−{currency(discount)}</span>
-              </div>
-            )}
-
             {/* SHIPPING */}
 
             <div className="cart-items-summary-row">
@@ -335,42 +299,6 @@ export default function Cart() {
               <span className="cart-items-summary-value">{currency(tax)}</span>
             </div>
           </div>
-
-          {/* =================================
-              PROMO
-          ================================= */}
-
-          <div className="cart-items-promo">
-            <input
-              value={promo}
-              onChange={e => {
-                setPromo(e.target.value);
-                setPromoMsg(null);
-              }}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  applyPromo();
-                }
-              }}
-              placeholder="Promo code"
-              className="cart-items-promo-input"
-            />
-
-            <button type="button" onClick={applyPromo} className="cart-items-promo-btn">
-              Apply
-            </button>
-          </div>
-
-          {promoMsg && (
-            <p
-              className={
-                promoMsg.type === 'error'
-                  ? 'cart-items-promo-message cart-items-promo-message--error'
-                  : 'cart-items-promo-message'
-              }>
-              {promoMsg.text}
-            </p>
-          )}
 
           {/* =================================
               TOTAL

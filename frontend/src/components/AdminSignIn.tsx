@@ -7,20 +7,25 @@ import { useRouter } from 'next/navigation';
 
 interface LoginErrors {
   identifier: string;
+  password: string;
 }
 
-export default function SignIn() {
+export default function AdminSignIn() {
   const router = useRouter();
 
   const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+
   const [errors, setErrors] = useState<LoginErrors>({
     identifier: '',
+    password: '',
   });
 
   const [loading, setLoading] = useState(false);
 
   const clearForm = () => {
     setIdentifier('');
+    setPassword('');
   };
 
   // Check whether input is an email
@@ -28,11 +33,8 @@ export default function SignIn() {
     return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value);
   };
 
-  // Check whether input is a phone number
-  const isPhone = (value: string) => {
-    return /^[0-9]{10}$/.test(value);
-  };
 
+ 
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -40,59 +42,77 @@ export default function SignIn() {
 
     const newErrors: LoginErrors = {
       identifier: '',
+      password: '',
     };
 
-    // Required validation
+    // ================= VALIDATION =================
+
+    // Identifier validation
     if (!value) {
-      newErrors.identifier = 'Email or phone number is required';
+      newErrors.identifier = 'Email is required';
+    } else if (!isEmail(value)) {
+      newErrors.identifier = 'Enter a valid email ';
     }
 
-    // Email or phone validation
-    else if (!isEmail(value) && !isPhone(value)) {
-      newErrors.identifier = 'Enter a valid email or 10-digit phone number';
+    // Password validation
+    if (!password) {
+      newErrors.password = 'Password is required';
     }
 
     setErrors(newErrors);
 
     // Stop if validation failed
-    if (newErrors.identifier) {
+    if (newErrors.identifier || newErrors.password) {
       return;
     }
 
+    // ================= API REQUEST =================
+
     try {
-      // setLoading(true);
+      //   setLoading(true);
 
-      // const response = await fetch('http://localhost:5000/api/auth/send-otp', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     identifier: value,
-      //   }),
-      // });
-
-      // const data = await response.json();
-
-      // if (!response.ok) {
-      //   setErrors({
-      //     identifier: data.message || 'Failed to send OTP',
+      //   const response = await fetch('http://localhost:5000/api/auth/signin', {
+      //     method: 'POST',
+      //     headers: {
+      //       'Content-Type': 'application/json',
+      //     },
+      //     credentials: 'include',
+      //     body: JSON.stringify({
+      //       identifier: value,
+      //       password: password,
+      //     }),
       //   });
 
-      //   return;
-      // }
+      //   const data = await response.json();
 
-      // console.log('OTP sent successfully');
+      //   if (!response.ok) {
+      //     setErrors({
+      //       identifier: data.message || 'Invalid email/phone or password',
+      //       password: '',
+      //     });
 
-      // Go to OTP verification page
-      router.push(`/otp-verification?identifier=${encodeURIComponent(identifier)}`);
+      //     return;
+      //   }
 
-      clearForm();
+      //   console.log('Login successful:', data);
+
+      // Clear form
+    //   clearForm();
+
+      // Go to admin page
+
+      if (identifier === 'admin@gmail.com' && password === 'admin@123') {
+        router.push('/admin');
+      }
+      else{
+        throw new Error('Incorrect password')
+      }
     } catch (error) {
-      console.error('Send OTP error:', error);
+      console.error('Sign in error:', error);
 
       setErrors({
         identifier: 'Something went wrong. Please try again.',
+        password: '',
       });
     } finally {
       setLoading(false);
@@ -122,68 +142,67 @@ export default function SignIn() {
             <div className="login-page-form-inner">
               <h1 className="login-page-heading">Sign in</h1>
 
-              <p className="login-page-subtext">
-                Don&rsquo;t have an account?{' '}
-                <Link href="/signup" className="login-page-signup-link">
-                  Sign up
-                </Link>
-              </p>
-
               {/* ================= LOGIN FORM ================= */}
 
               <form className="login-page-fields" onSubmit={handleSubmit} noValidate>
-                {/* Email / Phone */}
+                {/* ================= EMAIL / PHONE ================= */}
 
                 <div>
                   <input
                     type="text"
-                    placeholder="Email or phone number"
+                    placeholder="Enter you email"
                     value={identifier}
                     maxLength={60}
                     className="login-page-input"
                     onChange={e => {
                       const inputValue = e.target.value.replace(/[^A-Za-z0-9@.]/g, '');
+
                       setIdentifier(inputValue);
-                      setErrors({
+
+                      setErrors(prev => ({
+                        ...prev,
                         identifier: '',
-                      });
+                      }));
                     }}
                   />
 
                   {errors.identifier && <p className="login-page-error">{errors.identifier}</p>}
                 </div>
 
-                {/* Submit */}
+                {/* ================= PASSWORD ================= */}
+
+                <div>
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    maxLength={100}
+                    className="login-page-input"
+                    onChange={e => {
+                      setPassword(e.target.value);
+
+                      setErrors(prev => ({
+                        ...prev,
+                        password: '',
+                      }));
+                    }}
+                  />
+
+                  {errors.password && <p className="login-page-error">{errors.password}</p>}
+                </div>
+
+                {/* ================= FORGOT PASSWORD ================= */}
+
+                {/* ================= SUBMIT ================= */}
 
                 <button type="submit" className="login-page-submit-button" disabled={loading}>
-                  {loading ? 'Sending OTP...' : 'Continue'}
+                  {loading ? 'Signing in...' : 'Sign in'}
                 </button>
               </form>
 
               {/* ================= DIVIDER ================= */}
 
-              <div className="login-page-divider">
-                <span className="login-page-divider-line" />
-
-                <span className="login-page-divider-text">Or continue with</span>
-
-                <span className="login-page-divider-line" />
-              </div>
-
               {/* ================= GOOGLE ================= */}
-
-              <div className="login-page-oauth-grid">
-                <button
-                  className="login-page-oauth-button"
-                  type="button"
-                  onClick={() => {
-                    console.log('Google sign in');
-                    // Add your Google authentication logic here
-                  }}>
-                  <GoogleIcon />
-                  Google
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -219,4 +238,3 @@ function GoogleIcon() {
     </svg>
   );
 }
-
