@@ -1,61 +1,74 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, HttpUrl
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.ratings.constants import (
+    MAX_ALT_TEXT_LENGTH,
+    MAX_COMMENT_LENGTH,
+    MAX_IMAGE_URL_LENGTH,
+    MAX_IMAGES_PER_REVIEW,
+    MAX_RATING,
+    MAX_TITLE_LENGTH,
+    MIN_RATING,
+)
 
 
-class ReviewImageBase(BaseModel):
-    image_url: str
-    alt_text: Optional[str] = None
+class ReviewImageCreate(BaseModel):
+    image_url: str = Field(max_length=MAX_IMAGE_URL_LENGTH)
+    alt_text: str | None = Field(default=None, max_length=MAX_ALT_TEXT_LENGTH)
 
 
-class ReviewImageCreate(ReviewImageBase):
-    pass
+class ReviewImageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class ReviewImageResponse(ReviewImageBase):
     id: uuid.UUID
+    image_url: str
+    alt_text: str | None = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ReviewCreate(BaseModel):
     product_id: uuid.UUID
-    rating: int = Field(..., ge=1, le=5)
-    title: Optional[str] = Field(None, max_length=150)
-    comment: Optional[str] = Field(None, max_length=2000)
-    images: Optional[List[ReviewImageCreate]] = []
+    rating: int = Field(ge=MIN_RATING, le=MAX_RATING)
+    title: str | None = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    comment: str | None = Field(default=None, max_length=MAX_COMMENT_LENGTH)
+    images: list[ReviewImageCreate] = Field(
+        default_factory=list, max_length=MAX_IMAGES_PER_REVIEW
+    )
 
 
 class ReviewUpdate(BaseModel):
-    rating: Optional[int] = Field(None, ge=1, le=5)
-    title: Optional[str] = Field(None, max_length=150)
-    comment: Optional[str] = Field(None, max_length=2000)
-    is_approved: Optional[bool] = None
+    """What an author may change. Approval is a moderator's call, not theirs."""
+
+    rating: int | None = Field(default=None, ge=MIN_RATING, le=MAX_RATING)
+    title: str | None = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    comment: str | None = Field(default=None, max_length=MAX_COMMENT_LENGTH)
 
 
-class ReviewResponse(BaseModel):
+class ReviewModerate(BaseModel):
+    is_approved: bool
+
+
+class ReviewRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
-    tenant_id: uuid.UUID
-    product_id: Optional[uuid.UUID] = None
-    user_id: Optional[uuid.UUID] = None
-    order_id: Optional[uuid.UUID] = None
+    product_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = None
+    order_id: uuid.UUID | None = None
     rating: int
-    title: Optional[str] = None
-    comment: Optional[str] = None
+    title: str | None = None
+    comment: str | None = None
     is_verified_purchase: bool
     is_approved: bool
     created_at: datetime
-    updated_at: datetime
-    images: List[ReviewImageResponse] = []
-
-    class Config:
-        from_attributes = True
+    images: list[ReviewImageRead] = Field(default_factory=list)
 
 
-class RatingSummaryResponse(BaseModel):
+class RatingSummaryRead(BaseModel):
     product_id: uuid.UUID
     average_rating: float
     total_reviews: int

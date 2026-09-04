@@ -1,96 +1,77 @@
-import uuid
-from typing import List, Optional, Tuple
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from __future__ import annotations
+
+from uuid import UUID
+
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.orm import selectinload
 
+from app.core.repository import TenantScopedRepository
+from app.orders.constants import OrderStatus
 from app.orders.models import Order, OrderItem
-from app.ratings.models import Review, ReviewImage
+from app.ratings.constants import MAX_RATING, MIN_RATING
+from app.ratings.models import Review
 
 
+class ReviewRepository(TenantScopedRepository[Review]):
+    model = Review
 
-class ReviewRepository:
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def base_select(self) -> Select[tuple[Review]]:
+        return super().base_select().options(selectinload(Review.images))
 
-    async def get_by_id(self, review_id: uuid.UUID) -> Optional[Review]:
-        stmt = (
-            select(Review)
-            .options(selectinload(Review.images))
-            .filter(Review.id == review_id)
+    def product_select(
+        self, product_id: UUID, *, approved_only: bool = True
+    ) -> Select[tuple[Review]]:
+        stmt = self.base_select().where(Review.product_id == product_id)
+        if approved_only:
+            stmt = stmt.where(Review.is_approved.is_(True))
+        return stmt.order_by(Review.created_at.desc())
+
+    def moderation_select(self, *, is_approved: bool | None = None) -> Select[tuple[Review]]:
+        stmt = self.base_select()
+        if is_approved is not None:
+            stmt = stmt.where(Review.is_approved.is_(is_approved))
+        return stmt.order_by(Review.created_at.desc())
+
+    async def get_by_author(self, product_id: UUID, user_id: UUID) -> Review | None:
+        return await self.find_one(
+            Review.product_id == product_id, Review.user_id == user_id
         )
-        result = await self.session.scalars(stmt)
-        return result.first()
 
-    async def get_product_reviews(
-        self, product_id: uuid.UUID, skip: int = 0, limit: int = 10
-    ) -> Tuple[List[Review], int]:
-        base_query = select(Review).filter(
-            Review.product_id == product_id, Review.is_approved == True
-        )
-
-        count_stmt = select(func.count()).select_from(base_query.subquery())
-        total = await self.session.scalar(count_stmt) or 0
-
-        stmt = (
-            base_query.options(selectinload(Review.images))
-            .order_by(Review.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        result = await self.session.scalars(stmt)
-        reviews = list(result.all())
-        return reviews, total
-
-    async def check_user_purchased_product(self, user_id: uuid.UUID, product_id: uuid.UUID) -> bool:
+    async def delivered_order_id(self, customer_id: UUID, product_id: UUID) -> UUID | None:
+        """The customer's most recent delivered order containing the product, if any."""
         stmt = (
             select(Order.id)
-            .join(OrderItem, OrderItem.order_id == Order.id)
-            .filter(
-                Order.customer_id == user_id,
-                OrderItem.product_id == product_id,
-                Order.status == "delivered"
+            .join(
+                OrderItem,
+                and_(
+                    OrderItem.tenant_id == Order.tenant_id,
+                    OrderItem.order_id == Order.id,
+                ),
             )
+            .where(
+                Order.tenant_id == self.tenant_id,
+                Order.customer_id == customer_id,
+                Order.status == OrderStatus.DELIVERED.value,
+                OrderItem.product_id == product_id,
+            )
+            .order_by(Order.created_at.desc())
             .limit(1)
         )
-        return await self.session.scalar(stmt) is not None
+        return await self.session.scalar(stmt)
 
-    async def get_rating_summary(self, product_id: uuid.UUID) -> Tuple[float, int, dict[int, int]]:
-        stmt = select(Review.rating, func.count(Review.id)).filter(
-            Review.product_id == product_id, Review.is_approved == True
-        ).group_by(Review.rating)
-
+    async def rating_counts(self, product_id: UUID) -> dict[int, int]:
+        """How many approved reviews sit at each star, zeroes included."""
+        stmt = (
+            select(Review.rating, func.count(Review.id))
+            .where(
+                Review.tenant_id == self.tenant_id,
+                Review.product_id == product_id,
+                Review.is_approved.is_(True),
+            )
+            .group_by(Review.rating)
+        )
         result = await self.session.execute(stmt)
-        results = result.all()
-        distribution = {i: 0 for i in range(1, 6)}
-        total_reviews = 0
-        total_score = 0
 
-        for rating, count in results:
-            distribution[rating] = count
-            total_reviews += count
-            total_score += rating * count
-
-        avg_rating = round(total_score / total_reviews, 2) if total_reviews > 0 else 0.0
-        return avg_rating, total_reviews, distribution
-
-    async def create(self, review: Review, images: List[ReviewImage] = None) -> Review:
-        self.session.add(review)
-        await self.session.flush()
-        if images:
-            for img in images:
-                img.review_id = review.id
-                self.session.add(img)
-        await self.session.commit()
-        await self.session.refresh(review)
-        return review
-
-    async def update(self, review: Review) -> Review:
-        self.session.add(review)
-        await self.session.commit()
-        await self.session.refresh(review)
-        return review
-
-    async def delete(self, review: Review) -> None:
-        await self.session.delete(review)
-        await self.session.commit()
+        counts = {star: 0 for star in range(MIN_RATING, MAX_RATING + 1)}
+        counts.update({rating: count for rating, count in result.all()})
+        return counts
