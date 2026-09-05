@@ -77,3 +77,75 @@ async def test_moderation_list_is_scoped_to_the_tenant(
 
     assert response.status_code == 200, response.text
     assert response.json()["data"] == []
+
+
+async def test_moderators_still_see_a_hidden_review_on_the_product(
+    client, admin_headers, reviewable_product, review
+):
+    product_id = reviewable_product["product"]["id"]
+    await client.patch(
+        f"{ADMIN_REVIEWS}/{review['id']}",
+        json={"is_approved": False},
+        headers=admin_headers,
+    )
+
+    storefront = await client.get(f"{REVIEWS}/product/{product_id}")
+    assert storefront.json()["data"] == []
+
+    moderation = await client.get(
+        f"{ADMIN_REVIEWS}/product/{product_id}", headers=admin_headers
+    )
+    assert moderation.status_code == 200, moderation.text
+    assert [item["id"] for item in moderation.json()["data"]] == [review["id"]]
+    assert moderation.json()["meta"]["total_items"] == 1
+
+
+async def test_moderation_summary_counts_hidden_reviews(
+    client, admin_headers, reviewable_product, review
+):
+    product_id = reviewable_product["product"]["id"]
+    await client.patch(
+        f"{ADMIN_REVIEWS}/{review['id']}",
+        json={"is_approved": False},
+        headers=admin_headers,
+    )
+
+    storefront = await client.get(f"{REVIEWS}/product/{product_id}/summary")
+    assert storefront.json()["data"]["total_reviews"] == 0
+
+    moderation = await client.get(
+        f"{ADMIN_REVIEWS}/product/{product_id}/summary", headers=admin_headers
+    )
+    assert moderation.status_code == 200, moderation.text
+    body = moderation.json()["data"]
+    assert body["total_reviews"] == 1
+    assert body["average_rating"] == 4.0
+
+
+async def test_per_product_moderation_views_need_staff(
+    client, customer_headers, reviewable_product, review
+):
+    product_id = reviewable_product["product"]["id"]
+
+    listed = await client.get(
+        f"{ADMIN_REVIEWS}/product/{product_id}", headers=customer_headers
+    )
+    assert listed.status_code == 403
+
+    summary = await client.get(
+        f"{ADMIN_REVIEWS}/product/{product_id}/summary", headers=customer_headers
+    )
+    assert summary.status_code == 403
+
+
+async def test_per_product_moderation_is_scoped_to_the_tenant(
+    other_client, other_admin_headers, reviewable_product, review
+):
+    product_id = reviewable_product["product"]["id"]
+
+    response = await other_client.get(
+        f"{ADMIN_REVIEWS}/product/{product_id}", headers=other_admin_headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"] == []

@@ -77,10 +77,11 @@ class ReviewService:
         return review
 
     async def list_for_product(
-        self, product_id: UUID, params: PageParams
+        self, product_id: UUID, params: PageParams, *, approved_only: bool = True
     ) -> tuple[list[Review], int]:
         rows, total = await self.reviews.paginate(
-            self.reviews.product_select(product_id), params
+            self.reviews.product_select(product_id, approved_only=approved_only),
+            params,
         )
         return list(rows), total
 
@@ -92,8 +93,12 @@ class ReviewService:
         )
         return list(rows), total
 
-    async def summary(self, product_id: UUID) -> RatingSummaryRead:
-        counts = await self.reviews.rating_counts(product_id)
+    async def summary(
+        self, product_id: UUID, *, approved_only: bool = True
+    ) -> RatingSummaryRead:
+        counts = await self.reviews.rating_counts(
+            product_id, approved_only=approved_only
+        )
 
         total_reviews = sum(counts.values())
         total_score = sum(star * count for star, count in counts.items())

@@ -59,17 +59,20 @@ class ReviewRepository(TenantScopedRepository[Review]):
         )
         return await self.session.scalar(stmt)
 
-    async def rating_counts(self, product_id: UUID) -> dict[int, int]:
-        """How many approved reviews sit at each star, zeroes included."""
+    async def rating_counts(
+        self, product_id: UUID, *, approved_only: bool = True
+    ) -> dict[int, int]:
+        """How many reviews sit at each star, zeroes included."""
         stmt = (
             select(Review.rating, func.count(Review.id))
             .where(
                 Review.tenant_id == self.tenant_id,
                 Review.product_id == product_id,
-                Review.is_approved.is_(True),
             )
             .group_by(Review.rating)
         )
+        if approved_only:
+            stmt = stmt.where(Review.is_approved.is_(True))
         result = await self.session.execute(stmt)
 
         counts = {star: 0 for star in range(MIN_RATING, MAX_RATING + 1)}

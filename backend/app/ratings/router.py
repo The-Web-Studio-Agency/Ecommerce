@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import require_admin, require_customer
+from app.auth.dependencies import require_admin, require_customer, require_staff
 from app.core.database import get_db
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
@@ -126,6 +126,44 @@ async def list_reviews_for_moderation(
         params=params,
         message="Reviews retrieved",
     )
+
+
+@admin_router.get(
+    "/product/{product_id}",
+    response_model=ApiResponse[list[ReviewRead]],
+    summary="List every review on a product, hidden ones included",
+)
+async def list_product_reviews_for_moderation(
+    product_id: UUID,
+    params: Annotated[PageParams, Query()],
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+) -> ApiResponse[list[ReviewRead]]:
+    reviews, total = await ReviewService(session, user.tenant_id).list_for_product(
+        product_id, params, approved_only=False
+    )
+    return paginated(
+        [ReviewRead.model_validate(review) for review in reviews],
+        total_items=total,
+        params=params,
+        message="Reviews retrieved",
+    )
+
+
+@admin_router.get(
+    "/product/{product_id}/summary",
+    response_model=ApiResponse[RatingSummaryRead],
+    summary="Rating summary counting hidden reviews too",
+)
+async def get_product_rating_summary_for_moderation(
+    product_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_staff),
+) -> ApiResponse[RatingSummaryRead]:
+    summary = await ReviewService(session, user.tenant_id).summary(
+        product_id, approved_only=False
+    )
+    return ok(summary, message="Rating summary retrieved")
 
 
 @admin_router.patch(
