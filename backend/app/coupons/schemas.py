@@ -4,11 +4,18 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from app.catalogue.constants import PRICE_SCALE
 from app.core.money import MAX_MONEY
+from app.core.pagination import PageParams
 from app.coupons.constants import DiscountType
+
+
+class CouponQuery(PageParams):
+    """The admin listing filter, on top of the usual page controls."""
+
+    active_only: bool = False
 
 
 class CouponCreate(BaseModel):
@@ -37,20 +44,6 @@ class CouponCreate(BaseModel):
     per_customer_usage_limit: int | None = Field(default=None, ge=0)
     is_active: bool = True
 
-    @model_validator(mode="after")
-    def validate_coupon(self):
-        if(
-            self.discount_type == DiscountType.PERCENTAGE and self.discount_value > 100
-        ):
-            raise ValueError("Percentage discount value cannot exceed 100.")
-        if(
-            self.starts_at is not None 
-            and self.expires_at is not None 
-            and self.starts_at >= self.expires_at
-        ):
-            raise ValueError("Start date cannot be after expiration date.")
-        return self
-
 class CouponUpdate(BaseModel):
     discount_type: DiscountType | None = None
     discount_value: Decimal | None = Field(
@@ -74,20 +67,6 @@ class CouponUpdate(BaseModel):
     usage_limit: int | None = Field(default=None, ge=0)
     per_customer_usage_limit: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
-
-    @model_validator(mode="after")
-    def validate_coupon(self):
-        if(
-            self.discount_type == DiscountType.PERCENTAGE and self.discount_value > 100
-        ):
-            raise ValueError("Percentage discount value cannot exceed 100.")
-        if(
-            self.starts_at is not None 
-            and self.expires_at is not None 
-            and self.starts_at >= self.expires_at
-        ):
-            raise ValueError("Start date cannot be after expiration date.")
-        return self
 
 class CouponRead(BaseModel):
     id: UUID

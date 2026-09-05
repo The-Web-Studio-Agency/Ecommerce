@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -9,12 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_customer, require_staff
 from app.core.database import get_db
-from app.core.pagination import PageParams, page_params
 from app.core.responses import ApiResponse, ok, paginated
 from app.coupons.schemas import (
     CouponApplyRequest,
     CouponApplyResponse,
     CouponCreate,
+    CouponQuery,
     CouponRead,
     CouponUpdate,
 )
@@ -34,13 +35,12 @@ admin_router = APIRouter(prefix="/admin/coupons", tags=["Admin-Coupons"])
 )
 async def list_coupons(
     tenant: CurrentTenant,
-    active_only: bool = Query(default=False),
-    params: PageParams = Depends(page_params),
+    params: Annotated[CouponQuery, Query()],
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> ApiResponse[list[CouponRead]]:
     coupons, total = await CouponService(session, user.tenant_id).list(
-        params, active_only=active_only
+        params, active_only=params.active_only
     )
     return paginated(
         [coupon_read(coupon, tenant.currency) for coupon in coupons],

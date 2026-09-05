@@ -278,14 +278,14 @@ async def test_coupon_from_another_tenant_cannot_be_used(
     assert response.status_code == 404
 
 
-async def test_client_supplied_pricing_fields_are_ignored(
+async def test_client_cannot_supply_pricing_fields(
     client, customer_auth, address, variant, add_to_cart
 ):
-    """CheckoutCreate only has address_id and coupon_code -- there is no
-    subtotal/discount/total field for a client to send in the first place."""
+    """CheckoutCreate carries address_id and coupon_code only. Pricing is the
+    server's to compute, and a payload reaching for it is refused outright."""
     await add_to_cart(customer_auth, variant["id"], 2)
 
-    response = await client.post(
+    rejected = await client.post(
         CHECKOUT,
         json={
             "address_id": str(address["id"]),
@@ -295,8 +295,16 @@ async def test_client_supplied_pricing_fields_are_ignored(
         },
         headers=customer_auth,
     )
-    assert response.status_code == 201, response.text
-    body = response.json()["data"]
+    assert rejected.status_code == 422, rejected.text
+    refused = {detail["field"] for detail in rejected.json()["error"]["details"]}
+    assert refused == {"subtotal", "discount_amount", "total_amount"}
+
+    # The same cart, priced by the server alone.
+    accepted = await client.post(
+        CHECKOUT, json={"address_id": str(address["id"])}, headers=customer_auth
+    )
+    assert accepted.status_code == 201, accepted.text
+    body = accepted.json()["data"]
     assert body["subtotal"] == "1998.00"
     assert body["discount_amount"] == "0.00"
 

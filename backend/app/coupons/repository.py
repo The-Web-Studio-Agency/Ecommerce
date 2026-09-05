@@ -29,7 +29,8 @@ class CouponUsageRepository(TenantScopedRepository[CouponUsage]):
     model = CouponUsage
 
     async def count_for_customer(self, coupon_id: UUID, customer_id: UUID) -> int:
-        stmt=select(func.count()).select_from(CouponUsage).where(
+        stmt = select(func.count()).select_from(CouponUsage).where(
+            CouponUsage.tenant_id == self.tenant_id,
             CouponUsage.coupon_id == coupon_id,
             CouponUsage.customer_id == customer_id,
         )

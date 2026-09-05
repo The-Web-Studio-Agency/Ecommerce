@@ -21,6 +21,27 @@ logger = get_logger("coupons")
 
 COUPON_NOT_FOUND = "Coupon not found"
 SAVE_FAILED = "Unable to save coupon, please try again"
+PERCENTAGE_TOO_LARGE = "Percentage discount value cannot exceed 100."
+DATES_INVERTED = "Start date cannot be after expiration date."
+USAGE_LIMIT_REACHED = "This coupon has reached its usage limit"
+
+
+def _check_rules(
+    discount_type: DiscountType | str,
+    discount_value: Decimal | None,
+    starts_at: datetime | None,
+    expires_at: datetime | None,
+) -> None:
+    """Rules a coupon must satisfy however it arrived -- a 400, not a 422."""
+    if (
+        discount_type == DiscountType.PERCENTAGE
+        and discount_value is not None
+        and discount_value > PERCENT
+    ):
+        raise ValidationError(PERCENTAGE_TOO_LARGE)
+
+    if starts_at is not None and expires_at is not None and starts_at >= expires_at:
+        raise ValidationError(DATES_INVERTED)
 
 
 
@@ -50,6 +71,10 @@ class CouponService:
         return list(rows), total
 
     async def create(self, data: CouponCreate) -> Coupon:
+        _check_rules(
+            data.discount_type, data.discount_value, data.starts_at, data.expires_at
+        )
+
         code_upper = data.code.upper()
         existing = await self.coupons.get_by_code(code_upper)
         if existing is not None:
@@ -84,48 +109,19 @@ class CouponService:
 
     async def update(self, coupon_id: UUID, data: CouponUpdate) -> Coupon:
         coupon = await self.get(coupon_id)
-        update=data.model_dump(exclude_unset=True)
-        proposed={
-            "code": coupon.code,
-            "discount_type": coupon.discount_type,
-            "discount_value": coupon.discount_value,
-            "min_order_amount": coupon.min_order_amount,
-            "max_discount_amount": coupon.max_discount_amount,
-            "starts_at": coupon.starts_at,
-            "expires_at": coupon.expires_at,
-            "usage_limit": coupon.usage_limit,
-            "per_customer_usage_limit": coupon.per_customer_usage_limit,
-            "is_active": coupon.is_active,
-        }
-        proposed.update(update)
-        validated=CouponCreate.model_validate(proposed)
+        changes = data.model_dump(exclude_unset=True)
 
-        if "discount_type" in update:
-            coupon.discount_type = validated.discount_type.value
+        _check_rules(
+            changes.get("discount_type", coupon.discount_type),
+            changes.get("discount_value", coupon.discount_value),
+            changes.get("starts_at", coupon.starts_at),
+            changes.get("expires_at", coupon.expires_at),
+        )
 
-        if "discount_value" in update:
-            coupon.discount_value = validated.discount_value
-    
-        if "min_order_amount" in update:
-            coupon.min_order_amount = validated.min_order_amount
-
-        if "max_discount_amount" in update:
-            coupon.max_discount_amount = validated.max_discount_amount
-
-        if "starts_at" in update:
-            coupon.starts_at =validated.starts_at
-   
-        if "expires_at" in update:
-            coupon.expires_at = validated.expires_at
-     
-        if "usage_limit" in update:
-            coupon.usage_limit =validated.usage_limit
-
-        if "per_customer_usage_limit" in update:
-            coupon.per_customer_usage_limit =validated.per_customer_usage_limit
-
-        if "is_active" in update:
-            coupon.is_active =validated.is_active
+        for field, value in changes.items():
+            setattr(
+                coupon, field, value.value if isinstance(value, DiscountType) else value
+            )
 
         
         try:
@@ -168,11 +164,9 @@ class CouponService:
         if coupon.expires_at and now > coupon.expires_at:
             raise ValidationError("This coupon has expired")
 
-        # NULL means unlimited -- only an actual configured limit 
-        # 0, which is a real "block everything" setting, not "unlimited")
-
-        #if coupon.usage_limit is not None and coupon.times_used >= coupon.usage_limit:
-            #raise ValidationError("This coupon has reached its usage limit")
+        # NULL means unlimited; 0 is a real "block everything" setting.
+        if coupon.usage_limit is not None and coupon.times_used >= coupon.usage_limit:
+            raise ValidationError(USAGE_LIMIT_REACHED)
 
         if coupon.per_customer_usage_limit is not None:
             customer_uses = await self.usages.count_for_customer(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from backend.app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
+from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
 
 MONEY = Decimal("0.01")
 

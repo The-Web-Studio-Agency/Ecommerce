@@ -68,7 +68,7 @@ class Coupon(Base, TimestampMixin):
             "starts_at IS NULL OR expires_at IS NULL OR starts_at < expires_at",
             name="starts_before_expires"
         ),
-        Index("tenant_id","created_at",name="ix_coupons_tenant_id_created_at"),
+        Index("ix_coupons_tenant_id_created_at", "tenant_id", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -138,7 +138,12 @@ class CouponUsage(Base, TimestampMixin):
             "discount_amount >= 0",
             name="discount_amount_not_negative",
         ),
-        Index("tenant_id","coupon_id","customer_id",name="ix_coupon_usages_tenant_id_coupon_id_customer_id"),
+        Index(
+            "ix_coupon_usages_tenant_id_coupon_id_customer_id",
+            "tenant_id",
+            "coupon_id",
+            "customer_id",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
