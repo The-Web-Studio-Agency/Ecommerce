@@ -6,6 +6,7 @@ import { authApi } from '@/lib/api/auth';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
 import type { AuthFormState } from '@/lib/auth/form-state';
 import { clearSession, getRefreshToken, setSession } from '@/lib/auth/session';
+import { mergeGuestCart } from '@/lib/cart/actions';
 
 /**
  * Turn a failed call into something a form can show.
@@ -82,6 +83,10 @@ export async function verifyOtp(
   try {
     const tokens = await authApi.verifyOtp(phone, otp);
     await setSession(tokens);
+
+    // Anything gathered while signed out moves into the real cart now, so
+    // the shopper does not lose what they picked before signing in.
+    await mergeGuestCart(tokens.access_token);
   } catch (error) {
     return toFormState(error);
   }
