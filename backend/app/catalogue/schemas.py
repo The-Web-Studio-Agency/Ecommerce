@@ -309,6 +309,7 @@ class ProductCreate(StrictModel):
     seo_title: str | None = Field(default=None, max_length=MAX_SEO_TITLE_LENGTH)
     seo_description: str | None = Field(
         default=None, max_length=MAX_SEO_DESCRIPTION_LENGTH
+    
     )
 
     images: list[ProductImageCreate] = Field(min_length=MIN_PRODUCT_IMAGES)

@@ -21,6 +21,7 @@ from app.ratings.router import admin_router as ratings_admin_router
 from app.ratings.router import router as ratings_router
 from app.search_filter.router import router as search_filter_router
 from app.users.router import router as users_router
+from app.wishlist.router import router as wishlist_router
 
 api_router = APIRouter()
 
@@ -38,6 +39,8 @@ api_router.include_router(addresses_router)
 api_router.include_router(checkout_router)
 api_router.include_router(orders_router)
 api_router.include_router(orders_admin_router)
+
+api_router.include_router(wishlist_router)
 
 api_router.include_router(payments_router)
 api_router.include_router(payments_admin_router)
