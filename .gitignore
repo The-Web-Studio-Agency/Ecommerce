@@ -25,3 +25,5 @@ out/
 .cache/
 
 backend/var/
+
+*.tsbuildinfo
