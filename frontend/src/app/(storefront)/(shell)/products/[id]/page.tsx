@@ -22,7 +22,9 @@ async function loadProduct(id: string) {
   try {
     return await catalogueApi.getProduct(id);
   } catch (error) {
-    if (error instanceof ApiError && error.isNotFound) return null;
+    // A malformed id is a 422 from the backend, but to a visitor it is
+    // simply a URL that is not a product.
+    if (error instanceof ApiError && (error.isNotFound || error.status === 422)) return null;
     throw error;
   }
 }

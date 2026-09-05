@@ -32,7 +32,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   try {
     order = await orderApi.get(token, id);
   } catch (error) {
-    if (error instanceof ApiError && (error.isNotFound || error.isForbidden)) notFound();
+    if (error instanceof ApiError && (error.isNotFound || error.isForbidden || error.status === 422))
+      notFound();
     throw error;
   }
 

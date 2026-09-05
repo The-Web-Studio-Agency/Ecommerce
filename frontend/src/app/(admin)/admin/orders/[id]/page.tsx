@@ -19,7 +19,7 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
   try {
     order = await adminApi.getOrder(token, id);
   } catch (error) {
-    if (error instanceof ApiError && error.isNotFound) notFound();
+    if (error instanceof ApiError && (error.isNotFound || error.status === 422)) notFound();
     throw error;
   }
 
