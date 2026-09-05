@@ -79,8 +79,19 @@ class CheckoutService:
         coupon, discount = await self._resolve_coupon(coupon_code, subtotal, for_update=False)
         return await self._summary(items, subtotal, coupon, discount)
 
-    async def place_order(self, address_id: UUID, coupon_code: str | None = None) -> Order:
+    async def place_order(
+        self,
+        address_id: UUID,
+        coupon_code: str | None = None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> Order:
         """Create the order, its payment and its stock reservations in one transaction."""
+        if idempotency_key:
+            replayed = await self._replayed_order(idempotency_key)
+            if replayed is not None:
+                return replayed
+
         cart = await self._require_active_cart()
         address = await self._require_address(address_id)
         items = await self._priced_items(cart)
@@ -123,6 +134,7 @@ class CheckoutService:
                 delivery_state=address.state,
                 delivery_postal_code=address.postal_code,
                 delivery_country=address.country,
+                idempotency_key=idempotency_key,
             )
             self.session.add(order)
             await self.session.flush()
@@ -166,6 +178,12 @@ class CheckoutService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
+
+            if idempotency_key:
+                replayed = await self._replayed_order(idempotency_key)
+                if replayed is not None:
+                    return replayed
+
             raise ConflictError("Unable to place the order, please try again") from exc
         except Exception:
             await self.session.rollback()
@@ -180,6 +198,22 @@ class CheckoutService:
             summary.total_amount,
         )
         return await OrderService(self.session, self.tenant_id).get(order.id)
+
+    async def _replayed_order(self, idempotency_key: str) -> Order | None:
+        """The order this customer already placed under the same key, if any."""
+        existing = await self.orders.get_by_idempotency_key(
+            self.customer_id, idempotency_key
+        )
+        if existing is None:
+            return None
+
+        logger.info(
+            "orders.idempotent_replay order_number=%s tenant_id=%s customer_id=%s",
+            existing.order_number,
+            self.tenant_id,
+            self.customer_id,
+        )
+        return await OrderService(self.session, self.tenant_id).get(existing.id)
 
     async def _require_active_cart(self) -> Cart:
         cart = await self.carts.get_active(self.customer_id)

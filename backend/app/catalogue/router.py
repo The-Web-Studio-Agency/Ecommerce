@@ -3,7 +3,16 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_staff
@@ -36,6 +45,7 @@ from app.catalogue.service import (
     ProductService,
     VariantService,
 )
+from app.catalogue.uploads import store_image
 from app.core.database import get_db
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
@@ -406,6 +416,38 @@ async def add_product_image(
 ) -> ApiResponse[ProductImageRead]:
     image = await ProductImageService(session, user.tenant_id).add(product_id, data)
     return ok(ProductImageRead.model_validate(image), message="Product image added")
+
+
+@router.post(
+    "/products/{product_id}/images/upload",
+    response_model=ApiResponse[ProductImageRead],
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a product image file",
+)
+async def upload_product_image(
+    product_id: UUID,
+    file: UploadFile = File(description="JPEG, PNG or WebP"),
+    alt_text: str | None = Form(default=None),
+    sort_order: int = Form(default=0, ge=0),
+    is_primary: bool = Form(default=False),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[ProductImageRead]:
+    url = await store_image(
+        user.tenant_id,
+        file.filename or "",
+        file.content_type or "",
+        await file.read(),
+    )
+
+    image = await ProductImageService(session, user.tenant_id).add_uploaded(
+        product_id,
+        url=url,
+        alt_text=alt_text,
+        sort_order=sort_order,
+        is_primary=is_primary,
+    )
+    return ok(ProductImageRead.model_validate(image), message="Product image uploaded")
 
 
 @router.put(

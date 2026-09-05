@@ -13,6 +13,9 @@ STAFF_ROLES = frozenset({UserRole.STAFF.value, UserRole.ADMIN.value})
 class UserStatus(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
+    # The account was erased on request. The row survives so past orders
+    # keep a customer, but it carries no personal data any more.
+    DELETED = "DELETED"
 
 
 class OtpPurpose(str, Enum):

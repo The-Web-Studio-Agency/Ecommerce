@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_customer, require_staff
+from app.core import rate_limit
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.responses import ApiResponse, ok, paginated
 from app.coupons.schemas import (
@@ -122,6 +124,15 @@ async def apply_coupon(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[CouponApplyResponse]:
+    settings = get_settings()
+    await rate_limit.enforce(
+        "coupon-apply",
+        str(user.tenant_id),
+        str(user.id),
+        limit=settings.coupon_apply_rate_limit_attempts,
+        window_seconds=settings.commerce_rate_limit_window_seconds,
+    )
+
     coupon, discount = await CouponService(
         session, user.tenant_id
     ).validate_and_calculate(data.code, subtotal, user.id)

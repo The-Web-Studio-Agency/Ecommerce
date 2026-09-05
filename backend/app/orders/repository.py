@@ -17,6 +17,11 @@ def _escape_like(term: str) -> str:
 class OrderRepository(TenantScopedRepository[Order]):
     model = Order
 
+    async def get_by_idempotency_key(self, customer_id: UUID, key: str) -> Order | None:
+        return await self.find_one(
+            Order.customer_id == customer_id, Order.idempotency_key == key
+        )
+
     def list_select(
         self,
         *,

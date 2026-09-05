@@ -25,6 +25,7 @@ from app.core.request_context import client_ip
 from app.core.responses import ApiResponse, ok
 from app.tenants.models import Tenant
 from app.tenants.resolver import CurrentTenant
+from app.users.erasure import AccountErasureService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 admin_router = APIRouter(prefix="/admin/auth", tags=["Admin Auth"])
@@ -245,6 +246,20 @@ async def logout(
 )
 async def get_me(current_user: CurrentUser) -> ApiResponse[UserProfile]:
     return ok(UserProfile.model_validate(current_user), message="Authenticated user")
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Erase your account and personal data",
+)
+async def delete_me(
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    """Carts, wishlists, addresses and searches go. Orders stay, minus the person."""
+    await AccountErasureService(session, current_user.tenant_id).erase(current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

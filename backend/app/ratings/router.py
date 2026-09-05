@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_customer, require_staff
+from app.core import rate_limit
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
@@ -38,6 +40,15 @@ async def create_review(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[ReviewRead]:
+    settings = get_settings()
+    await rate_limit.enforce(
+        "review-create",
+        str(user.tenant_id),
+        str(user.id),
+        limit=settings.review_rate_limit_attempts,
+        window_seconds=settings.commerce_rate_limit_window_seconds,
+    )
+
     review = await ReviewService(session, user.tenant_id).create(user.id, data)
     return ok(ReviewRead.model_validate(review), message="Review created")
 

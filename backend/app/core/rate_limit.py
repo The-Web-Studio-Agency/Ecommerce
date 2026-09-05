@@ -40,6 +40,11 @@ async def hit(key: str, *, limit: int, window_seconds: int) -> None:
         raise RateLimitedError(retry_after_seconds=max(int(ttl), 1))
 
 
+async def enforce(scope: str, *parts: str, limit: int, window_seconds: int) -> None:
+    """Throttle one scope for whoever the caller identifies as the subject."""
+    await hit(build_key(scope, *parts), limit=limit, window_seconds=window_seconds)
+
+
 async def reset(key: str) -> None:
     try:
         await get_redis().delete(key)

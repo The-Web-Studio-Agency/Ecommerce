@@ -3,12 +3,15 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser, CurrentUserOptional
+from app.core import rate_limit
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.pagination import MAX_PAGE_SIZE, PageParams
+from app.core.request_context import client_ip
 from app.core.responses import ApiResponse, ok, paginated
 from app.ratings.constants import MAX_RATING, MIN_RATING
 from app.search_filter.constants import MAX_QUERY_LENGTH, SearchSort
@@ -29,6 +32,7 @@ router = APIRouter(prefix="/storefront", tags=["Product Search & Filtering"])
     summary="Search, filter and sort the storefront catalogue",
 )
 async def search_and_filter_storefront_products(
+    request: Request,
     tenant: CurrentTenant,
     current_user: CurrentUserOptional,
     q: str | None = Query(
@@ -65,6 +69,15 @@ async def search_and_filter_storefront_products(
     ),
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[ProductDiscoveryItem]]:
+    settings = get_settings()
+    await rate_limit.enforce(
+        "storefront-search",
+        str(tenant.id),
+        client_ip(request),
+        limit=settings.search_rate_limit_attempts,
+        window_seconds=settings.commerce_rate_limit_window_seconds,
+    )
+
     params = PageParams(page=page, page_size=size)
     filters = ProductFilters(
         search=q,

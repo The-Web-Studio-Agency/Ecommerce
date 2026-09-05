@@ -497,22 +497,57 @@ class ProductImageService:
         return list(result.all())
 
     async def add(self, product_id: UUID, data: ProductImageCreate) -> ProductImage:
+        return await self._attach(
+            product_id,
+            url=data.url,
+            alt_text=data.alt_text,
+            sort_order=data.sort_order,
+            is_primary=data.is_primary,
+        )
+
+    async def add_uploaded(
+        self,
+        product_id: UUID,
+        *,
+        url: str,
+        alt_text: str | None,
+        sort_order: int,
+        is_primary: bool,
+    ) -> ProductImage:
+        """For a URL this service produced. Client-supplied URLs go through add()."""
+        return await self._attach(
+            product_id,
+            url=url,
+            alt_text=alt_text,
+            sort_order=sort_order,
+            is_primary=is_primary,
+        )
+
+    async def _attach(
+        self,
+        product_id: UUID,
+        *,
+        url: str,
+        alt_text: str | None,
+        sort_order: int,
+        is_primary: bool,
+    ) -> ProductImage:
         product = await self._require_product(product_id)
 
         if product.status == CatalogueStatus.ARCHIVED.value:
             raise ConflictError("Cannot add an image to an archived product")
 
         try:
-            if data.is_primary:
+            if is_primary:
                 await self.images.clear_primary(product_id)
 
             image = await self.images.add(
                 ProductImage(
                     product_id=product_id,
-                    url=data.url,
-                    alt_text=data.alt_text,
-                    sort_order=data.sort_order,
-                    is_primary=data.is_primary,
+                    url=url,
+                    alt_text=alt_text,
+                    sort_order=sort_order,
+                    is_primary=is_primary,
                 )
             )
             await self.session.commit()

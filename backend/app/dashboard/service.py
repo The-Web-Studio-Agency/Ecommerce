@@ -4,9 +4,10 @@ from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.constants import UserRole
 from app.catalogue.models import InventoryItem, Product, ProductVariant
 from app.core.money import money
 from app.orders.constants import OrderStatus
@@ -14,6 +15,12 @@ from app.orders.models import Order, OrderItem
 from app.payments.constants import PaymentStatus
 from app.payments.models import Payment
 from app.users.models import User
+
+# low_stock_threshold is NOT NULL default 0, so an unset one reads as 0.
+DEFAULT_LOW_STOCK_THRESHOLD = 5
+
+# How many example variants the overview carries alongside the counts.
+STOCK_SAMPLE_SIZE = 10
 
 
 class DashboardService:
@@ -210,7 +217,10 @@ class DashboardService:
                 .select_from(Order)
                 .join(
                     Payment,
-                    Payment.order_id == Order.id,
+                    and_(
+                        Payment.tenant_id == Order.tenant_id,
+                        Payment.order_id == Order.id,
+                    ),
                 )
                 .where(
                     Order.tenant_id == self.tenant_id,
@@ -246,56 +256,85 @@ class DashboardService:
 
         products_overview = {"total": total_products_count}
 
-        # Inventory Overview via ProductVariant and Product
-        inv_stmt = (
-            select(InventoryItem, ProductVariant, Product)
-            .join(
-                ProductVariant,
-                InventoryItem.variant_id == ProductVariant.id,
-            )
-            .join(
-                Product,
-                ProductVariant.product_id == Product.id,
-            )
-            .where(
-                InventoryItem.tenant_id == self.tenant_id,
-            )
+        # Inventory Overview. Filtered and counted in SQL -- pulling every
+        # variant into Python to slice ten of them does not survive a real
+        # catalogue.
+        sellable = InventoryItem.available_quantity - InventoryItem.reserved_quantity
+        # The column is NOT NULL default 0, so 0 is what "nobody set one"
+        # looks like. Treating it as the default preserves the alerting admins
+        # already get; making 0 mean "never warn" is a product decision.
+        threshold = case(
+            (
+                InventoryItem.low_stock_threshold > 0,
+                InventoryItem.low_stock_threshold,
+            ),
+            else_=DEFAULT_LOW_STOCK_THRESHOLD,
         )
 
-        inv_rows = (await self.session.execute(inv_stmt)).all()
+        def _stock_select(*conditions):
+            return (
+                select(
+                    Product.id.label("product_id"),
+                    Product.name.label("product_name"),
+                    ProductVariant.id.label("variant_id"),
+                    ProductVariant.sku.label("sku"),
+                    sellable.label("available_quantity"),
+                    threshold.label("low_stock_threshold"),
+                )
+                .join(
+                    ProductVariant,
+                    and_(
+                        ProductVariant.tenant_id == InventoryItem.tenant_id,
+                        ProductVariant.id == InventoryItem.variant_id,
+                    ),
+                )
+                .join(
+                    Product,
+                    and_(
+                        Product.tenant_id == ProductVariant.tenant_id,
+                        Product.id == ProductVariant.product_id,
+                    ),
+                )
+                .select_from(InventoryItem)
+                .where(InventoryItem.tenant_id == self.tenant_id, *conditions)
+            )
 
-        low_stock_variants = []
-        out_of_stock_variants = []
+        out_of_stock = _stock_select(sellable <= 0)
+        low_stock = _stock_select(sellable > 0, sellable <= threshold)
 
-        for item, variant, prod in inv_rows:
-            sellable = item.available_quantity - item.reserved_quantity
-            threshold = item.low_stock_threshold or 5
-
-            variant_item = {
-                "product_id": prod.id,
-                "product_name": prod.name,
-                "variant_id": variant.id,
-                "sku": variant.sku,
-                "available_quantity": sellable,
-                "low_stock_threshold": threshold,
-            }
-
-            if sellable <= 0:
-                out_of_stock_variants.append(variant_item)
-            elif sellable <= threshold:
-                low_stock_variants.append(variant_item)
+        async def _count(stmt) -> int:
+            return int(
+                await self.session.scalar(
+                    select(func.count()).select_from(stmt.subquery())
+                )
+                or 0
+            )
 
         inventory_overview = {
-            "low_stock_count": len(low_stock_variants),
-            "out_of_stock_count": len(out_of_stock_variants),
-            "low_stock_variants": low_stock_variants[:10],
-            "out_of_stock_variants": out_of_stock_variants[:10],
+            "low_stock_count": await _count(low_stock),
+            "out_of_stock_count": await _count(out_of_stock),
+            "low_stock_variants": [
+                dict(row._mapping)
+                for row in (
+                    await self.session.execute(
+                        low_stock.order_by(sellable).limit(STOCK_SAMPLE_SIZE)
+                    )
+                ).all()
+            ],
+            "out_of_stock_variants": [
+                dict(row._mapping)
+                for row in (
+                    await self.session.execute(
+                        out_of_stock.order_by(ProductVariant.sku).limit(STOCK_SAMPLE_SIZE)
+                    )
+                ).all()
+            ],
         }
 
         # Customer Overview
         cust_base = select(func.count(User.id)).where(
             User.tenant_id == self.tenant_id,
-            User.role == "CUSTOMER",
+            User.role == UserRole.CUSTOMER.value,
         )
 
         total_customers = (await self.session.scalar(cust_base)) or 0
@@ -466,15 +505,24 @@ class DashboardService:
             )
             .join(
                 ProductVariant,
-                OrderItem.variant_id == ProductVariant.id,
+                and_(
+                    ProductVariant.tenant_id == OrderItem.tenant_id,
+                    ProductVariant.id == OrderItem.variant_id,
+                ),
             )
             .join(
                 Product,
-                ProductVariant.product_id == Product.id,
+                and_(
+                    Product.tenant_id == ProductVariant.tenant_id,
+                    Product.id == ProductVariant.product_id,
+                ),
             )
             .join(
                 Order,
-                OrderItem.order_id == Order.id,
+                and_(
+                    Order.tenant_id == OrderItem.tenant_id,
+                    Order.id == OrderItem.order_id,
+                ),
             )
             .where(
                 Order.tenant_id == self.tenant_id,

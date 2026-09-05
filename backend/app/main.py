@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1 import api_router
 from app.core.cache import close_redis
@@ -51,6 +53,16 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
         return response
+
+    # Local storage keeps files on disk, so the app serves them itself. An
+    # object-store backend would hand out its own URLs and skip this.
+    uploads = Path(settings.storage_local_path)
+    uploads.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        settings.storage_public_base_url,
+        StaticFiles(directory=uploads),
+        name="media",
+    )
 
     register_exception_handlers(app)
 

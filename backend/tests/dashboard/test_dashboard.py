@@ -10,6 +10,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.dashboard.service import DEFAULT_LOW_STOCK_THRESHOLD, STOCK_SAMPLE_SIZE
 from app.orders.constants import OrderStatus
 from app.orders.models import Order, OrderItem
 from app.payments.constants import PaymentStatus
@@ -384,3 +385,63 @@ async def test_change_pct_is_calculated_normally_when_previous_period_is_nonzero
     assert today["previous_order_count"] == 1
     assert today["order_count_change_pct"] == 0.0
     assert today["revenue_change_pct"] == 0.0
+
+@pytest.mark.asyncio
+async def test_an_unset_threshold_falls_back_to_the_default(
+    client: AsyncClient, admin_headers: dict, new_variant
+):
+    """The column is NOT NULL default 0, so 0 is what "unset" looks like."""
+    sparse = await new_variant(initial_quantity=4, low_stock_threshold=0)
+
+    response = await client.get(DASHBOARD, headers=admin_headers)
+    assert response.status_code == 200, response.text
+    inventory = response.json()["data"]["inventory"]
+
+    listed = [v for v in inventory["low_stock_variants"] if v["sku"] == sparse["sku"]]
+    assert listed, inventory["low_stock_variants"]
+    assert listed[0]["low_stock_threshold"] == DEFAULT_LOW_STOCK_THRESHOLD
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_threshold_is_respected(
+    client: AsyncClient, admin_headers: dict, new_variant
+):
+    plenty = await new_variant(initial_quantity=4, low_stock_threshold=2)
+
+    response = await client.get(DASHBOARD, headers=admin_headers)
+    assert response.status_code == 200, response.text
+    inventory = response.json()["data"]["inventory"]
+
+    assert all(v["sku"] != plenty["sku"] for v in inventory["low_stock_variants"])
+
+
+@pytest.mark.asyncio
+async def test_stock_counts_are_complete_but_the_sample_is_capped(
+    client: AsyncClient, admin_headers: dict, new_variant
+):
+    """Counts come from SQL, so they are not limited to the ten shown."""
+    empty = STOCK_SAMPLE_SIZE + 2
+    for _ in range(empty):
+        await new_variant(initial_quantity=0)
+
+    response = await client.get(DASHBOARD, headers=admin_headers)
+    assert response.status_code == 200, response.text
+    inventory = response.json()["data"]["inventory"]
+
+    assert inventory["out_of_stock_count"] >= empty
+    assert len(inventory["out_of_stock_variants"]) == STOCK_SAMPLE_SIZE
+
+
+@pytest.mark.asyncio
+async def test_the_dashboard_never_reports_another_tenants_stock(
+    other_client: AsyncClient, other_admin_headers: dict, admin_headers, new_variant
+):
+    await new_variant(initial_quantity=0)
+
+    response = await other_client.get(DASHBOARD, headers=other_admin_headers)
+
+    assert response.status_code == 200, response.text
+    inventory = response.json()["data"]["inventory"]
+    assert inventory["out_of_stock_count"] == 0
+    assert inventory["out_of_stock_variants"] == []
+    assert response.json()["data"]["products"]["total"] == 0

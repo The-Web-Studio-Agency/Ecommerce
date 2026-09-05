@@ -72,6 +72,17 @@ class Settings(BaseSettings):
     refresh_rate_limit_attempts: int = 30
     otp_rate_limit_window_seconds: int = 300
 
+    checkout_rate_limit_attempts: int = 20
+    coupon_apply_rate_limit_attempts: int = 15
+    review_rate_limit_attempts: int = 10
+    search_rate_limit_attempts: int = 120
+    commerce_rate_limit_window_seconds: int = 60
+
+    storage_local_path: str = "var/uploads"
+    storage_public_base_url: str = "/media"
+    max_upload_bytes: int = 5 * 1024 * 1024
+    image_max_dimension: int = 2000
+
     seed_tenant_name: str = "Zeen"
     seed_tenant_slug: str = "zeen"
     seed_tenant_currency: str = DEFAULT_CURRENCY

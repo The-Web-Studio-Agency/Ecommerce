@@ -3,13 +3,16 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin, require_customer, require_staff
+from app.core import rate_limit
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
+from app.orders.constants import MAX_IDEMPOTENCY_KEY_LENGTH
 from app.orders.schemas import (
     CheckoutCreate,
     CheckoutPreview,
@@ -66,11 +69,26 @@ async def preview_checkout(
 async def place_order(
     data: CheckoutCreate,
     tenant: CurrentTenant,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        max_length=MAX_IDEMPOTENCY_KEY_LENGTH,
+        description="Send the same key to retry safely; the original order comes back",
+    ),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[OrderRead]:
+    settings = get_settings()
+    await rate_limit.enforce(
+        "checkout",
+        str(user.tenant_id),
+        str(user.id),
+        limit=settings.checkout_rate_limit_attempts,
+        window_seconds=settings.commerce_rate_limit_window_seconds,
+    )
+
     order = await CheckoutService(session, user.tenant_id, user.id).place_order(
-        data.address_id, data.coupon_code
+        data.address_id, data.coupon_code, idempotency_key=idempotency_key
     )
     return ok(order_read(order, tenant.currency), message="Order placed")
 

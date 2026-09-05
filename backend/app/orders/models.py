@@ -32,6 +32,7 @@ from app.catalogue.constants import (
 )
 from app.models.base import Base, TimestampMixin
 from app.orders.constants import (
+    MAX_IDEMPOTENCY_KEY_LENGTH,
     MAX_ORDER_NUMBER_LENGTH,
     ORDER_NUMBER_START,
     OrderStatus,
@@ -55,6 +56,14 @@ class Order(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_orders_tenant_id_id"),
         UniqueConstraint("order_number", name="uq_orders_order_number"),
+        # NULLs stay distinct in Postgres, so orders placed without a key
+        # never collide with each other.
+        UniqueConstraint(
+            "tenant_id",
+            "customer_id",
+            "idempotency_key",
+            name="uq_orders_tenant_customer_idempotency",
+        ),
         ForeignKeyConstraint(
             ["tenant_id", "customer_id"],
             ["users.tenant_id", "users.id"],
@@ -93,6 +102,12 @@ class Order(Base, TimestampMixin):
 
     order_number: Mapped[str] = mapped_column(
         String(MAX_ORDER_NUMBER_LENGTH), nullable=False
+    )
+
+    # What the client sent as Idempotency-Key, so a retry returns this order
+    # instead of placing a second one.
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(MAX_IDEMPOTENCY_KEY_LENGTH), nullable=True
     )
 
     status: Mapped[str] = mapped_column(
