@@ -1,0 +1,78 @@
+.hero {
+  padding-block: var(--space-7) var(--space-8);
+  border-bottom: 1px solid var(--line);
+}
+
+.inner {
+  display: grid;
+  gap: var(--space-6);
+  align-items: end;
+}
+
+@media (min-width: 56rem) {
+  .inner {
+    grid-template-columns: 1.1fr 1fr;
+    gap: var(--space-8);
+  }
+}
+
+/* The headline is the one loud thing on the page. */
+.title {
+  font-size: clamp(2.625rem, 7vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+}
+
+.title em {
+  font-style: italic;
+}
+
+.lede {
+  max-width: 42ch;
+  margin-top: var(--space-4);
+  color: var(--ink-soft);
+  font-size: var(--text-lg);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.figure {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+@media (min-width: 56rem) {
+  .figure {
+    aspect-ratio: 1 / 1;
+  }
+}
+
+.figureImage {
+  object-fit: cover;
+}
+
+.caption {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  padding: var(--space-4);
+  background: linear-gradient(transparent, rgba(27, 29, 42, 0.55));
+  color: var(--on-dark);
+}
+
+.captionName {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+}
+
+.captionPrice {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,95 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  background: var(--ground);
+  border-bottom: 1px solid var(--line);
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 3.75rem;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  letter-spacing: 0.16em;
+  text-decoration: none;
+}
+
+.nav {
+  display: none;
+}
+
+@media (min-width: 56rem) {
+  .nav {
+    display: flex;
+    gap: var(--space-5);
+    justify-self: center;
+  }
+}
+
+.navLink {
+  font-size: var(--text-sm);
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.navLink:hover {
+  color: var(--ink);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  justify-self: end;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.action:hover {
+  color: var(--ink);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mobile category strip: the catalogue is the navigation on small screens. */
+.rail {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-3);
+  scrollbar-width: none;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 56rem) {
+  .rail {
+    display: none;
+  }
+}
+
+.railLink {
+  flex: none;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+}

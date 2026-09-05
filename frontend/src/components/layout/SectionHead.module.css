@@ -1,0 +1,21 @@
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.title {
+  font-size: var(--text-2xl);
+}
+
+.link {
+  flex: none;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.link:hover {
+  color: var(--ink);
+}
