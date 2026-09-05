@@ -6,7 +6,7 @@ import PasswordForm from '@/components/auth/PasswordForm';
 import { getCurrentUser } from '@/lib/auth/current-user';
 
 export const metadata: Metadata = {
-  title: 'Admin sign in',
+  title: 'Sign in',
   robots: { index: false, follow: false },
 };
 

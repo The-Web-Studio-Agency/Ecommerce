@@ -1,0 +1,146 @@
+.shell {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-rows: auto 1fr;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--gutter);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  letter-spacing: 0.14em;
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+}
+
+.link {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.link:hover {
+  color: var(--ink);
+}
+
+.user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.main {
+  padding: var(--space-6) var(--gutter);
+  max-width: var(--container);
+  width: 100%;
+  margin-inline: auto;
+}
+
+.tiles {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  margin-bottom: var(--space-6);
+}
+
+.tile {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+}
+
+.tileLabel {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.tileValue {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-top: var(--space-1);
+}
+
+.tileDelta {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.up { color: var(--positive); }
+.down { color: var(--critical); }
+
+.table {
+  width: 100%;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-surface);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-4);
+}
+
+.blocks {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 64rem) {
+  .blocks {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.link2 {
+  text-decoration: none;
+}
+
+.link2:hover {
+  text-decoration: underline;
+}
