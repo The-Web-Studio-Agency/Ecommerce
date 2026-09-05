@@ -9,8 +9,13 @@ import {
   sessionCookieOptions,
 } from '@/lib/auth/cookies';
 
-/** Routes that need a signed-in customer. */
-const CUSTOMER_PREFIXES = ['/account', '/orders', '/cart', '/checkout', '/wishlist'];
+/**
+ * Routes that need a signed-in customer.
+ *
+ * /cart is deliberately absent: guests keep a cookie-backed cart that is
+ * merged after sign-in, so they have to be able to see it.
+ */
+const CUSTOMER_PREFIXES = ['/account', '/orders', '/checkout', '/wishlist'];
 
 /** Routes that need a staff or admin role. */
 const ADMIN_PREFIX = '/admin';

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Container } from '@/components/ui/Layout';
 import { catalogueApi } from '@/lib/api/catalogue';
 import { getCurrentUser } from '@/lib/auth/current-user';
+import { getCartCount } from '@/lib/cart/read';
 
 import styles from './Header.module.css';
 
@@ -21,7 +22,11 @@ async function navCategories() {
 }
 
 export default async function Header() {
-  const [categories, user] = await Promise.all([navCategories(), getCurrentUser()]);
+  const [categories, user, cartCount] = await Promise.all([
+    navCategories(),
+    getCurrentUser(),
+    getCartCount(),
+  ]);
 
   return (
     <header className={styles.header}>
@@ -50,6 +55,11 @@ export default async function Header() {
 
             <Link href="/cart" className={styles.action}>
               Cart
+              {cartCount > 0 && (
+                <span className={styles.count} data-numeric>
+                  ({cartCount})
+                </span>
+              )}
             </Link>
           </div>
         </div>
