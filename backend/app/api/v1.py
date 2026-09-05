@@ -11,6 +11,7 @@ from app.catalogue.router import router as catalogue_router
 from app.catalogue.storefront import router as storefront_router
 from app.coupons.router import admin_router as coupons_admin_router
 from app.coupons.router import router as coupons_router
+from app.dashboard.router import router as dashboard_router
 from app.orders.router import admin_router as orders_admin_router
 from app.orders.router import checkout_router
 from app.orders.router import router as orders_router
@@ -54,3 +55,5 @@ api_router.include_router(ratings_router)
 api_router.include_router(ratings_admin_router)
 
 api_router.include_router(search_filter_router)
+
+api_router.include_router(dashboard_router)

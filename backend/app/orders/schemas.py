@@ -43,8 +43,6 @@ class CheckoutCreate(StrictModel):
 
     address_id: UUID
     coupon_code: str | None = Field(default=None, min_length=1, max_length=50)
-    address_id: UUID
-    coupon_code: str | None = Field(default=None, min_length=1, max_length=50)
 
 
 class CheckoutPreviewCreate(StrictModel):

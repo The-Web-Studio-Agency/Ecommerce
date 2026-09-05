@@ -55,7 +55,6 @@ async def preview_checkout(
         coupon_code=coupon_code,
     )
     return ok(preview, message="Checkout preview")
-    
 
 
 @checkout_router.post(
