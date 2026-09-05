@@ -27,3 +27,5 @@ out/
 backend/var/
 
 *.tsbuildinfo
+
+.env*.local
