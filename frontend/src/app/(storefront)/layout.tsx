@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Newsreader, Schibsted_Grotesk } from 'next/font/google';
 
 import { ToastProvider } from '@/components/ui/Toast';
+import { siteUrl } from '@/lib/site';
 import '@/styles/base.css';
 
 /**
@@ -25,11 +26,20 @@ const schibsted = Schibsted_Grotesk({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: {
     default: 'Zeen',
     template: '%s | Zeen',
   },
   description: 'Everyday pieces in considered fabrics -- clothing, bags and jewellery from Zeen.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: 'Zeen',
+    title: 'Zeen',
+    description: 'Everyday pieces in considered fabrics -- clothing, bags and jewellery from Zeen.',
+  },
+  twitter: { card: 'summary_large_image' },
 };
 
 export default function StorefrontLayout({ children }: Readonly<{ children: React.ReactNode }>) {

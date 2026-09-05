@@ -14,6 +14,9 @@ import type { ProductSort } from '@/types/catalogue';
 export const metadata: Metadata = {
   title: 'Shop',
   description: 'The full Zeen collection: clothing, bags, footwear and jewellery.',
+  // Filtered views are the same collection, so they point at the canonical
+  // listing rather than competing with it in the index.
+  alternates: { canonical: '/shop' },
 };
 
 const SORTS: ProductSort[] = ['newest', 'name_asc', 'name_desc', 'price_low', 'price_high'];

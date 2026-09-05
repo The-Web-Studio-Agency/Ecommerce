@@ -13,6 +13,7 @@ import { catalogueApi } from '@/lib/api/catalogue';
 import { reviewApi } from '@/lib/api/reviews';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
+import { siteUrl } from '@/lib/site';
 import { formatPriceRange } from '@/lib/format';
 
 import styles from '@/components/product/ProductDetail.module.css';
@@ -107,11 +108,32 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         : undefined,
   };
 
+  const base = siteUrl();
+
+  const breadcrumbs = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Shop', item: `${base}/shop` },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: product.category.name,
+        item: `${base}/shop?category=${product.category.id}`,
+      },
+      { '@type': 'ListItem', position: 3, name: product.name, item: `${base}/products/${product.id}` },
+    ],
+  };
+
   return (
     <main>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }}
       />
 
       <Section>
