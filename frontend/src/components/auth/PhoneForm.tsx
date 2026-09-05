@@ -2,43 +2,38 @@
 
 import { useActionState } from 'react';
 
+import Button from '@/components/ui/Button';
+import { Input } from '@/components/ui/Field';
 import { requestOtp } from '@/lib/auth/actions';
 import { initialAuthState } from '@/lib/auth/form-state';
 
-/**
- * Step one of sign-in: the phone number.
- *
- * There is no separate registration -- a number without an account gets one
- * when its first code is verified, so this form is both sign-in and sign-up.
- */
+import { authStyles } from './AuthShell';
+
 export default function PhoneForm() {
   const [state, formAction, pending] = useActionState(requestOtp, initialAuthState);
 
-  return (
-    <form action={formAction} noValidate>
-      <label htmlFor="phone">Mobile number</label>
+  const fieldError = state.fieldErrors?.phone;
+  const formError = fieldError ? null : state.error;
 
-      <input
-        id="phone"
+  return (
+    <form action={formAction} className={authStyles.form} noValidate>
+      {formError && <p className={authStyles.alert}>{formError}</p>}
+
+      <Input
+        label="Mobile number"
         name="phone"
         type="tel"
         inputMode="numeric"
         autoComplete="tel"
+        placeholder="10-digit number"
         required
         autoFocus
-        aria-describedby={state.fieldErrors?.phone || state.error ? 'phone-error' : undefined}
-        aria-invalid={Boolean(state.fieldErrors?.phone)}
+        error={fieldError}
       />
 
-      {(state.fieldErrors?.phone || state.error) && (
-        <p id="phone-error" role="alert">
-          {state.fieldErrors?.phone ?? state.error}
-        </p>
-      )}
-
-      <button type="submit" disabled={pending}>
-        {pending ? 'Sending code...' : 'Send code'}
-      </button>
+      <Button type="submit" size="lg" block disabled={pending}>
+        {pending ? 'Sending code' : 'Send code'}
+      </Button>
     </form>
   );
 }

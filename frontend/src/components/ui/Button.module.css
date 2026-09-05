@@ -1,0 +1,75 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease), border-color var(--duration) var(--ease),
+    color var(--duration) var(--ease);
+}
+
+.root:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.sm {
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-sm);
+}
+
+.md {
+  padding: 0.6875rem 1.125rem;
+  font-size: var(--text-sm);
+}
+
+.lg {
+  padding: 0.9375rem 1.75rem;
+  font-size: var(--text-base);
+}
+
+.primary {
+  background: var(--ink);
+  color: var(--on-dark);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.secondary {
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.secondary:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--ink);
+  padding-inline: var(--space-2);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.critical {
+  background: var(--critical);
+  color: var(--on-dark);
+}
+
+.critical:hover:not(:disabled) {
+  background: #85281e;
+}
+
+.block {
+  width: 100%;
+}

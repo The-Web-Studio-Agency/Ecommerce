@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
+import AuthShell from '@/components/auth/AuthShell';
 import PhoneForm from '@/components/auth/PhoneForm';
 import { getCurrentUser } from '@/lib/auth/current-user';
 
@@ -22,11 +23,8 @@ export default async function SignInPage({
   }
 
   return (
-    <main>
-      <h1>Sign in to Zeen</h1>
-      <p>We&rsquo;ll text you a code. New here? Your account is created automatically.</p>
-
+    <AuthShell title="Sign in" lede="We'll text you a code. If you're new, your account is created as you go.">
       <PhoneForm />
-    </main>
+    </AuthShell>
   );
 }

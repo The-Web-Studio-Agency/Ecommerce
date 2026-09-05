@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
+import AuthShell from '@/components/auth/AuthShell';
 import PasswordForm from '@/components/auth/PasswordForm';
 import { getCurrentUser } from '@/lib/auth/current-user';
 
@@ -15,10 +16,8 @@ export default async function AdminLoginPage() {
   if (user?.role === 'ADMIN' || user?.role === 'STAFF') redirect('/admin');
 
   return (
-    <main>
-      <h1>Zeen admin</h1>
-
+    <AuthShell title="Admin" lede="Sign in with your staff password.">
       <PasswordForm />
-    </main>
+    </AuthShell>
   );
 }

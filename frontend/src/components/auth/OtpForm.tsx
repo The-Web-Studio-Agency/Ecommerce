@@ -2,10 +2,14 @@
 
 import { useActionState, useEffect, useState } from 'react';
 
+import Button from '@/components/ui/Button';
+import { Input } from '@/components/ui/Field';
 import { requestOtp, verifyOtp } from '@/lib/auth/actions';
 import { initialAuthState } from '@/lib/auth/form-state';
 
-/** The backend allows 5 code requests per 5 minutes, so resend is paced. */
+import { authStyles } from './AuthShell';
+
+/** The backend allows five code requests per five minutes, so resend is paced. */
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function OtpForm({ phone, next }: { phone: string; next: string }) {
@@ -20,18 +24,19 @@ export default function OtpForm({ phone, next }: { phone: string; next: string }
     return () => clearTimeout(timer);
   }, [secondsLeft]);
 
-  const error = state.fieldErrors?.otp ?? state.error ?? resendState.error;
+  const fieldError = state.fieldErrors?.otp;
+  const formError = fieldError ? null : (state.error ?? resendState.error);
 
   return (
     <>
-      <form action={formAction} noValidate>
+      <form action={formAction} className={authStyles.form} noValidate>
+        {formError && <p className={authStyles.alert}>{formError}</p>}
+
         <input type="hidden" name="phone" value={phone} />
         <input type="hidden" name="next" value={next} />
 
-        <label htmlFor="otp">6-digit code</label>
-
-        <input
-          id="otp"
+        <Input
+          label="6-digit code"
           name="otp"
           type="text"
           inputMode="numeric"
@@ -40,31 +45,27 @@ export default function OtpForm({ phone, next }: { phone: string; next: string }
           pattern="\d{6}"
           required
           autoFocus
-          aria-describedby={error ? 'otp-error' : undefined}
-          aria-invalid={Boolean(error)}
+          error={fieldError}
         />
 
-        {error && (
-          <p id="otp-error" role="alert">
-            {error}
-          </p>
-        )}
-
-        <button type="submit" disabled={pending}>
-          {pending ? 'Verifying...' : 'Verify and continue'}
-        </button>
+        <Button type="submit" size="lg" block disabled={pending}>
+          {pending ? 'Verifying' : 'Verify and continue'}
+        </Button>
       </form>
 
-      <form action={resendAction}>
+      <form action={resendAction} className={authStyles.footnote}>
         <input type="hidden" name="phone" value={phone} />
 
-        <button
-          type="submit"
-          disabled={resending || secondsLeft > 0}
-          onClick={() => setSecondsLeft(RESEND_COOLDOWN_SECONDS)}
-        >
-          {secondsLeft > 0 ? `Resend code in ${secondsLeft}s` : 'Resend code'}
-        </button>
+        {secondsLeft > 0 ? (
+          <span>Didn&rsquo;t get it? You can ask for another in {secondsLeft}s.</span>
+        ) : (
+          <span>
+            Didn&rsquo;t get it?{' '}
+            <button type="submit" className={authStyles.resend} disabled={resending}>
+              Send a new code
+            </button>
+          </span>
+        )}
       </form>
     </>
   );

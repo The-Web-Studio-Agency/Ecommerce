@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
+import AuthShell from '@/components/auth/AuthShell';
 import OtpForm from '@/components/auth/OtpForm';
 
 export const metadata: Metadata = {
@@ -15,18 +16,15 @@ export default async function VerifyPage({
 }) {
   const { phone, next } = await searchParams;
 
-  // Without a number there is nothing to verify against, so start over
-  // rather than showing a form that cannot succeed.
+  // Without a number there is nothing to verify, so start over rather than
+  // showing a form that cannot succeed.
   if (!phone) redirect('/signin');
 
   const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/account';
 
   return (
-    <main>
-      <h1>Enter your code</h1>
-      <p>We sent a 6-digit code to {phone}.</p>
-
+    <AuthShell title="Enter your code" lede={`We sent a 6-digit code to ${phone}.`}>
       <OtpForm phone={phone} next={destination} />
-    </main>
+    </AuthShell>
   );
 }

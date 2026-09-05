@@ -2,44 +2,27 @@
 
 import { useActionState } from 'react';
 
+import Button from '@/components/ui/Button';
+import { Input } from '@/components/ui/Field';
 import { passwordLogin } from '@/lib/auth/actions';
 import { initialAuthState } from '@/lib/auth/form-state';
 
-/** Admins and staff sign in with a password; only customers use codes. */
+import { authStyles } from './AuthShell';
+
 export default function PasswordForm() {
   const [state, formAction, pending] = useActionState(passwordLogin, initialAuthState);
 
   return (
-    <form action={formAction} noValidate>
-      <label htmlFor="identifier">Email or phone</label>
-      <input
-        id="identifier"
-        name="identifier"
-        type="text"
-        autoComplete="username"
-        required
-        autoFocus
-      />
+    <form action={formAction} className={authStyles.form} noValidate>
+      {state.error && <p className={authStyles.alert}>{state.error}</p>}
 
-      <label htmlFor="password">Password</label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        autoComplete="current-password"
-        required
-        aria-describedby={state.error ? 'login-error' : undefined}
-      />
+      <Input label="Email or phone" name="identifier" type="text" autoComplete="username" required autoFocus />
 
-      {state.error && (
-        <p id="login-error" role="alert">
-          {state.error}
-        </p>
-      )}
+      <Input label="Password" name="password" type="password" autoComplete="current-password" required />
 
-      <button type="submit" disabled={pending}>
-        {pending ? 'Signing in...' : 'Sign in'}
-      </button>
+      <Button type="submit" size="lg" block disabled={pending}>
+        {pending ? 'Signing in' : 'Sign in'}
+      </Button>
     </form>
   );
 }
