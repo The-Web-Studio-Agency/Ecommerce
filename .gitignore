@@ -19,6 +19,7 @@ out/
 .idea/
 
 .DS_Store
+__MACOSX/
 
 *.log
 
