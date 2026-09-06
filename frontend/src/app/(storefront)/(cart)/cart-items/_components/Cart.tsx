@@ -270,65 +270,66 @@ export default function Cart() {
         {/* =================================
             ORDER SUMMARY
         ================================= */}
+        { cartItems.length !==0 &&
+          <div className="cart-items-summary">
+            <h2 className="cart-items-summary-title">Order Summary</h2>
 
-        <div className="cart-items-summary">
-          <h2 className="cart-items-summary-title">Order Summary</h2>
+            <div className="cart-items-summary-rows">
+              {/* SUBTOTAL */}
 
-          <div className="cart-items-summary-rows">
-            {/* SUBTOTAL */}
+              <div className="cart-items-summary-row">
+                <span>Subtotal ({itemCount} items)</span>
 
-            <div className="cart-items-summary-row">
-              <span>Subtotal ({itemCount} items)</span>
+                <span className="cart-items-summary-value">{currency(subtotal)}</span>
+              </div>
 
-              <span className="cart-items-summary-value">{currency(subtotal)}</span>
+              {/* SHIPPING */}
+
+              <div className="cart-items-summary-row">
+                <span>Shipping</span>
+
+                <span className="cart-items-summary-value">Free</span>
+              </div>
+
+              {/* TAX */}
+
+              <div className="cart-items-summary-row">
+                <span>Estimated Tax</span>
+
+                <span className="cart-items-summary-value">{currency(tax)}</span>
+              </div>
             </div>
 
-            {/* SHIPPING */}
-
-            <div className="cart-items-summary-row">
-              <span>Shipping</span>
-
-              <span className="cart-items-summary-value">Free</span>
-            </div>
-
-            {/* TAX */}
-
-            <div className="cart-items-summary-row">
-              <span>Estimated Tax</span>
-
-              <span className="cart-items-summary-value">{currency(tax)}</span>
-            </div>
-          </div>
-
-          {/* =================================
+            {/* =================================
               TOTAL
-          ================================= */}
+              ================================= */}
 
-          <div className="cart-items-total">
-            <span className="cart-items-total-label">Total</span>
+            <div className="cart-items-total">
+              <span className="cart-items-total-label">Total</span>
 
-            <span className="cart-items-total-value">{currency(total)}</span>
-          </div>
-
-          {/* CHECKOUT */}
-          <Link href={'/check-out'}>
-            <button type="button" className="cart-items-checkout-btn">
-              Proceed to Checkout
-            </button>
-          </Link>
-
-          {/* NOTES */}
-
-          <div className="cart-items-notes">
-            <div className="cart-items-note">
-              <span>Secure checkout, encrypted payment</span>
+              <span className="cart-items-total-value">{currency(total)}</span>
             </div>
 
-            <div className="cart-items-note">
-              <span>Free white-glove delivery on this order</span>
+            {/* CHECKOUT */}
+            <Link href={'/check-out'}>
+              <button type="button" className="cart-items-checkout-btn">
+                Proceed to Checkout
+              </button>
+            </Link>
+
+            {/* NOTES */}
+
+            <div className="cart-items-notes">
+              <div className="cart-items-note">
+                <span>Secure checkout, encrypted payment</span>
+              </div>
+
+              <div className="cart-items-note">
+                <span>Free white-glove delivery on this order</span>
+              </div>
             </div>
           </div>
-        </div>
+        }
       </div>
     </div>
   );

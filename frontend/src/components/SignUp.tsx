@@ -127,7 +127,7 @@ export default function SignUp() {
         {/* ================= LEFT PANEL ================= */}
 
         <div className="imageWrap">
-          <Image src="/assets/cloth-0.webp" alt="Desert dunes at dusk" height={500} width={500} className="image" />
+          <img src="/assets/cloth-0.webp" alt="Desert dunes at dusk"  className="image" />
         </div>
 
         {/* ================= RIGHT PANEL ================= */}

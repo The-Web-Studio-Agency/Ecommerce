@@ -41413,7 +41413,7 @@ video#video-background {
   display: flex;
   gap: 10px;
 }
-@media (max-width: 550px) {
+@media (max-width: 1100px) {
   .single-product-image-section {
     flex-direction: column-reverse;
   }
@@ -41425,7 +41425,7 @@ video#video-background {
   flex-direction: column;
   gap: 5px;
 }
-@media (max-width: 550px) {
+@media (max-width: 1100px) {
   .product-thumbnail-gallery {
     flex-direction: row;
     width: 100%;
@@ -41621,7 +41621,6 @@ video#video-background {
 /* ============ Cart page ============ */
 
 .cart-items-page {
-  min-height: 100vh;
   background-color: #ffffff;
   padding: 1.5rem;
   font-family: inherit;
@@ -41634,6 +41633,7 @@ video#video-background {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  min-height: 750px;
 }
 
 /* ---------- Left column: cart list ---------- */
@@ -41666,6 +41666,11 @@ video#video-background {
   padding: 3rem;
   text-align: center;
   color: #a3a3a3;
+  display: flex;
+  font-size: 30px;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
 }
 
 .cart-items-card {
@@ -42060,9 +42065,7 @@ video#video-background {
   }
 }
 
-
 /* ============ Otp Verification  page ============ */
-
 
 .otpverification-page {
   min-height: 100vh;
@@ -42072,12 +42075,12 @@ video#video-background {
   align-items: center;
   justify-content: center;
   padding: 2.5rem 1rem;
-  font-family:inherit;
+  font-family: inherit;
 }
 
 .otpverification-container {
   width: 100%;
-  display:flex;
+  display: flex;
   flex-direction: column;
   gap: 10px;
   align-items: center;
@@ -42086,8 +42089,8 @@ video#video-background {
 
 .otpverification-card {
   border: 1px solid #e5e7eb;
-  max-width:600px;
-  width:100%;
+  max-width: 600px;
+  width: 100%;
   border-radius: 1.5rem;
   padding: 1.75rem;
 }
@@ -42180,9 +42183,8 @@ video#video-background {
 }
 
 @media (max-width: 600px) {
-.otpverification-otp-input{
-
- }
+  .otpverification-otp-input {
+  }
 }
 
 .otpverification-otp-input:focus {
@@ -42318,63 +42320,57 @@ video#video-background {
 /* ============ SignIn page ============ */
 
 .login-page-wrapper {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100dvh;
-  padding: 40px 16px 40px 16px;
+  max-width: 100%;
+  width: 95%;
+  margin: auto;
+  min-height: 100vh;
 }
-
 .login-page-card {
-  width: 100%;
-  max-width: 1024px;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 24px;
-  box-shadow: 0 20px 60px #0000001f;
-  padding: 12px;
-  overflow: hidden;
+  min-height: 100vh;
 }
-
 .login-page-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+  min-height: 100vh;
+  grid-template-columns: 1fr 1fr;
 }
 
-@media (min-width: 768px) {
+@media (max-width: 1100px) {
   .login-page-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+    grid-template-rows: 0.5fr 2fr;
   }
 }
-
-/* ---- Image panel ---- */
-
 .login-page-image-panel {
-  display: none;
-  border-radius: 16px;
-  overflow: hidden;
-  background: #efefe7;
-}
-
-@media (min-width: 768px) {
-  .login-page-image-panel {
-    display: block;
-  }
+  object-fit: cover;
+  width: 100%;
+  min-height: 100vh;
 }
 
 .login-page-image {
-  width: 100%;
-  height: 100%;
+  min-height: 100vh;
   object-fit: cover;
-  display: block;
+  width: 100%;
+}
+@media (max-width: 1100px) {
+  .login-page-image-panel {
+    min-height: 0;
+    height: 400px;
+  }
+
+  .login-page-image {
+    min-height: 0;
+    height: 400px;
+    object-fit: fill;
+  }
 }
 
 .login-page-form-panel {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
   padding: 32px 16px;
+  height: 100%;
 }
 
 @media (min-width: 640px) {
@@ -42387,8 +42383,10 @@ video#video-background {
   width: 100%;
   display: flex;
   flex-direction: column;
+  margin-top: 50px;
+  justify-content: start;
+  gap: 30px;
   height: 100%;
-  justify-content: space-between;
 }
 
 .login-page-error {
@@ -42633,104 +42631,85 @@ video#video-background {
 
 .page {
   min-height: 100vh;
-  width: 100%;
+  width: 95%;
+  margin: auto;
   background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
 }
 .page {
   margin-top: 0rem !important;
 }
 .card {
   width: 100%;
-  max-width: 1024px;
+  min-height: 100vh;
   background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-@media (min-width: 768px) {
-  .card {
-    flex-direction: row;
-  }
-}
-
-/* ---------- Left: image panel ---------- */
-
-.imageWrap {
-  position: relative;
-  width: 100%;
-  height: 260px;
-  padding: 12px;
-}
-
-@media (min-width: 768px) {
-  .imageWrap {
-    width: 50%;
-    height: auto;
-    min-height: 640px;
-  }
-}
-.imageWrap {
-  display: none;
-}
-@media (min-width: 770px) {
-  .imageWrap {
-    display: block;
-  }
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-bottom: 0px;
+  box-shadow: none;
 }
 .image {
   width: 100%;
   height: 100%;
-  border-radius: 16px;
   object-fit: cover;
-  display: block;
 }
-@media (max-width: 700px) {
+
+@media (max-width: 1100px) {
+  .card {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 2fr;
+  }
   .image {
-    width: 100%;
-    height: 100%;
-    border-radius: 16px;
-    object-fit: cover;
-    display: block;
+    min-height: 0;
+    height: 400px;
+    object-fit: fill;
   }
-  .formWrap {
-    padding: 50px 10px 50px 10px;
-  }
+}
+/* ---------- Left: image panel ---------- */
+
+.imageWrap {
+  width: 100%;
+  height: 100%;
 }
 
 /* ---------- Right: form panel ---------- */
 
 .formWrap {
   width: 100%;
-  padding: 50px 10px 50px 10px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-}
-
-@media (min-width: 768px) {
-  .formWrap {
-    width: 50%;
-  }
+  margin-top: 50px;
+  height: 100%;
+  justify-content: start;
 }
 
 .formInner {
-  max-width: 380px;
   width: 100%;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
 }
-
+@media (max-width: 1100px) {
+  .formInner {
+    gap: 20px;
+  }
+  .formWrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    margin-top: 30px;
+  }
+}
 .title {
   color: #000000;
   font-size: 2.25rem;
   font-weight: 600;
+  text-align: left;
   margin: 0 0 12px 0;
 }
 @media (max-width: 700px) {
@@ -42743,6 +42722,7 @@ video#video-background {
   color: #737373;
   font-size: 0.875rem;
   margin: 0 0 32px 0;
+  text-align: left;
 }
 
 .link {
@@ -44369,12 +44349,10 @@ video#video-background {
 
 /* ============  My Order Details Page ============ */
 
-
-
 .myorderPage {
-  min-height: 100vh;
   width: 100%;
-  background-color:white; /* stone-50 */
+  min-height: 850px;
+  background-color: white; /* stone-50 */
   padding: 3rem 1.5rem;
 }
 
@@ -44431,7 +44409,10 @@ video#video-background {
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .myorderFilterButton:hover {
@@ -44591,19 +44572,34 @@ video#video-background {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 4rem 0;
+  min-height: 500px;
+
   color: #a8a29e; /* stone-400 */
 }
 
 .myorderEmptyIcon {
+  height: 2rem;
+  width: 2rem;
+}
+
+.myorderEmptyText {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+@media(max-width:600px){
+  .myorderEmptyIcon {
   height: 1.5rem;
   width: 1.5rem;
 }
 
 .myorderEmptyText {
-  font-size: 0.875rem;
+  font-size: 1rem;
   margin: 0;
+}
 }
 /* ============ Main Footer ============ */
 
@@ -44615,16 +44611,11 @@ footer {
   --accent-text: #1c1b19;
   --divider: #33312c;
   --input-bg: #242220;
-
   background-color: var(--bg);
   color: var(--text);
-  font-family:
-    'Inter',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: inherit;
   width: 100%;
+  bottom: 0px;
 }
 
 .footer-inner {
@@ -73491,6 +73482,9 @@ footer.footer-dark .icon-bx-wraper {
 
 .main-bar-wraper.sticky-no .main-bar {
   position: unset;
+}
+.page-wraper{
+  min-height: 100vh;
 }
 
 .boxed .page-wraper {

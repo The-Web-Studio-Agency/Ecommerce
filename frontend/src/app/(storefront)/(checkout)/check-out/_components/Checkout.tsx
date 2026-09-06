@@ -11,6 +11,7 @@ interface CheckoutFormState {
   firstName: string;
   lastName: string;
   address: string;
+  address2: string;
   city: string;
   state: string;
   pincode: string;
@@ -72,6 +73,7 @@ const INITIAL_FORM: CheckoutFormState = {
   lastName: '',
 
   address: '',
+  address2: '',
   city: '',
   state: '',
   pincode: '',
@@ -348,6 +350,8 @@ export default function CheckoutPage() {
 
           address: form.address.trim(),
 
+          address2: form.address2.trim(),
+
           city: form.city.trim(),
 
           state: form.state,
@@ -454,7 +458,7 @@ export default function CheckoutPage() {
       console.log('Ready to send to backend:', orderData);
 
       alert('Checkout form is valid. Backend order API will be connected next.');
-      router.push(`/order-success/${"1234"}`)
+      router.push(`/order-success/${'1234'}`);
     } catch (error) {
       console.error('Checkout error:', error);
 
@@ -588,9 +592,22 @@ export default function CheckoutPage() {
                   label="Address"
                   placeholder="Your address"
                   value={form.address}
-                  maxLength={200}
+                  maxLength={100}
                   onChange={handleChange}
                   error={errors.address}
+                  span
+                />
+
+                {/* ADDRESS LINE 2 */}
+
+                <Field
+                  id="address2"
+                  label="Apartment, suite, landmark (optional)"
+                  placeholder="Near XYZ landmark"
+                  value={form.address2}
+                  maxLength={100}
+                  onChange={handleChange}
+                  error={errors.address2}
                   span
                 />
 

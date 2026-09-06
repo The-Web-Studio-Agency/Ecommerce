@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 
-
 function ArrowUpRightIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -107,52 +106,46 @@ export default function MyOrders() {
 
   const orders = filter === 'all' ? ORDERS : ORDERS.filter(o => o.status === filter);
 
-//   const [orders, setOrders] = useState([]);
-// const [loading, setLoading] = useState(true);
-// const [error, setError] = useState('');
+  //   const [orders, setOrders] = useState([]);
+  // const [loading, setLoading] = useState(true);
+  // const [error, setError] = useState('');
 
-// useEffect(() => {
-//   const fetchOrders = async () => {
-//     try {
-//       setLoading(true);
-//       setError('');
+  // useEffect(() => {
+  //   const fetchOrders = async () => {
+  //     try {
+  //       setLoading(true);
+  //       setError('');
 
-//       const response = await fetch(
-//         'http://localhost:5000/api/orders/my-orders',
-//         {
-//           method: 'GET',
-//           credentials: 'include',
-//         }
-//       );
+  //       const response = await fetch(
+  //         'http://localhost:5000/api/orders/my-orders',
+  //         {
+  //           method: 'GET',
+  //           credentials: 'include',
+  //         }
+  //       );
 
-//       const data = await response.json();
+  //       const data = await response.json();
 
-//       if (!response.ok) {
-//         throw new Error(data.message || 'Failed to fetch orders');
-//       }
+  //       if (!response.ok) {
+  //         throw new Error(data.message || 'Failed to fetch orders');
+  //       }
 
-//       setOrders(data.orders);
-//     } catch (error) {
-//       console.error('Failed to fetch orders:', error);
+  //       setOrders(data.orders);
+  //     } catch (error) {
+  //       console.error('Failed to fetch orders:', error);
 
-//       if (error instanceof Error) {
-//         setError(error.message);
-//       } else {
-//         setError('Something went wrong while fetching orders');
-//       }
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
+  //       if (error instanceof Error) {
+  //         setError(error.message);
+  //       } else {
+  //         setError('Something went wrong while fetching orders');
+  //       }
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
 
-//   fetchOrders();
-// }, []);
-
-
-
-
-
-
+  //   fetchOrders();
+  // }, []);
 
   return (
     <div className="myorderPage">
@@ -162,22 +155,23 @@ export default function MyOrders() {
             <h1 className="myorderTitle">My orders</h1>
           </div>
         </div>
-
-        <div className="myorderFilters">
-          {FILTERS.map(f => {
-            const active = filter === f;
-            const label = f === 'all' ? 'All' : STATUS_META[f].label;
-            return (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`myorderFilterButton ${active ? 'myorderFilterButtonActive' : ''}`}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        {orders.length!==0 &&
+          <div className="myorderFilters">
+            {FILTERS.map(f => {
+              const active = filter === f;
+              const label = f === 'all' ? 'All' : STATUS_META[f].label;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={`myorderFilterButton ${active ? 'myorderFilterButtonActive' : ''}`}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        }
 
         <div className="myorderTableCard">
           {/* Horizontal scroll wrapper: keeps the table usable on narrow screens */}
@@ -223,7 +217,7 @@ export default function MyOrders() {
           {orders.length === 0 && (
             <div className="myorderEmptyState">
               <PackageSearchIcon className="myorderEmptyIcon" />
-              <p className="myorderEmptyText">No orders with this status.</p>
+              <p className="myorderEmptyText">You haven't placed any orders yet</p>
             </div>
           )}
         </div>

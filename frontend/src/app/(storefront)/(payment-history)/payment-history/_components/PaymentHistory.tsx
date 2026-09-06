@@ -40,9 +40,13 @@ interface StatusMeta {
 
 const PAYMENTS: Payment[] = [
   { orderId: 'ORD-1234', paymentId: 'pay_ABC123', method: 'UPI', amount: '₹2,814', status: 'paid' },
+
   { orderId: 'ORD-1235', paymentId: '—', method: 'COD', amount: '₹1,500', status: 'pending' },
+
   { orderId: 'ORD-1236', paymentId: 'pay_DEF456', method: 'Card', amount: '₹4,999', status: 'paid' },
+
   { orderId: 'ORD-1237', paymentId: 'pay_GHI789', method: 'Net Banking', amount: '₹899', status: 'failed' },
+
   { orderId: 'ORD-1238', paymentId: 'pay_JKL012', method: 'UPI', amount: '₹1,250', status: 'refunded' },
 ];
 
@@ -128,21 +132,23 @@ export default function PaymentHistory() {
           </div>
         </div>
 
-        <div className="myorderFilters">
-          {FILTERS.map(f => {
-            const active = filter === f;
-            const label = f === 'all' ? 'All' : STATUS_META[f].label;
-            return (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`myorderFilterButton ${active ? 'myorderFilterButtonActive' : ''}`}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        {payments.length !== 0 && (
+          <div className="myorderFilters">
+            {FILTERS.map(f => {
+              const active = filter === f;
+              const label = f === 'all' ? 'All' : STATUS_META[f].label;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={`myorderFilterButton ${active ? 'myorderFilterButtonActive' : ''}`}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="myorderTableCard">
           {/* Horizontal scroll wrapper: keeps the table usable on narrow screens */}
@@ -183,7 +189,7 @@ export default function PaymentHistory() {
           {payments.length === 0 && (
             <div className="myorderEmptyState">
               <PackageSearchIcon className="myorderEmptyIcon" />
-              <p className="myorderEmptyText">No payments with this status.</p>
+              <p className="myorderEmptyText">No payment transactions found.</p>
             </div>
           )}
         </div>

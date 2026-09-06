@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { auto } from '@popperjs/core';
 
 interface LoginErrors {
   identifier: string;
@@ -106,13 +107,11 @@ export default function SignIn() {
           {/* ================= LEFT IMAGE ================= */}
 
           <div className="login-page-image-panel">
-            <Image
+            <img
               src="/assets/cloth-0.webp"
               alt="Portrait against a light neutral backdrop"
-              width={500}
-              height={500}
               className="login-page-image"
-              priority
+    
             />
           </div>
 
