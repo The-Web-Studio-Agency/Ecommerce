@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 
 import ProductCard from '../Shop/ProductCard';
 import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { ProductStorefront, ProductSummaryStorefront, VariantStorefront } from '@/types/catalogue';
@@ -57,8 +58,10 @@ const SingleProduct = ({ product, rating, related }: Props) => {
   const [message, setMessage] = useState<string | null>(null);
 
   const { addToCart, pending } = useCart();
+  const { isVariantSaved, toggleVariant, pending: wishlistPending } = useWishlist();
 
   const variant = useMemo(() => findVariant(product, selection), [product, selection]);
+  const saved = variant ? isVariantSaved(variant.id) : false;
 
   const images = product.images.length > 0 ? product.images : null;
   const stockCount = variant ? variant.available_quantity : 0;
@@ -84,6 +87,15 @@ const SingleProduct = ({ product, rating, related }: Props) => {
 
     await addToCart(variant.id, quantity);
     setMessage('Added to your cart');
+  }
+
+  async function handleToggleWishlist() {
+    if (!variant) return;
+
+    const wasSaved = saved;
+    const error = await toggleVariant(variant.id);
+
+    setMessage(error ?? (wasSaved ? 'Removed from your wishlist' : 'Saved to your wishlist'));
   }
 
   return (
@@ -227,6 +239,31 @@ const SingleProduct = ({ product, rating, related }: Props) => {
               disabled={pending || stockCount === 0}
               className="add-to-cart-btn">
               {stockCount === 0 ? 'OUT OF STOCK' : pending ? 'ADDING...' : 'ADD TO CART'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleWishlist}
+              disabled={wishlistPending || !variant}
+              aria-label={saved ? 'Remove from wishlist' : 'Save to wishlist'}
+              title={saved ? 'Remove from wishlist' : 'Save to wishlist'}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                border: '1px solid #e2e2e2',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#fff',
+                color: saved ? '#cc0d39' : '#333',
+                cursor: wishlistPending || !variant ? 'default' : 'pointer',
+                flexShrink: 0,
+                marginLeft: 12,
+              }}>
+              <i
+                className={`heart-icon feather ${saved ? 'icon-heart-on dz-heart-fill' : 'icon-heart dz-heart'}`}
+              />
             </button>
           </div>
 

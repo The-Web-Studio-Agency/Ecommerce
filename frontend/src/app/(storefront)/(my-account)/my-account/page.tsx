@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import CommanLayout from '@/components/CommanLayout';
 import CommonBanner2 from '@/components/CommonBanner2';
+import DeleteAccountButton from '@/components/DeleteAccountButton';
 import SignOutButton from '@/components/SignOutButton';
 import { addressApi } from '@/lib/api/addresses';
 import { orderApi } from '@/lib/api/orders';
@@ -120,6 +121,8 @@ export default async function MyAccountPage() {
             </Link>
 
             <SignOutButton />
+
+            <DeleteAccountButton />
           </div>
         </div>
       </div>

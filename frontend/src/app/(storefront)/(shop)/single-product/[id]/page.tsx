@@ -2,10 +2,12 @@ import { notFound } from 'next/navigation';
 
 import CommanLayout from '@/components/CommanLayout';
 import CommonBanner2 from '@/components/CommonBanner2';
+import ProductReviews from '@/elements/SingleProductPage/ProductReviews';
 import SingleProduct from '@/elements/SingleProductPage/SingleProduct';
 import { catalogueApi } from '@/lib/api/catalogue';
 import { ApiError } from '@/lib/api/errors';
 import { reviewApi } from '@/lib/api/reviews';
+import { getCurrentUser } from '@/lib/auth/current-user';
 import type { ProductStorefront } from '@/types/catalogue';
 
 const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }) => {
@@ -22,12 +24,17 @@ const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }
 
   /* A product with no reviews still renders, with an empty star row, and
      "you might also like" falls back to nothing rather than to filler. */
-  const [summary, related] = await Promise.all([
+  const [summary, related, reviews, user] = await Promise.all([
     reviewApi.summary(id).catch(() => null),
     catalogueApi
       .listProducts({ category_id: product.category.id, page_size: 4 })
       .then(page => page.items.filter(item => item.id !== product.id).slice(0, 3))
       .catch(() => []),
+    reviewApi
+      .listForProduct(id, { page_size: 20 })
+      .then(page => page.items)
+      .catch(() => []),
+    getCurrentUser().catch(() => null),
   ]);
 
   return (
@@ -37,6 +44,12 @@ const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }
         product={product}
         rating={summary ? summary.average_rating : 0}
         related={related}
+      />
+      <ProductReviews
+        productId={id}
+        reviews={reviews}
+        summary={summary}
+        currentUserId={user?.id ?? null}
       />
     </CommanLayout>
   );

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { authApi } from '@/lib/api/auth';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
 import type { AuthFormState } from '@/lib/auth/form-state';
-import { clearSession, getRefreshToken, setSession } from '@/lib/auth/session';
+import { clearSession, getAccessToken, getRefreshToken, setSession } from '@/lib/auth/session';
 import { mergeGuestCart } from '@/lib/cart/actions';
 
 /**
@@ -126,6 +126,27 @@ export async function logout(): Promise<void> {
     } catch {
       // The cookies still get cleared: a revoke that fails must not strand
       // someone in a session they have asked to leave.
+    }
+  }
+
+  await clearSession();
+  redirect('/');
+}
+
+/**
+ * Erase the account. Past orders survive, stripped of the person.
+ *
+ * The session is cleared either way: a failed erase must not strand someone
+ * signed in to an account they just asked to leave.
+ */
+export async function deleteAccount(): Promise<void> {
+  const token = await getAccessToken();
+
+  if (token) {
+    try {
+      await authApi.deleteAccount(token);
+    } catch {
+      // See above -- the cookies still get cleared.
     }
   }
 

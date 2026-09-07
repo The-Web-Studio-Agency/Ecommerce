@@ -3,9 +3,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { toast } from 'react-toastify';
 
-import { useCart } from '@/context/CartContext';
+import { useWishlist } from '@/context/WishlistContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { ProductSummaryStorefront } from '@/types/catalogue';
@@ -24,17 +24,30 @@ interface ProductCardProps {
  * the wrong item as often as the right one.
  */
 export default function ProductCard({ product, rating = 0 }: ProductCardProps) {
-  const [heartIcon, setHeartIcon] = useState(false);
   const router = useRouter();
+  const { isProductSaved, toggleProduct, pending } = useWishlist();
 
   const href = `/single-product/${product.id}`;
   const image = product.primary_image;
+  const saved = isProductSaved(product.id);
+
+  async function handleToggleWishlist(event: React.MouseEvent) {
+    event.preventDefault();
+    if (pending) return;
+
+    const wasSaved = saved;
+    const error = await toggleProduct(product.id);
+
+    if (error) toast.error(error);
+    else if (wasSaved) toast.info('Removed from your wishlist');
+    else toast.success('Saved to your wishlist');
+  }
 
   return (
     <div className="product-card">
       {/* Wishlist */}
-      <div className={`btn-wishlist ${heartIcon ? 'active' : ''}`} onClick={() => setHeartIcon(!heartIcon)}>
-        {heartIcon ? (
+      <div className={`btn-wishlist ${saved ? 'active' : ''}`} onClick={handleToggleWishlist}>
+        {saved ? (
           <i className="icon heart-icon feather icon-heart-on dz-heart-fill" />
         ) : (
           <i className="icon heart-icon feather icon-heart dz-heart" />
