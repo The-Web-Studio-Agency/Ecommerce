@@ -1,91 +1,62 @@
 'use client';
 
-import { createContext, useContext, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useState, useTransition } from 'react';
 
-export interface CartItem {
-  productId: string;
-  name: string;
-  image: string;
-  price: number;
-  rating: number;
-  stockCount: number;
-  color: string;
-  size: string;
-  quantity: number;
-}
+import { addCartItem, removeCartLine, setCartItemQuantity } from '@/lib/cart/actions';
+import type { Cart, CartItem } from '@/types/cart';
 
 interface CartContextType {
-  cartItems: CartItem[];
-  addToCart: (item: CartItem) => void;
-  updateQuantity: (productId: string, color: string, size: string, quantity: number) => void;
-  removeFromCart: (productId: string, color: string, size: string) => void;
+  cart: Cart;
+  items: CartItem[];
+  itemCount: number;
+  pending: boolean;
+  error: string | null;
+  addToCart: (variantId: string, quantity: number) => Promise<void>;
+  updateQuantity: (itemId: string, quantity: number) => Promise<void>;
+  removeFromCart: (itemId: string) => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+/**
+ * The cart, held by the backend rather than in the browser.
+ *
+ * Every mutation answers with the whole cart, so prices, line subtotals and
+ * stock always come from the API and are never recomputed here. The router
+ * refresh afterwards is what lets server-rendered views -- the header badge,
+ * the checkout summary -- see the same change.
+ */
+export function CartProvider({ initialCart, children }: { initialCart: Cart; children: React.ReactNode }) {
+  const router = useRouter();
+  const [cart, setCart] = useState<Cart>(initialCart);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  // -----------------------------------
-  // ADD TO CART
-  // -----------------------------------
+  useEffect(() => {
+    setCart(initialCart);
+  }, [initialCart]);
 
-  const addToCart = (item: CartItem) => {
-    setCartItems(prevItems => {
-      const existingItem = prevItems.find(
-        cartItem =>
-          cartItem.productId === item.productId && cartItem.color === item.color && cartItem.size === item.size,
-      );
+  async function run(mutation: Promise<{ cart: Cart; error: string | null }>) {
+    const result = await mutation;
 
-      if (existingItem) {
-        return prevItems.map(cartItem =>
-          cartItem.productId === item.productId && cartItem.color === item.color && cartItem.size === item.size
-            ? {
-                ...cartItem,
-                quantity: Math.min(cartItem.quantity + item.quantity, cartItem.stockCount),
-              }
-            : cartItem,
-        );
-      }
+    setCart(result.cart);
+    setError(result.error);
 
-      return [...prevItems, item];
-    });
-  };
-
-  // -----------------------------------
-  // UPDATE QUANTITY
-  // -----------------------------------
-
-  const updateQuantity = (productId: string, color: string, size: string, quantity: number) => {
-    setCartItems(prevItems =>
-      prevItems.map(item =>
-        item.productId === productId && item.color === color && item.size === size
-          ? {
-              ...item,
-              quantity: Math.min(quantity, item.stockCount),
-            }
-          : item,
-      ),
-    );
-  };
-
-  // -----------------------------------
-  // REMOVE FROM CART
-  // -----------------------------------
-
-  const removeFromCart = (productId: string, color: string, size: string) => {
-    setCartItems(prevItems =>
-      prevItems.filter(item => !(item.productId === productId && item.color === color && item.size === size)),
-    );
-  };
+    startTransition(() => router.refresh());
+  }
 
   return (
     <CartContext.Provider
       value={{
-        cartItems,
-        addToCart,
-        updateQuantity,
-        removeFromCart,
+        cart,
+        items: cart.items,
+        itemCount: cart.item_count,
+        pending,
+        error,
+        addToCart: (variantId, quantity) => run(addCartItem(variantId, quantity)),
+        updateQuantity: (itemId, quantity) => run(setCartItemQuantity(itemId, quantity)),
+        removeFromCart: itemId => run(removeCartLine(itemId)),
       }}>
       {children}
     </CartContext.Provider>

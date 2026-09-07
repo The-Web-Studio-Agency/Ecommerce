@@ -1,12 +1,21 @@
 import CommanLayout from '@/components/CommanLayout';
-import CommonBanner2 from '@/components/CommonBanner2';
+import { checkoutApi } from '@/lib/api/orders';
+import { getAccessToken } from '@/lib/auth/session';
 import Checkout from './_components/Checkout';
 
-export default function CheckOutPage() {
+/**
+ * Price the cart before the form renders.
+ *
+ * Middleware has already turned guests away, so a missing preview here means
+ * an empty cart or a backend that is down -- the form handles both.
+ */
+export default async function CheckoutPageRoute() {
+  const token = await getAccessToken();
+  const preview = token ? await checkoutApi.preview(token).catch(() => null) : null;
+
   return (
     <CommanLayout>
-      <CommonBanner2 parentText="Cart" currentText="Checkout" mainText="Shop Standard"></CommonBanner2>
-       <Checkout/>
+      <Checkout initialPreview={preview} />
     </CommanLayout>
   );
 }

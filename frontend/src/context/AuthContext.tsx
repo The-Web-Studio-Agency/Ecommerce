@@ -1,58 +1,26 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext } from 'react';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-}
+import type { UserProfile } from '@/types/auth';
 
 interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  signIn: (user: User) => void;
+  user: UserProfile | null;
+  isSignedIn: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-
-  const [loading, setLoading] = useState(true);
-
-  const signIn = (user: User) => {
-    setUser(user);
-  };
-
-//   useEffect(() => {
-//     const fetchCurrentUser = async () => {
-//       try {
-        /*
-      const response = await fetch("BACKEND_ME_URL", {
-        method: "GET",
-        credentials: "include",
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch user");
-      }
-
-      setUser(data.user);
-      */
-//       } catch (error) {
-//         console.error('Failed to fetch current user:', error);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     fetchCurrentUser();
-//   }, []);
-
-  return <AuthContext.Provider value={{ user, loading, signIn }}>{children}</AuthContext.Provider>;
+/**
+ * The signed-in user, resolved on the server.
+ *
+ * Tokens live in httpOnly cookies, so nothing here can read them -- the
+ * layout calls /auth/me while rendering and passes the profile down. There
+ * is no client-side sign-in call to make: the OTP forms post to server
+ * actions, which set the cookies and refresh the tree.
+ */
+export function AuthProvider({ user, children }: { user: UserProfile | null; children: React.ReactNode }) {
+  return <AuthContext.Provider value={{ user, isSignedIn: user !== null }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
@@ -61,5 +29,6 @@ export function useAuth() {
   if (!context) {
     throw new Error('useAuth must be used inside AuthProvider');
   }
+
   return context;
 }

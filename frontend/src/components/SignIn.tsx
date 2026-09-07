@@ -1,104 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { auto } from '@popperjs/core';
+import { useActionState } from 'react';
 
-interface LoginErrors {
-  identifier: string;
-}
+import { requestOtp } from '@/lib/auth/actions';
+import { initialAuthState } from '@/lib/auth/form-state';
 
+/**
+ * Sign in with a phone number.
+ *
+ * The backend authenticates customers with a code sent by SMS -- there is
+ * no customer password login, and no email route to a code -- so this asks
+ * for a phone and nothing else. Verifying the code both signs an existing
+ * shopper in and creates an account for a new one.
+ */
 export default function SignIn() {
-  const router = useRouter();
-
-  const [identifier, setIdentifier] = useState('');
-  const [errors, setErrors] = useState<LoginErrors>({
-    identifier: '',
-  });
-
-  const [loading, setLoading] = useState(false);
-
-  const clearForm = () => {
-    setIdentifier('');
-  };
-
-  // Check whether input is an email
-  const isEmail = (value: string) => {
-    return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value);
-  };
-
-  // Check whether input is a phone number
-  const isPhone = (value: string) => {
-    return /^[0-9]{10}$/.test(value);
-  };
-
-  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const value = identifier.trim();
-
-    const newErrors: LoginErrors = {
-      identifier: '',
-    };
-
-    // Required validation
-    if (!value) {
-      newErrors.identifier = 'Email or phone number is required';
-    }
-
-    // Email or phone validation
-    else if (!isEmail(value) && !isPhone(value)) {
-      newErrors.identifier = 'Enter a valid email or 10-digit phone number';
-    }
-
-    setErrors(newErrors);
-
-    // Stop if validation failed
-    if (newErrors.identifier) {
-      return;
-    }
-
-    try {
-      // setLoading(true);
-
-      // const response = await fetch('http://localhost:5000/api/auth/send-otp', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     identifier: value,
-      //   }),
-      // });
-
-      // const data = await response.json();
-
-      // if (!response.ok) {
-      //   setErrors({
-      //     identifier: data.message || 'Failed to send OTP',
-      //   });
-
-      //   return;
-      // }
-
-      // console.log('OTP sent successfully');
-
-      // Go to OTP verification page
-      router.push(`/otp-verification?identifier=${encodeURIComponent(identifier)}`);
-
-      clearForm();
-    } catch (error) {
-      console.error('Send OTP error:', error);
-
-      setErrors({
-        identifier: 'Something went wrong. Please try again.',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [state, formAction, pending] = useActionState(requestOtp, initialAuthState);
 
   return (
     <div className="login-page-wrapper">
@@ -130,32 +47,29 @@ export default function SignIn() {
 
               {/* ================= LOGIN FORM ================= */}
 
-              <form className="login-page-fields" onSubmit={handleSubmit} noValidate>
-                {/* Email / Phone */}
+              <form className="login-page-fields" action={formAction} noValidate>
+                {/* Phone */}
 
                 <div>
                   <input
-                    type="text"
-                    placeholder="Email or phone number"
-                    value={identifier}
-                    maxLength={60}
+                    type="tel"
+                    name="phone"
+                    placeholder="Phone number"
+                    maxLength={15}
+                    inputMode="numeric"
+                    autoComplete="tel"
                     className="login-page-input"
-                    onChange={e => {
-                      const inputValue = e.target.value.replace(/[^A-Za-z0-9@.]/g, '');
-                      setIdentifier(inputValue);
-                      setErrors({
-                        identifier: '',
-                      });
-                    }}
                   />
 
-                  {errors.identifier && <p className="login-page-error">{errors.identifier}</p>}
+                  {(state.fieldErrors?.phone || state.error) && (
+                    <p className="login-page-error">{state.fieldErrors?.phone ?? state.error}</p>
+                  )}
                 </div>
 
                 {/* Submit */}
 
-                <button type="submit" className="login-page-submit-button" disabled={loading}>
-                  {loading ? 'Sending OTP...' : 'Continue'}
+                <button type="submit" className="login-page-submit-button" disabled={pending}>
+                  {pending ? 'Sending OTP...' : 'Continue'}
                 </button>
               </form>
 

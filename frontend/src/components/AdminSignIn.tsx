@@ -1,123 +1,21 @@
 'use client';
 
-import Link from 'next/link';
 import Image from 'next/image';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useActionState } from 'react';
 
-interface LoginErrors {
-  identifier: string;
-  password: string;
-}
+import { passwordLogin } from '@/lib/auth/actions';
+import { initialAuthState } from '@/lib/auth/form-state';
 
+/**
+ * Sign in an admin or staff member.
+ *
+ * Unlike shoppers, staff authenticate with a password against
+ * /admin/auth/login. The action puts the returned pair in the same httpOnly
+ * cookies the storefront uses, so one session covers both.
+ */
 export default function AdminSignIn() {
-  const router = useRouter();
-
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-
-  const [errors, setErrors] = useState<LoginErrors>({
-    identifier: '',
-    password: '',
-  });
-
-  const [loading, setLoading] = useState(false);
-
-  const clearForm = () => {
-    setIdentifier('');
-    setPassword('');
-  };
-
-  // Check whether input is an email
-  const isEmail = (value: string) => {
-    return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value);
-  };
-
-
- 
-  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const value = identifier.trim();
-
-    const newErrors: LoginErrors = {
-      identifier: '',
-      password: '',
-    };
-
-    // ================= VALIDATION =================
-
-    // Identifier validation
-    if (!value) {
-      newErrors.identifier = 'Email is required';
-    } else if (!isEmail(value)) {
-      newErrors.identifier = 'Enter a valid email ';
-    }
-
-    // Password validation
-    if (!password) {
-      newErrors.password = 'Password is required';
-    }
-
-    setErrors(newErrors);
-
-    // Stop if validation failed
-    if (newErrors.identifier || newErrors.password) {
-      return;
-    }
-
-    // ================= API REQUEST =================
-
-    try {
-      //   setLoading(true);
-
-      //   const response = await fetch('http://localhost:5000/api/auth/signin', {
-      //     method: 'POST',
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     },
-      //     credentials: 'include',
-      //     body: JSON.stringify({
-      //       identifier: value,
-      //       password: password,
-      //     }),
-      //   });
-
-      //   const data = await response.json();
-
-      //   if (!response.ok) {
-      //     setErrors({
-      //       identifier: data.message || 'Invalid email/phone or password',
-      //       password: '',
-      //     });
-
-      //     return;
-      //   }
-
-      //   console.log('Login successful:', data);
-
-      // Clear form
-    //   clearForm();
-
-      // Go to admin page
-
-      if (identifier === 'admin@gmail.com' && password === 'admin@123') {
-        router.push('/admin');
-      }
-      else{
-        throw new Error('Incorrect password')
-      }
-    } catch (error) {
-      console.error('Sign in error:', error);
-
-      setErrors({
-        identifier: 'Something went wrong. Please try again.',
-        password: '',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [state, formAction, pending] = useActionState(passwordLogin, initialAuthState);
 
   return (
     <div className="login-page-wrapper">
@@ -144,59 +42,45 @@ export default function AdminSignIn() {
 
               {/* ================= LOGIN FORM ================= */}
 
-              <form className="login-page-fields" onSubmit={handleSubmit} noValidate>
-                {/* ================= EMAIL / PHONE ================= */}
+              <form className="login-page-fields" action={formAction} noValidate>
+                {/* Email or phone */}
 
                 <div>
                   <input
                     type="text"
-                    placeholder="Enter you email"
-                    value={identifier}
+                    name="identifier"
+                    placeholder="Enter your email"
                     maxLength={60}
+                    autoComplete="username"
                     className="login-page-input"
-                    onChange={e => {
-                      const inputValue = e.target.value.replace(/[^A-Za-z0-9@.]/g, '');
-
-                      setIdentifier(inputValue);
-
-                      setErrors(prev => ({
-                        ...prev,
-                        identifier: '',
-                      }));
-                    }}
                   />
 
-                  {errors.identifier && <p className="login-page-error">{errors.identifier}</p>}
+                  {state.fieldErrors?.identifier && (
+                    <p className="login-page-error">{state.fieldErrors.identifier}</p>
+                  )}
                 </div>
 
-                {/* ================= PASSWORD ================= */}
+                {/* Password */}
 
                 <div>
                   <input
                     type="password"
+                    name="password"
                     placeholder="Password"
-                    value={password}
-                    maxLength={100}
+                    maxLength={128}
+                    autoComplete="current-password"
                     className="login-page-input"
-                    onChange={e => {
-                      setPassword(e.target.value);
-
-                      setErrors(prev => ({
-                        ...prev,
-                        password: '',
-                      }));
-                    }}
                   />
 
-                  {errors.password && <p className="login-page-error">{errors.password}</p>}
+                  {state.fieldErrors?.password && (
+                    <p className="login-page-error">{state.fieldErrors.password}</p>
+                  )}
                 </div>
 
-                {/* ================= FORGOT PASSWORD ================= */}
+                {state.error && <p className="login-page-error">{state.error}</p>}
 
-                {/* ================= SUBMIT ================= */}
-
-                <button type="submit" className="login-page-submit-button" disabled={loading}>
-                  {loading ? 'Signing in...' : 'Sign in'}
+                <button type="submit" className="login-page-submit-button" disabled={pending}>
+                  {pending ? 'Signing in...' : 'Sign in'}
                 </button>
               </form>
 

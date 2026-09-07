@@ -1,95 +1,11 @@
 import Link from 'next/link';
 
-interface OrderItem {
-  id: number;
-  title: string;
-  size: string;
-  qty: number;
-  price: number;
-  image: string;
-}
+import { formatDate, formatMoney } from '@/lib/format';
+import type { Order } from '@/types/orders';
 
-interface OrderSuccessProps {
-  orderId: string;
-}
-
-/* ----- Mock data ----- */
-
-const ORDER_ITEMS: OrderItem[] = [
-  {
-    id: 1,
-    title: 'Ribbed Knit Cardigan',
-    size: 'XS',
-    qty: 1,
-    price: 4999,
-    image: '#EDEAE3',
-  },
-  {
-    id: 2,
-    title: 'Sophisticated Swan Blouse',
-    size: 'SM',
-    qty: 1,
-    price: 2499,
-    image: '#EFEFEF',
-  },
-   {
-    id: 3,
-    title: 'Sophisticated Swan Blouse',
-    size: 'SM',
-    qty: 1,
-    price: 2499,
-    image: '#EFEFEF',
-  },
-
-   {
-    id: 4,
-    title: 'Sophisticated Swan Blouse',
-    size: 'SM',
-    qty: 1,
-    price: 2499,
-    image: '#EFEFEF',
-  },
-   {
-    id: 5,
-    title: 'Sophisticated Swan Blouse',
-    size: 'SM',
-    qty: 1,
-    price: 2499,
-    image: '#EFEFEF',
-  },
-
-   {
-    id: 6,
-    title: 'Sophisticated Swan Blouse',
-    size: 'SM',
-    qty: 1,
-    price: 2499,
-    image: '#EFEFEF',
-  },
-   {
-    id: 7,
-    title: 'Sophisticated Swan Blouse',
-    size: 'SM',
-    qty: 1,
-    price: 2499,
-    image: '#EFEFEF',
-  },
-];
-
-export default function OrderSuccess({ orderId }: OrderSuccessProps) {
-  const subtotal = ORDER_ITEMS.reduce((s, i) => s + i.price * i.qty, 0);
-
-  const shipping: number = 0;
-
-  const tax = Math.round(subtotal * 0.18);
-
-  const total = subtotal + shipping + tax;
-
-  const placedOn = new Date().toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+/** Confirmation for one placed order, rendered from the order itself. */
+export default function OrderSuccess({ order }: { order: Order }) {
+  const money = (amount: string) => formatMoney(amount, order.currency);
 
   return (
     <div className="order-success">
@@ -113,7 +29,7 @@ export default function OrderSuccess({ orderId }: OrderSuccessProps) {
         <h1 className="order-success-title">Order placed successfully</h1>
 
         <p className="order-success-subtext">
-          Thank you for your purchase. A confirmation has been sent to your email.
+          {"Thank you for your purchase. Your order is "}{order.status.toLowerCase()}.
         </p>
 
         {/* Order Information */}
@@ -121,13 +37,13 @@ export default function OrderSuccess({ orderId }: OrderSuccessProps) {
           <div className="order-success-meta-item">
             <span className="order-success-meta-label">Order ID</span>
 
-            <span className="order-success-meta-value">{orderId}</span>
+            <span className="order-success-meta-value">{order.order_number}</span>
           </div>
 
           <div className="order-success-meta-item">
             <span className="order-success-meta-label">Placed on</span>
 
-            <span className="order-success-meta-value">{placedOn}</span>
+            <span className="order-success-meta-value">{formatDate(order.created_at)}</span>
           </div>
         </div>
 
@@ -136,24 +52,17 @@ export default function OrderSuccess({ orderId }: OrderSuccessProps) {
           <h2 className="order-success-summary-title">Order Summary</h2>
 
           <ul className="order-success-items">
-            {ORDER_ITEMS.map(item => (
-              <li key={item.id} className="order-success-item">
-                <div
-                  className="order-success-item-image"
-                  style={{
-                    backgroundColor: item.image,
-                  }}
-                />
-
+            {order.items.map(item => (
+              <li key={item.variant_id} className="order-success-item">
                 <div className="order-success-item-info">
-                  <p className="order-success-item-title">{item.title}</p>
+                  <p className="order-success-item-title">{item.product_name}</p>
 
-                  <p className="order-success-item-meta">Size: {item.size}</p>
+                  <p className="order-success-item-meta">{item.variant_name}</p>
 
-                  <p className="order-success-item-meta">Qty: {item.qty}</p>
+                  <p className="order-success-item-meta">Qty: {item.quantity}</p>
                 </div>
 
-                <div className="order-success-item-price">₹{item.price.toLocaleString('en-IN')}</div>
+                <div className="order-success-item-price">{money(item.subtotal)}</div>
               </li>
             ))}
           </ul>
@@ -163,22 +72,27 @@ export default function OrderSuccess({ orderId }: OrderSuccessProps) {
             <div className="order-success-totals-row">
               <span>Subtotal</span>
 
-              <span>₹{subtotal.toLocaleString('en-IN')}</span>
+              <span>{money(order.subtotal)}</span>
             </div>
+
+            {Number(order.discount_amount) > 0 && (
+              <div className="order-success-totals-row">
+                <span>Discount{order.coupon_code ? ` (${order.coupon_code})` : ''}</span>
+
+                <span>−{money(order.discount_amount)}</span>
+              </div>
+            )}
 
             <div className="order-success-totals-row">
               <span>Shipping</span>
 
-              <span>
-                {' '}
-                <span>{shipping === 0 ? 'Free' : `₹${shipping.toLocaleString('en-IN')}`}</span>
-              </span>
+              <span>{Number(order.shipping_amount) === 0 ? 'Free' : money(order.shipping_amount)}</span>
             </div>
 
             <div className="order-success-totals-row">
-              <span>GST (18%)</span>
+              <span>Tax</span>
 
-              <span>₹{tax.toLocaleString('en-IN')}</span>
+              <span>{money(order.tax_amount)}</span>
             </div>
           </div>
 
@@ -186,13 +100,13 @@ export default function OrderSuccess({ orderId }: OrderSuccessProps) {
           <div className="order-success-total-row">
             <span>Total Paid</span>
 
-            <span>₹{total.toLocaleString('en-IN')}</span>
+            <span>{money(order.total_amount)}</span>
           </div>
         </div>
 
         {/* Actions */}
         <div className="order-success-actions">
-          <Link href={`/invoice/${orderId}`} className="order-success-button order-success-button-primary">
+          <Link href={`/invoice/${order.id}`} className="order-success-button order-success-button-primary">
             View Invoice
           </Link>
 

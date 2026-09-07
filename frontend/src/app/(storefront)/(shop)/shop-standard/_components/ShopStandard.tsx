@@ -6,7 +6,8 @@ import CommanBanner from '@/components/CommanBanner';
 import IMAGES, { SVGICON } from '@/constant/theme';
 import ShopSidebar from '@/elements/Shop/ShopSidebar';
 import ShopListCard from '@/elements/Shop/ShopListCard';
-import { productData, shopStyleData, TabData } from '@/constant/Alldata';
+import { shopStyleData, TabData } from '@/constant/Alldata';
+import type { ProductSummaryStorefront } from '@/types/catalogue';
 import ShopGridCard from '@/elements/Shop/ShopGridCard';
 import SelectBoxOne from '@/elements/Shop/SelectBoxOne';
 import SelectBoxTwo from '@/elements/Shop/SelectBoxTwo';
@@ -16,7 +17,13 @@ import BasicModalData from '@/components/BasicModalData';
 import ProductCard from '@/elements/Shop/ProductCard';
 import CommonBanner2 from '@/components/CommonBanner2';
 
-export default function ShopStandard() {
+export default function ShopStandard({
+  products,
+  totalItems,
+}: {
+  products: ProductSummaryStorefront[];
+  totalItems: number;
+}) {
   const [detailModal, setDetailModal] = useState<boolean>(false);
   const [mobileSidebar, setMobileSidebar] = useState<boolean>(false);
   return (
@@ -90,7 +97,7 @@ export default function ShopStandard() {
                         </Link>
                       </li>
                     </ul>
-                    <span>Showing 1–5 of 50 Results</span>
+                    <span>Showing {products.length} of {totalItems} Results</span>
                   </div>
                   <div className="filter-right-area">
                     <Link href={'#'} className="panel-btn me-2" onClick={() => setMobileSidebar(true)}>
@@ -146,20 +153,9 @@ export default function ShopStandard() {
                     </Tab.Pane>
                     <Tab.Pane eventKey={'Grid'} aria-labelledby="tab-list-grid-btn">
                       <div className="row gx-xl-4 g-3 mb-5">
-                        {productData.map((item, ind) => (
-                          <div className="col-12 col-sm-6 col-md-4 col-lg-4 col-xl-4 " key={ind}>
-                            <ProductCard
-                              productId={item.id}
-                              image={item.image}
-                              title={item.name}
-                              price={item.price}
-                              oldPrice={item.oldPrice}
-                              sizes={item.sizes}
-                              discount={item.discount}
-                              colors={item.colors}
-                              rating={item.rating}
-                              stockCount={item.stockCount}
-                            />
+                        {products.map(item => (
+                          <div className="col-12 col-sm-6 col-md-4 col-lg-4 col-xl-4 " key={item.id}>
+                            <ProductCard product={item} />
                           </div>
                         ))}
                       </div>
@@ -169,7 +165,7 @@ export default function ShopStandard() {
               </Tab.Container>
               <div className="row page mt-0">
                 <div className="col-md-6">
-                  <p className="page-text">Showing 1–5 of 50 Results</p>
+                  <p className="page-text">Showing {products.length} of {totalItems} Results</p>
                 </div>
                 <div className="col-md-6">
                   <nav aria-label="Blog Pagination">

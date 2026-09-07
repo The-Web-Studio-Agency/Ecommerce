@@ -9,6 +9,7 @@ import Menus from './Menus';
 import HeadSearchBar from './HeadSearchBar';
 import HeaderSidbar from './HeaderSidbar';
 import HeaderSideShoppingCard from './HeaderSideShopingCard';
+import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 
 interface DesignType {
@@ -77,7 +78,8 @@ function reducer(state: State, action: Action): State {
 
 const Header = ({ design }: DesignType) => {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const { cartItems } = useCart();
+  const { itemCount: cartItemCount } = useCart();
+  const { user, isSignedIn } = useAuth();
 
   const scrollHandler = () => {
     if (window.scrollY > 80) {
@@ -86,8 +88,6 @@ const Header = ({ design }: DesignType) => {
       dispatch({ type: 'FIX_HEADER', payload: false });
     }
   };
-
-  const cartItemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -198,8 +198,8 @@ const Header = ({ design }: DesignType) => {
                 <div className="extra-cell">
                   <ul className="header-right">
                     <li className="nav-item login-link">
-                      <Link className="nav-link" href="/login">
-                        Login / Register
+                      <Link className="nav-link" href={isSignedIn ? '/my-account' : '/signin'}>
+                        {isSignedIn ? (user?.name ?? 'My Account') : 'Login / Register'}
                       </Link>
                     </li>
                     <li className="nav-item search-link">
@@ -214,7 +214,7 @@ const Header = ({ design }: DesignType) => {
                     <li className="nav-item wishlist-link">
                       <Link
                         className="nav-link"
-                        href="/cart"
+                        href="/shop-wishlist"
                         // onClick={()=>setHeadShoppingSidebar(true)}
                         onClick={() => dispatch({ type: 'TOGGLE_HEAD_SHOPPING_SIDEBAR' })}>
                         <i className="iconly-Light-Heart2" />

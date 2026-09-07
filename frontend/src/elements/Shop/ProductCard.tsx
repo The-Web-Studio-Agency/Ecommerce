@@ -1,52 +1,34 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
-import Image, { StaticImageData } from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+
 import { useCart } from '@/context/CartContext';
+import { STOREFRONT_CURRENCY } from '@/lib/currency';
+import { formatPriceRange } from '@/lib/format';
+import type { ProductSummaryStorefront } from '@/types/catalogue';
 
 interface ProductCardProps {
-  productId: string;
-  image: StaticImageData | string;
-  title: string;
-  price: number;
-  oldPrice?: number;
-  discount?: number;
-  colors: string[];
-  sizes: string[];
-  rating: number;
-  stockCount: number;
+  product: ProductSummaryStorefront;
+  rating?: number;
 }
 
-export default function ProductCard({
-  productId,
-  image,
-  title,
-  price,
-  oldPrice,
-  discount,
-  colors,
-  sizes,
-  rating,
-  stockCount,
-}: ProductCardProps) {
+/**
+ * A catalogue tile.
+ *
+ * The listing endpoint returns no variants, so there is nothing here to put
+ * in a cart -- "Add to Cart" opens the product instead, where options are
+ * chosen and a real variant id exists. Adding a guessed variant would be
+ * the wrong item as often as the right one.
+ */
+export default function ProductCard({ product, rating = 0 }: ProductCardProps) {
   const [heartIcon, setHeartIcon] = useState(false);
+  const router = useRouter();
 
-  const { addToCart } = useCart();
-
-  const handleAddToCart = () => {
-    addToCart({
-      productId,
-      name: title,
-      image: typeof image === 'string' ? image : image.src,
-      price,
-      rating,
-      stockCount,
-      color: colors[0],
-      size: sizes[0],
-      quantity: 1,
-    });
-  };
+  const href = `/single-product/${product.id}`;
+  const image = product.primary_image;
 
   return (
     <div className="product-card">
@@ -60,18 +42,25 @@ export default function ProductCard({
       </div>
 
       {/* Product Image */}
-      <Link href={`/single-product/${productId}`}>
+      <Link href={href}>
         <div className="product-media">
-          {/* Discount */}
-          {discount && (
+          {!product.in_stock && (
             <div className="discount-tag">
-              <span>{discount}% Off</span>
+              <span>Sold out</span>
             </div>
           )}
 
           {/* Image */}
           <div className="product-img-container">
-            <Image width={500} height={700} src={image} alt={title} className="product-img" />
+            {image && (
+              <Image
+                width={500}
+                height={700}
+                src={image.url}
+                alt={image.alt_text ?? product.name}
+                className="product-img"
+              />
+            )}
           </div>
 
           {/* View Product */}
@@ -86,23 +75,14 @@ export default function ProductCard({
       {/* Product Information */}
       <div className="product-body">
         {/* Product Name */}
-        <p className="product-name-text">{title}</p>
+        <p className="product-name-text">{product.name}</p>
 
         {/* Price */}
         <div className="product-price-list">
-          <p className="product-price-text">${price.toFixed(2)}</p>
-
-          {oldPrice && <p className="product-old-price-text">${oldPrice.toFixed(2)}</p>}
+          <p className="product-price-text">
+            {formatPriceRange(product.price_from, product.price_to, STOREFRONT_CURRENCY)}
+          </p>
         </div>
-
-        {/* Colors */}
-        {colors.length > 0 && (
-          <div className="swatches">
-            {colors.map((color, index) => (
-              <span key={index} className="swatch" style={{ background: color }} />
-            ))}
-          </div>
-        )}
 
         {/* Rating + Cart */}
         <div className="product-footer">
@@ -122,8 +102,8 @@ export default function ProductCard({
           </div>
 
           {/* Add To Cart */}
-          <button type="button" className="btn-add-cart" onClick={handleAddToCart}>
-            Add to Cart
+          <button type="button" className="btn-add-cart" onClick={() => router.push(href)}>
+            {product.in_stock ? 'Add to Cart' : 'View'}
             <span className="plus-icon">+</span>
           </button>
         </div>

@@ -1,58 +1,90 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
-import { useCart } from '@/context/CartContext';
-import { productData } from '@/constant/Alldata';
+import { useMemo, useState } from 'react';
+
 import ProductCard from '../Shop/ProductCard';
+import { useCart } from '@/context/CartContext';
+import { STOREFRONT_CURRENCY } from '@/lib/currency';
+import { formatMoney } from '@/lib/format';
+import type { ProductStorefront, ProductSummaryStorefront, VariantStorefront } from '@/types/catalogue';
 
 type Props = {
-  productId: string;
-  name: string;
-  price: number;
-  oldPrice?: number;
-  discount?: number;
-  images: string[];
-  colors: string[];
-  sizes: string[];
+  product: ProductStorefront;
   rating: number;
-  stockCount: number;
-  description: string;
+  related: ProductSummaryStorefront[];
 };
 
-const SingleProduct = ({
-  productId,
-  name,
-  price,
-  oldPrice,
-  discount,
-  images,
-  colors,
-  sizes,
-  rating,
-  stockCount,
-  description,
-}: Props) => {
+/** Option values the shopper has picked, keyed by option name. */
+type Selection = Record<string, string>;
+
+/**
+ * Start on the first in-stock variant, falling back to the first of any.
+ *
+ * Landing on a sold-out combination when a sellable one exists would read
+ * as the whole product being unavailable.
+ */
+function initialSelection(product: ProductStorefront): Selection {
+  const variant = product.variants.find(entry => entry.in_stock) ?? product.variants[0];
+  return variant ? { ...variant.options } : {};
+}
+
+function findVariant(product: ProductStorefront, selection: Selection): VariantStorefront | null {
+  const names = product.options.map(option => option.name);
+
+  return (
+    product.variants.find(variant => names.every(name => variant.options[name] === selection[name])) ??
+    null
+  );
+}
+
+/**
+ * Whether a value can be painted as a swatch.
+ *
+ * Option values are free text on the backend -- "Black" is a CSS colour but
+ * "Sand Dune" is not, and a chip with an unpaintable value would render as
+ * an invisible blank, so those fall back to showing the name.
+ */
+function isPaintable(value: string): boolean {
+  if (typeof CSS === 'undefined' || !CSS.supports) return false;
+  return CSS.supports('color', value.replace(/\s+/g, ''));
+}
+
+const SingleProduct = ({ product, rating, related }: Props) => {
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedColor, setSelectedColor] = useState(0);
-  const [selectedSize, setSelectedSize] = useState(0);
+  const [selection, setSelection] = useState<Selection>(() => initialSelection(product));
   const [quantity, setQuantity] = useState(1);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const { addToCart } = useCart();
+  const { addToCart, pending } = useCart();
 
-  const handleAddToCart = () => {
-    addToCart({
-      productId,
-      name,
-      image: images[0],
-      price,
-      rating,
-      stockCount,
-      color: colors[selectedColor],
-      size: sizes[selectedSize],
-      quantity,
-    });
-  };
+  const variant = useMemo(() => findVariant(product, selection), [product, selection]);
+
+  const images = product.images.length > 0 ? product.images : null;
+  const stockCount = variant ? variant.available_quantity : 0;
+  const price = variant ? variant.price : product.price_from;
+
+  const colorOption = product.options.find(option => option.name.toLowerCase() === 'color');
+  const sizeOption = product.options.find(option => option.name.toLowerCase() === 'size');
+  const otherOptions = product.options.filter(
+    option => option !== colorOption && option !== sizeOption,
+  );
+
+  function choose(name: string, value: string) {
+    setSelection(previous => ({ ...previous, [name]: value }));
+    setQuantity(1);
+    setMessage(null);
+  }
+
+  async function handleAddToCart() {
+    if (!variant) {
+      setMessage('That combination is not available.');
+      return;
+    }
+
+    await addToCart(variant.id, quantity);
+    setMessage('Added to your cart');
+  }
 
   return (
     <section className="wrapper">
@@ -60,81 +92,110 @@ const SingleProduct = ({
       <div className="single-product-container">
         {/* Images */}
         <div className="single-product-image-section">
-          <div className="product-thumbnail-gallery">
-            {images.map((item, index) => (
-              <div
-                key={index}
-                className={`${
-                  selectedImage === index ? 'selected-product-thumdbnail' : 'unselected-products-thumbnail'
-                } product-thumbnail`}>
-                <Image
-                  onClick={() => setSelectedImage(index)}
-                  className="product-active-thumbnail"
-                  src={item}
-                  alt={name}
-                  width={100}
-                  height={150}
-                />
-              </div>
-            ))}
-          </div>
+          {images && (
+            <div className="product-thumbnail-gallery">
+              {images.map((item, index) => (
+                <div
+                  key={item.id}
+                  className={`${
+                    selectedImage === index ? 'selected-product-thumdbnail' : 'unselected-products-thumbnail'
+                  } product-thumbnail`}>
+                  <Image
+                    src={item.url}
+                    alt={item.alt_text ?? product.name}
+                    width={200}
+                    height={200}
+                    onClick={() => setSelectedImage(index)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
-          <div className="single-product-image">
-            <Image src={images[selectedImage]} alt={name} width={1000} height={1000} />
-          </div>
+          {images && (
+            <div className="product-main-image">
+              <Image
+                src={images[selectedImage].url}
+                alt={images[selectedImage].alt_text ?? product.name}
+                width={1000}
+                height={1000}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Product Details */}
-        <div className="single-product-details">
-          {/* Discount */}
-          <div className="discount-offers">
-            <p className="new-tag">NEW</p>
-
-            {discount && <p className="discount-offer-tag">{discount}% OFF</p>}
-          </div>
-
+        {/* Details */}
+        <div className="single-product-details-section">
           {/* Name + Price */}
           <div className="product-name-price">
-            <p className="product-type">Pants & Skirts</p>
+            <p className="product-type">{product.category.name}</p>
 
-            <p className="product-name">{name}</p>
+            <p className="product-name">{product.name}</p>
 
             <div className="product-price">
-              <span>${price.toFixed(2)} USD</span>
-
-              {oldPrice && <span className="product-old-price">${oldPrice.toFixed(2)}</span>}
+              <span>{formatMoney(price, STOREFRONT_CURRENCY)}</span>
             </div>
           </div>
 
           {/* Colors */}
-          <div className="product-colors-container">
-            <p>Colors :</p>
+          {colorOption && (
+            <div className="product-colors-container">
+              <p>Colors :</p>
 
-            {colors.map((color, index) => (
-              <p
-                key={index}
-                onClick={() => setSelectedColor(index)}
-                className={`product-color ${selectedColor === index ? 'active' : ''}`}
-                style={{
-                  backgroundColor: color,
-                }}
-              />
-            ))}
-          </div>
+              {colorOption.values.map(value => {
+                const active = selection[colorOption.name] === value;
+
+                return isPaintable(value) ? (
+                  <p
+                    key={value}
+                    title={value}
+                    onClick={() => choose(colorOption.name, value)}
+                    className={`product-color ${active ? 'active' : ''}`}
+                    style={{ backgroundColor: value.replace(/\s+/g, '') }}
+                  />
+                ) : (
+                  <p
+                    key={value}
+                    onClick={() => choose(colorOption.name, value)}
+                    className={`product-size ${active ? 'active' : ''}`}>
+                    {value}
+                  </p>
+                );
+              })}
+            </div>
+          )}
 
           {/* Sizes */}
-          <div className="product-size-container">
-            <p>Sizes :</p>
+          {sizeOption && (
+            <div className="product-size-container">
+              <p>Sizes :</p>
 
-            {sizes.map((size, index) => (
-              <p
-                key={index}
-                onClick={() => setSelectedSize(index)}
-                className={`product-size ${selectedSize === index ? 'active' : ''}`}>
-                {size}
-              </p>
-            ))}
-          </div>
+              {sizeOption.values.map(value => (
+                <p
+                  key={value}
+                  onClick={() => choose(sizeOption.name, value)}
+                  className={`product-size ${selection[sizeOption.name] === value ? 'active' : ''}`}>
+                  {value}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {otherOptions.map(option => (
+            <div className="product-size-container" key={option.name}>
+              <p>{option.name} :</p>
+
+              {option.values.map(value => (
+                <p
+                  key={value}
+                  onClick={() => choose(option.name, value)}
+                  className={`product-size ${selection[option.name] === value ? 'active' : ''}`}>
+                  {value}
+                </p>
+              ))}
+            </div>
+          ))}
+
           <div className="single-product-rating">
             {Array.from({ length: 5 }).map((_, index) => {
               if (index < Math.floor(rating)) {
@@ -161,43 +222,39 @@ const SingleProduct = ({
               </div>
             </div>
 
-            <button onClick={handleAddToCart} className="add-to-cart-btn">
-              ADD TO CART
+            <button
+              onClick={handleAddToCart}
+              disabled={pending || stockCount === 0}
+              className="add-to-cart-btn">
+              {stockCount === 0 ? 'OUT OF STOCK' : pending ? 'ADDING...' : 'ADD TO CART'}
             </button>
           </div>
+
+          {message && <p className="product-cart-message">{message}</p>}
 
           {/* Description */}
           <div className="product-description-container">
             <p className="description-heading">DESCRIPTION</p>
 
-            <p>{description}</p>
+            <p>{product.description ?? product.short_description ?? ''}</p>
           </div>
         </div>
       </div>
 
       {/* Similar Products */}
-      <div className="similiar-products-section">
-        <p className="similiar-products-heading">YOU MIGHT ALSO LIKE</p>
+      {related.length > 0 && (
+        <div className="similiar-products-section">
+          <p className="similiar-products-heading">YOU MIGHT ALSO LIKE</p>
 
-        <div className="row gx-xl-4 g-3 mt-5 mb-5">
-          {productData.slice(0, 3).map(item => (
-            <div className="col-12 col-sm-6 col-md-4 col-lg-4 col-xl-4" key={item.id}>
-              <ProductCard
-                productId={item.id}
-                image={item.image}
-                title={item.name}
-                price={item.price}
-                oldPrice={item.oldPrice}
-                sizes={item.sizes}
-                discount={item.discount}
-                colors={item.colors}
-                rating={item.rating}
-                stockCount={item.stockCount}
-              />
-            </div>
-          ))}
+          <div className="row gx-xl-4 g-3 mt-5 mb-5">
+            {related.map(item => (
+              <div className="col-12 col-sm-6 col-md-4 col-lg-4 col-xl-4" key={item.id}>
+                <ProductCard product={item} />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 };

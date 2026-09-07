@@ -6,7 +6,8 @@ import { cartApi, wishlistApi } from '@/lib/api/cart';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
 import { getAccessToken } from '@/lib/auth/session';
 import { addLine, clearGuestCart, readGuestCart, writeGuestCart } from '@/lib/cart/guest-cart';
-import type { CartActionState } from '@/lib/cart/state';
+import { getCart } from '@/lib/cart/read';
+import type { CartActionState, CartMutation } from '@/lib/cart/state';
 
 function toState(error: unknown): CartActionState {
   if (error instanceof ApiError) {
@@ -22,7 +23,7 @@ function toState(error: unknown): CartActionState {
 }
 
 function refreshCartViews(): void {
-  revalidatePath('/cart');
+  revalidatePath('/cart-items');
   revalidatePath('/', 'layout');
 }
 
@@ -152,14 +153,77 @@ export async function toggleWishlist(
   try {
     if (itemId) {
       await wishlistApi.removeItem(token, itemId);
-      revalidatePath('/wishlist');
+      revalidatePath('/shop-wishlist');
       return { status: 'success', message: 'Removed from your wishlist' };
     }
 
     await wishlistApi.addItem(token, variantId);
-    revalidatePath('/wishlist');
+    revalidatePath('/shop-wishlist');
     return { status: 'success', message: 'Saved to your wishlist' };
   } catch (error) {
     return toState(error);
   }
+}
+
+/**
+ * Mutations the client cart provider calls directly.
+ *
+ * They answer with the whole cart rather than a status, so the provider can
+ * render the backend's own totals instead of recomputing them locally. The
+ * form-shaped actions above stay for anything driven by a <form>.
+ */
+async function mutate(apply: (token: string | null) => Promise<void>): Promise<CartMutation> {
+  const token = await getAccessToken();
+
+  try {
+    await apply(token);
+  } catch (error) {
+    const state = toState(error);
+    return { cart: await getCart(), error: state.message };
+  }
+
+  refreshCartViews();
+  return { cart: await getCart(), error: null };
+}
+
+export async function addCartItem(variantId: string, quantity: number): Promise<CartMutation> {
+  if (!variantId) return { cart: await getCart(), error: 'Choose an option first.' };
+
+  return mutate(async token => {
+    if (token) {
+      await cartApi.addItem(token, variantId, quantity);
+      return;
+    }
+
+    const lines = await readGuestCart();
+    await writeGuestCart(addLine(lines, variantId, quantity));
+  });
+}
+
+export async function setCartItemQuantity(itemId: string, quantity: number): Promise<CartMutation> {
+  if (quantity < 1) return removeCartLine(itemId);
+
+  return mutate(async token => {
+    if (token) {
+      await cartApi.updateItem(token, itemId, quantity);
+      return;
+    }
+
+    const lines = await readGuestCart();
+    await writeGuestCart(
+      lines.map(line => (line.variant_id === itemId ? { ...line, quantity } : line)),
+    );
+  });
+}
+
+export async function removeCartLine(itemId: string): Promise<CartMutation> {
+  return mutate(async token => {
+    if (token) {
+      await cartApi.removeItem(token, itemId);
+      return;
+    }
+
+    const lines = await readGuestCart();
+    await writeGuestCart(lines.filter(line => line.variant_id !== itemId));
+  });
 }

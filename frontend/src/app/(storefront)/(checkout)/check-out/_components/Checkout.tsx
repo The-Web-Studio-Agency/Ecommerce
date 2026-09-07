@@ -2,6 +2,12 @@
 
 import { useState, useMemo, SubmitEvent, ChangeEvent } from 'react';
 
+import { applyCoupon, placeOrderWithAddress, previewCheckout } from '@/lib/orders/actions';
+import { initialCheckoutState } from '@/lib/orders/state';
+import { STOREFRONT_CURRENCY } from '@/lib/currency';
+import { formatMoney } from '@/lib/format';
+import type { CheckoutPreview } from '@/types/orders';
+
 import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 
@@ -182,10 +188,17 @@ function Field({ id, label, placeholder, type = 'text', value, span, error, maxL
   );
 }
 
-export default function CheckoutPage() {
-  const { cartItems } = useCart();
+/**
+ * Checkout.
+ *
+ * Every figure on this page is the backend's: the summary renders the
+ * checkout preview rather than adding up the cart here, so what is shown is
+ * what the order will be written for. The typed address is created first
+ * and its id handed to /checkout, which prices the order server-side.
+ */
+export default function CheckoutPage({ initialPreview }: { initialPreview: CheckoutPreview | null }) {
+  const { items: cartItems, itemCount } = useCart();
   const [form, setForm] = useState<CheckoutFormState>(INITIAL_FORM);
-  const router = useRouter();
 
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -193,25 +206,17 @@ export default function CheckoutPage() {
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [discount, setDiscount] = useState(0);
+  const [preview, setPreview] = useState<CheckoutPreview | null>(initialPreview);
 
-  const itemCount = useMemo(() => {
-    return cartItems.reduce((total, item) => total + item.quantity, 0);
-  }, [cartItems]);
+  const [couponCode, setCouponCode] = useState<string | null>(null);
 
-  const subtotal = useMemo(() => {
-    return cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
-  }, [cartItems]);
+  const money = (amount: string | null | undefined) => formatMoney(amount, STOREFRONT_CURRENCY);
 
-  const shipping = 0;
-
-  const tax = useMemo(() => {
-    const taxableAmount = Math.max(0, subtotal - discount);
-
-    return Math.round(taxableAmount * 0.18);
-  }, [subtotal, discount]);
-
-  const total = Math.max(0, subtotal - discount) + shipping + tax;
+  const subtotal = preview ? preview.subtotal : '0.00';
+  const discount = preview ? preview.discount_amount : '0.00';
+  const shipping = preview ? preview.shipping_amount : '0.00';
+  const tax = preview ? preview.tax_amount : '0.00';
+  const total = preview ? preview.total_amount : '0.00';
 
   function handleChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const target = e.target;
@@ -278,29 +283,31 @@ export default function CheckoutPage() {
      APPLY PROMO
   ===================================================== */
 
-  function applyPromo() {
+  async function applyPromo() {
     const code = form.promo.trim().toUpperCase();
 
     if (!code) {
-      setDiscount(0);
+      setCouponCode(null);
+      setPreview(await previewCheckout(null));
+      setSubmitError(null);
       return;
     }
 
-    /* ---------------------------------------------
-       DEMO PROMO CODE
-    --------------------------------------------- */
+    const formData = new FormData();
+    formData.set('code', code);
 
-    if (code === 'ZEEN10') {
-      const discountAmount = subtotal * 0.1;
+    const result = await applyCoupon(initialCheckoutState, formData);
 
-      setDiscount(discountAmount);
-
-      setSubmitError(null);
-    } else {
-      setDiscount(0);
-
-      setSubmitError('That promo code is not valid.');
+    if (result.status === 'error') {
+      setCouponCode(null);
+      setSubmitError(result.message);
+      setPreview(await previewCheckout(null));
+      return;
     }
+
+    setCouponCode(code);
+    setSubmitError(null);
+    setPreview(await previewCheckout(code));
   }
 
   /* =====================================================
@@ -312,19 +319,10 @@ export default function CheckoutPage() {
 
     setSubmitError(null);
 
-    /* ---------------------------------------------
-       CHECK EMPTY CART
-    --------------------------------------------- */
-
     if (cartItems.length === 0) {
       setSubmitError('Your cart is empty.');
-
       return;
     }
-
-    /* ---------------------------------------------
-       VALIDATE FORM
-    --------------------------------------------- */
 
     const validationErrors = validate(form);
 
@@ -336,136 +334,25 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
 
-    try {
-      const orderData = {
-        contact: {
-          email: form.email.trim(),
+    const formData = new FormData();
+    formData.set('full_name', `${form.firstName} ${form.lastName}`.trim());
+    formData.set('phone', form.phone.trim());
+    formData.set('address_line_1', form.address.trim());
+    formData.set('address_line_2', form.address2.trim());
+    formData.set('city', form.city.trim());
+    formData.set('state', form.state.trim());
+    formData.set('postal_code', form.pincode.trim());
+    formData.set('country', 'India');
+    formData.set('idempotency_key', crypto.randomUUID());
 
-          phone: form.phone.trim(),
-        },
-        shippingAddress: {
-          firstName: form.firstName.trim(),
+    if (couponCode) formData.set('coupon_code', couponCode);
 
-          lastName: form.lastName.trim(),
+    /* A success redirects out of this component, so only a failure returns. */
+    const result = await placeOrderWithAddress(initialCheckoutState, formData);
 
-          address: form.address.trim(),
-
-          address2: form.address2.trim(),
-
-          city: form.city.trim(),
-
-          state: form.state,
-
-          pincode: form.pincode.trim(),
-        },
-        gst: form.wantGst
-          ? {
-              wantGst: true,
-
-              gstin: form.gstin.trim().toUpperCase(),
-            }
-          : {
-              wantGst: false,
-            },
-
-        paymentMethod: form.paymentMethod,
-        promoCode: form.promo.trim() ? form.promo.trim().toUpperCase() : null,
-
-        /* ---------------------------------------------
-           CART ITEMS
-
-           We only send the information needed
-           to identify the cart item.
-
-           DO NOT send:
-           price
-           subtotal
-           tax
-           total
-
-           Backend should calculate those.
-        --------------------------------------------- */
-
-        items: cartItems.map(item => ({
-          productId: item.productId,
-
-          color: item.color,
-
-          size: item.size,
-
-          quantity: item.quantity,
-        })),
-      };
-
-      console.log('ORDER DATA:', orderData);
-
-      /*
-      const response = await fetch(
-        'http://localhost:5000/orders',
-        {
-          method: 'POST',
-
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-
-          // Important:
-          // Sends the authentication cookie
-          // to your Express backend.
-
-          credentials: 'include',
-
-          body:
-            JSON.stringify(orderData),
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-          'Failed to place order'
-        );
-      }
-
-      console.log(
-        'ORDER CREATED:',
-        data
-      );
-
-      // Example backend response:
-      //
-      // {
-      //   orderId: "ORD12345"
-      // }
-
-      // Then redirect:
-      //
-      router.push(
-        `/order-success?orderId=${data.orderId}`
-      );
-      */
-
-      /* =================================================
-         TEMPORARY DEMO
-      ================================================= */
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      console.log('Ready to send to backend:', orderData);
-
-      alert('Checkout form is valid. Backend order API will be connected next.');
-      router.push(`/order-success/${'1234'}`);
-    } catch (error) {
-      console.error('Checkout error:', error);
-
-      setSubmitError('Could not place the order. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    setSubmitError(result.message);
+    setErrors(previous => ({ ...previous, ...(result.fieldErrors as FormErrors) }));
+    setSubmitting(false);
   }
 
   /* =====================================================
@@ -765,57 +652,26 @@ export default function CheckoutPage() {
 
             <ul className="checkout-page__items">
               {cartItems.map(item => (
-                <li key={`${item.productId}-${item.color}-${item.size}`} className="checkout-page__item">
+                <li key={item.id} className="checkout-page__item">
                   {/* IMAGE */}
 
                   <div className="checkout-page__item-image">
-                    <img src={item.image} alt={item.name} />
+                    {item.image && <img src={item.image.url} alt={item.image.alt_text ?? item.product_name} />}
                   </div>
 
                   {/* INFORMATION */}
 
                   <div className="checkout-page__item-info">
-                    <p className="checkout-page__item-title">{item.name}</p>
+                    <p className="checkout-page__item-title">{item.product_name}</p>
 
-                    {/* COLOR */}
-
-                    <p className="checkout-page__item-meta">
-                      Color:
-                      <span
-                        style={{
-                          display: 'inline-block',
-
-                          width: '14px',
-
-                          height: '14px',
-
-                          borderRadius: '50%',
-
-                          backgroundColor: item.color,
-
-                          border: '1px solid #ccc',
-
-                          marginLeft: '6px',
-
-                          verticalAlign: 'middle',
-                        }}
-                      />
-                    </p>
-
-                    {/* SIZE */}
-
-                    <p className="checkout-page__item-meta">Size: {item.size}</p>
-
-                    {/* QUANTITY */}
+                    <p className="checkout-page__item-meta">{item.variant_name}</p>
 
                     <p className="checkout-page__item-meta">Qty: {item.quantity}</p>
                   </div>
 
                   {/* PRICE */}
 
-                  <div className="checkout-page__item-price">
-                    ₹{(item.price * item.quantity).toLocaleString('en-IN')}
-                  </div>
+                  <div className="checkout-page__item-price">{money(item.subtotal)}</div>
                 </li>
               ))}
             </ul>
@@ -830,19 +686,16 @@ export default function CheckoutPage() {
               <div className="checkout-page__totals-row">
                 <span>Subtotal ({itemCount} items)</span>
 
-                <span>₹{subtotal.toLocaleString('en-IN')}</span>
+                <span>{money(subtotal)}</span>
               </div>
 
               {/* DISCOUNT */}
 
-              {discount > 0 && (
+              {Number(discount) > 0 && (
                 <div className="checkout-page__totals-row">
-                  <span>Discount</span>
+                  <span>Discount{couponCode ? ` (${couponCode})` : ''}</span>
 
-                  <span>
-                    −₹
-                    {discount.toLocaleString('en-IN')}
-                  </span>
+                  <span>−{money(discount)}</span>
                 </div>
               )}
 
@@ -851,15 +704,15 @@ export default function CheckoutPage() {
               <div className="checkout-page__totals-row">
                 <span>Shipping</span>
 
-                <span>{shipping === 0 ? 'Free' : `₹${shipping}`}</span>
+                <span>{Number(shipping) === 0 ? 'Free' : money(shipping)}</span>
               </div>
 
-              {/* GST */}
+              {/* TAX */}
 
               <div className="checkout-page__totals-row">
-                <span>GST (18%)</span>
+                <span>Tax</span>
 
-                <span>₹{tax.toLocaleString('en-IN')}</span>
+                <span>{money(tax)}</span>
               </div>
             </div>
 
@@ -889,7 +742,7 @@ export default function CheckoutPage() {
             <div className="checkout-page__total-row">
               <span>Total</span>
 
-              <span>₹{total.toLocaleString('en-IN')}</span>
+              <span>{money(total)}</span>
             </div>
 
             {/* ========================================

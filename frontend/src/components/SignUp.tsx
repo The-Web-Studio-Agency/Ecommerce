@@ -1,125 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useActionState, useState } from 'react';
 
+import { requestOtp } from '@/lib/auth/actions';
+import { initialAuthState } from '@/lib/auth/form-state';
+
+/**
+ * Create an account with a phone number.
+ *
+ * Registration and sign-in are the same call on this backend: a phone with
+ * no account gets one on its first successful code verification. There is
+ * no customer password, so nothing is collected here beyond the number --
+ * a name has no endpoint to be stored against yet.
+ */
 export default function SignUp() {
   const [agreed, setAgreed] = useState(true);
-  const router = useRouter()
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [identifier, setIdentifier] = useState('');
-
-  const [errors, setErrors] = useState({
-    firstName: '',
-    lastName: '',
-    identifier: '',
-    agreed: '',
-  });
-
-  const clearForm = () => {
-    setFirstName('');
-    setLastName('');
-    setIdentifier('');
-  };
-
-  // Email validation
-  const isEmail = (value: string) => {
-    return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value);
-  };
-
-  // Phone validation
-  const isPhone = (value: string) => {
-    return /^[0-9]{10}$/.test(value);
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const newErrors = {
-      firstName: '',
-      lastName: '',
-      identifier: '',
-      agreed: '',
-    };
-
-    // First name validation
-    if (!firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-
-    // Last name validation
-    if (!lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
-    }
-
-    // Email / Phone validation
-    const value = identifier.trim();
-
-    if (!value) {
-      newErrors.identifier = 'Email or phone number is required';
-    } else if (!isEmail(value) && !isPhone(value)) {
-      newErrors.identifier = 'Enter a valid email or 10-digit phone number';
-    }
-
-    // Terms validation
-    if (!agreed) {
-      newErrors.agreed = 'Please accept the Terms & Conditions';
-    }
-
-    setErrors(newErrors);
-
-    // Stop if validation fails
-    if (Object.values(newErrors).some(error => error !== '')) {
-      return;
-    }
-
-    const signupData = {
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      identifier: value,
-    };
-
-    console.log('Signup data:', signupData);
-
-   router.push('/')
-    /*
-    try {
-      const response = await fetch(
-        'http://localhost:5000/api/auth/register',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(signupData),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.log('Signup failed:', data);
-        return;
-      }
-
-      console.log('Signup successful:', data);
-
-      // Redirect to OTP verification page
-      // router.push(
-      //   `/verify-otp?identifier=${encodeURIComponent(value)}`
-      // );
-
-    } catch (error) {
-      console.log('Something went wrong:', error);
-    }
-    */
-   router.push(`/otp-verification?identifier=${encodeURIComponent(value)}`)
-
-    clearForm();
-  };
+  const [state, formAction, pending] = useActionState(requestOtp, initialAuthState);
 
   return (
     <div className="page">
@@ -143,82 +40,23 @@ export default function SignUp() {
               </Link>
             </p>
 
-            <form className="form" onSubmit={handleSubmit} noValidate>
-              {/* ================= FIRST + LAST NAME ================= */}
-
-              <div className="nameRow">
-                {/* First name */}
-
-                <div>
-                  <input
-                    maxLength={60}
-                    type="text"
-                    value={firstName}
-                    placeholder="First name"
-                    className="input"
-                    onChange={e => {
-                      const inputName = e.target.value.replace(/[^A-Za-z ]/g, '');
-
-                      setFirstName(inputName);
-
-                      setErrors(prev => ({
-                        ...prev,
-                        firstName: '',
-                      }));
-                    }}
-                  />
-
-                  {errors.firstName && <p className="error">{errors.firstName}</p>}
-                </div>
-
-                {/* Last name */}
-
-                <div>
-                  <input
-                    maxLength={40}
-                    type="text"
-                    value={lastName}
-                    placeholder="Last name"
-                    className="input"
-                    onChange={e => {
-                      const inputName = e.target.value.replace(/[^A-Za-z ]/g, '');
-
-                      setLastName(inputName);
-
-                      setErrors(prev => ({
-                        ...prev,
-                        lastName: '',
-                      }));
-                    }}
-                  />
-
-                  {errors.lastName && <p className="error">{errors.lastName}</p>}
-                </div>
-              </div>
-
-              {/* ================= EMAIL / PHONE ================= */}
+            <form className="form" action={formAction} noValidate>
+              {/* ================= PHONE ================= */}
 
               <div>
                 <input
-                  maxLength={60}
-                  type="text"
-                  value={identifier}
-                  placeholder="Email or phone number"
+                  maxLength={15}
+                  type="tel"
+                  name="phone"
+                  placeholder="Phone number"
                   className="input"
-                  autoComplete="username"
-                  onChange={e => {
-                    const inputValue = e.target.value.replace(/[^A-Za-z0-9@.+]/g, '');
-
-                    setIdentifier(inputValue);
-
-                    setErrors(prev => ({
-                      ...prev,
-                      identifier: '',
-                    }));
-                  }}
+                  inputMode="numeric"
+                  autoComplete="tel"
                 />
 
-                {errors.identifier && <p className="error">{errors.identifier}</p>}
+                {(state.fieldErrors?.phone || state.error) && (
+                  <p className="error">{state.fieldErrors?.phone ?? state.error}</p>
+                )}
               </div>
 
               {/* ================= TERMS ================= */}
@@ -227,14 +65,7 @@ export default function SignUp() {
                 <label className="checkboxLabel">
                   <button
                     type="button"
-                    onClick={() => {
-                      setAgreed(a => !a);
-
-                      setErrors(prev => ({
-                        ...prev,
-                        agreed: '',
-                      }));
-                    }}
+                    onClick={() => setAgreed(a => !a)}
                     className={`checkbox ${agreed ? 'checkboxChecked' : ''}`}
                     aria-pressed={agreed}>
                     {agreed && <CheckIcon />}
@@ -247,14 +78,12 @@ export default function SignUp() {
                     </a>
                   </span>
                 </label>
-
-                {errors.agreed && <p className="error">{errors.agreed}</p>}
               </div>
 
               {/* ================= SUBMIT ================= */}
 
-              <button type="submit" className="submitButton">
-                Create account
+              <button type="submit" className="submitButton" disabled={!agreed || pending}>
+                {pending ? 'Sending code...' : 'Create account'}
               </button>
             </form>
 

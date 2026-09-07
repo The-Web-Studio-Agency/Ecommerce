@@ -17,16 +17,17 @@ import HottestBlog from "@/elements/Home/HottestBlog";
 import LatestNewsRollup from "@/elements/Home/LatestNewsRollup";
 import MainBannerSlider2 from "@/elements/Home/MainbannerSlider2";
 import OffersectionSlider from "@/elements/Home/OffersectionSlider";
-import ProductSection from "@/elements/Home/ProductSection";
 import ShortListBlog from "@/elements/Home/ShortListBlog";
 import SponsoredSlider from "@/elements/Home/SponsoredSlider";
 import SummerSaleBlog from "@/elements/Home/SummerSaleBlog";
 import TradingSliderBlog from "@/elements/Home/TradingSliderBlog";
 import Image from "next/image";
 import MoreCollectionBlog from "@/elements/Home/MoreCollectionBlog";
+import ProductCard from "@/elements/Shop/ProductCard";
+import type { ProductSummaryStorefront } from "@/types/catalogue";
 
 
-const MainSection = () =>{
+const MainSection = ({ products }: { products: ProductSummaryStorefront[] }) =>{
     const [openVideo, setOpenVideo] = useState(false);
     return(
         <Fragment>
@@ -77,7 +78,16 @@ const MainSection = () =>{
                 {/*  Products  Section Start */}
                 <section className="content-inner">
                     <div className="container">
-                        <ProductSection />
+                        <div className="section-head text-center">
+                            <h2 className="title">New Arrivals</h2>
+                        </div>
+                        <div className="row gx-xl-4 g-3">
+                            {products.map(product => (
+                                <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={product.id}>
+                                    <ProductCard product={product} />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </section>
                 <section className=" adv-area">

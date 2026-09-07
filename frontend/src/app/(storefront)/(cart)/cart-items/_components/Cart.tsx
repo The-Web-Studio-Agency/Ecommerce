@@ -1,61 +1,13 @@
 'use client';
 
-import { useCart, CartItem } from '@/context/CartContext';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useMemo } from 'react';
 
-// -----------------------------------
-// CURRENCY
-// -----------------------------------
-
-function currency(n: number): string {
-  return n.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-// -----------------------------------
-// STOCK BADGE
-// -----------------------------------
-
-function StockBadge({ stockCount }: { stockCount: number }) {
-  if (stockCount === 0) {
-    return (
-      <span className="cart-items-badge cart-items-badge--out">
-        <span className="cart-items-badge-dot" />
-        Stock Out
-      </span>
-    );
-  }
-
-  if (stockCount > 10) {
-    return (
-      <span className="cart-items-badge cart-items-badge--in-stock">
-        <svg className="cart-items-badge-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M4 10.5L8 14.5L16 6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        In Stock
-      </span>
-    );
-  }
-
-  return (
-    <span className="cart-items-badge cart-items-badge--low">
-      <span className="cart-items-badge-dot" />
-      Only {stockCount} left
-    </span>
-  );
-}
+import { useCart } from '@/context/CartContext';
+import { STOREFRONT_CURRENCY } from '@/lib/currency';
+import { formatMoney } from '@/lib/format';
+import type { CartItem } from '@/types/cart';
+import type { CheckoutPreview } from '@/types/orders';
 
 // -----------------------------------
 // QUANTITY CONTROL
@@ -63,17 +15,18 @@ function StockBadge({ stockCount }: { stockCount: number }) {
 
 function QuantityControl({
   quantity,
-  stockCount,
+  disabled,
   onChange,
 }: {
   quantity: number;
-  stockCount: number;
+  disabled: boolean;
   onChange: (quantity: number) => void;
 }) {
   return (
     <div className="cart-items-qty">
       <button
         type="button"
+        disabled={disabled}
         onClick={() => onChange(quantity === 1 ? quantity : quantity - 1)}
         className="cart-items-qty-btn"
         aria-label="Decrease quantity">
@@ -84,10 +37,10 @@ function QuantityControl({
 
       <button
         type="button"
-        onClick={() => onChange(quantity < stockCount ? quantity + 1 : quantity)}
+        disabled={disabled}
+        onClick={() => onChange(quantity + 1)}
         className="cart-items-qty-btn"
-        aria-label="Increase quantity"
-        disabled={quantity >= stockCount}>
+        aria-label="Increase quantity">
         +
       </button>
     </div>
@@ -95,19 +48,19 @@ function QuantityControl({
 }
 
 // -----------------------------------
-// CART LINE ITEM
+// LINE
 // -----------------------------------
 
 function CartLineItem({
   item,
+  disabled,
   onQtyChange,
   onRemove,
 }: {
   item: CartItem;
-
-  onQtyChange: (productId: string, color: string, size: string, quantity: number) => void;
-
-  onRemove: (productId: string, color: string, size: string) => void;
+  disabled: boolean;
+  onQtyChange: (itemId: string, quantity: number) => void;
+  onRemove: (itemId: string) => void;
 }) {
   return (
     <div className="cart-items-card">
@@ -115,7 +68,15 @@ function CartLineItem({
         {/* IMAGE */}
 
         <div className="cart-items-image-wrap">
-          <Image src={item.image} alt={item.name} className="cart-items-image" width={100} height={100} />
+          {item.image && (
+            <Image
+              src={item.image.url}
+              alt={item.image.alt_text ?? item.product_name}
+              className="cart-items-image"
+              width={100}
+              height={100}
+            />
+          )}
         </div>
 
         {/* DETAILS */}
@@ -123,41 +84,23 @@ function CartLineItem({
         <div className="cart-items-details">
           <div className="cart-items-details-top">
             <div>
-              <h3 className="cart-items-name">{item.name}</h3>
+              <h3 className="cart-items-name">
+                <Link href={`/single-product/${item.product_id}`}>{item.product_name}</Link>
+              </h3>
 
-              <p className="cart-items-variant">
-                Color:{' '}
-                <span
-                  style={{
-                    display: 'inline-block',
-                    width: '15px',
-                    height: '15px',
-                    borderRadius: '50%',
-                    backgroundColor: item.color,
-                    border: '1px solid #ccc',
-                    verticalAlign: 'middle',
-                    marginLeft: '5px',
-                  }}
-                />
-              </p>
+              <p className="cart-items-variant">{item.variant_name}</p>
 
-              <p className="cart-items-variant">Size: {item.size}</p>
+              <p className="cart-items-variant">SKU: {item.sku}</p>
             </div>
           </div>
 
           <div className="cart-items-quantity-details">
-            <div className="cart-items-badge-row">
-              <StockBadge stockCount={item.stockCount} />
-            </div>
-
             <div className="cart-items-actions">
-              {item.stockCount > 0 && (
-                <QuantityControl
-                  quantity={item.quantity}
-                  stockCount={item.stockCount}
-                  onChange={quantity => onQtyChange(item.productId, item.color, item.size, quantity)}
-                />
-              )}
+              <QuantityControl
+                quantity={item.quantity}
+                disabled={disabled}
+                onChange={quantity => onQtyChange(item.id, quantity)}
+              />
             </div>
           </div>
         </div>
@@ -166,16 +109,21 @@ function CartLineItem({
 
         <div className="cart-items-price-details">
           <div className="cart-items-price-block">
-            <div className="cart-items-price">{currency(item.price * item.quantity)}</div>
+            <div className="cart-items-price">{formatMoney(item.subtotal, STOREFRONT_CURRENCY)}</div>
 
-            {item.quantity > 1 && <div className="cart-items-price-each">{currency(item.price)} each</div>}
+            {item.quantity > 1 && (
+              <div className="cart-items-price-each">
+                {formatMoney(item.unit_price, STOREFRONT_CURRENCY)} each
+              </div>
+            )}
           </div>
 
           {/* REMOVE */}
 
           <button
             type="button"
-            onClick={() => onRemove(item.productId, item.color, item.size)}
+            disabled={disabled}
+            onClick={() => onRemove(item.id)}
             className="cart-items-link">
             <Image src="/assets/dustbin.png" alt="remove-button-image" width={20} height={20} />
           </button>
@@ -189,54 +137,16 @@ function CartLineItem({
 // CART
 // -----------------------------------
 
-export default function Cart() {
-  const { cartItems, updateQuantity, removeFromCart } = useCart();
-
-  // -----------------------------------
-  // UPDATE QUANTITY
-  // -----------------------------------
-
-  const updateQty = (productId: string, color: string, size: string, quantity: number) => {
-    updateQuantity(productId, color, size, quantity);
-  };
-
-  // -----------------------------------
-  // REMOVE ITEM
-  // -----------------------------------
-
-  const removeItem = (productId: string, color: string, size: string) => {
-    removeFromCart(productId, color, size);
-  };
-
-  // -----------------------------------
-  // SUBTOTAL
-  // -----------------------------------
-
-  const subtotal = useMemo(() => {
-    return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  }, [cartItems]);
-
-  // -----------------------------------
-  // ITEM COUNT
-  // -----------------------------------
-
-  const itemCount = useMemo(() => {
-    return cartItems.reduce((total, item) => total + item.quantity, 0);
-  }, [cartItems]);
-
-  // -----------------------------------
-  // TAX
-  // -----------------------------------
-
-  const tax = useMemo(() => {
-    return subtotal * 0.065;
-  }, [subtotal]);
-
-  // -----------------------------------
-  // TOTAL
-  // -----------------------------------
-
-  const total = subtotal + tax;
+/**
+ * The cart page.
+ *
+ * Line totals and the subtotal are the backend's; shipping and tax only
+ * exist once checkout prices them, which needs a session -- so a guest sees
+ * the subtotal and is told the rest is worked out at checkout, rather than
+ * being shown a guess that changes at the last step.
+ */
+export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
+  const { cart, items, itemCount, pending, error, updateQuantity, removeFromCart } = useCart();
 
   return (
     <div className="cart-items-page">
@@ -253,15 +163,18 @@ export default function Cart() {
             </span>
           </h1>
 
-          {cartItems.length === 0 ? (
+          {error && <div className="cart-items-empty">{error}</div>}
+
+          {items.length === 0 ? (
             <div className="cart-items-empty">Your cart is empty.</div>
           ) : (
-            cartItems.map(item => (
+            items.map(item => (
               <CartLineItem
-                key={`${item.productId}-${item.color}-${item.size}`}
+                key={item.id}
                 item={item}
-                onQtyChange={updateQty}
-                onRemove={removeItem}
+                disabled={pending}
+                onQtyChange={updateQuantity}
+                onRemove={removeFromCart}
               />
             ))
           )}
@@ -270,7 +183,7 @@ export default function Cart() {
         {/* =================================
             ORDER SUMMARY
         ================================= */}
-        { cartItems.length !==0 &&
+        {items.length !== 0 && (
           <div className="cart-items-summary">
             <h2 className="cart-items-summary-title">Order Summary</h2>
 
@@ -280,7 +193,9 @@ export default function Cart() {
               <div className="cart-items-summary-row">
                 <span>Subtotal ({itemCount} items)</span>
 
-                <span className="cart-items-summary-value">{currency(subtotal)}</span>
+                <span className="cart-items-summary-value">
+                  {formatMoney(preview ? preview.subtotal : cart.subtotal, STOREFRONT_CURRENCY)}
+                </span>
               </div>
 
               {/* SHIPPING */}
@@ -288,15 +203,19 @@ export default function Cart() {
               <div className="cart-items-summary-row">
                 <span>Shipping</span>
 
-                <span className="cart-items-summary-value">Free</span>
+                <span className="cart-items-summary-value">
+                  {preview ? formatMoney(preview.shipping_amount, STOREFRONT_CURRENCY) : 'At checkout'}
+                </span>
               </div>
 
               {/* TAX */}
 
               <div className="cart-items-summary-row">
-                <span>Estimated Tax</span>
+                <span>Tax</span>
 
-                <span className="cart-items-summary-value">{currency(tax)}</span>
+                <span className="cart-items-summary-value">
+                  {preview ? formatMoney(preview.tax_amount, STOREFRONT_CURRENCY) : 'At checkout'}
+                </span>
               </div>
             </div>
 
@@ -307,7 +226,9 @@ export default function Cart() {
             <div className="cart-items-total">
               <span className="cart-items-total-label">Total</span>
 
-              <span className="cart-items-total-value">{currency(total)}</span>
+              <span className="cart-items-total-value">
+                {formatMoney(preview ? preview.total_amount : cart.subtotal, STOREFRONT_CURRENCY)}
+              </span>
             </div>
 
             {/* CHECKOUT */}
@@ -323,13 +244,9 @@ export default function Cart() {
               <div className="cart-items-note">
                 <span>Secure checkout, encrypted payment</span>
               </div>
-
-              <div className="cart-items-note">
-                <span>Free white-glove delivery on this order</span>
-              </div>
             </div>
           </div>
-        }
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
-
 import { Fragment } from "react";
 import MainSection from "./_components/MainSection";
 import MainLayout from "@/components/MainLayout";
+import { catalogueApi } from "@/lib/api/catalogue";
 
 export const metadata  = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -9,11 +9,14 @@ export const metadata  = {
   keywords: "Pixio, NextJs eCommerce template, shop template, online store Next.js, responsive eCommerce UI, modern shopping site, product showcase template, frontend eCommerce, fast-loading shop, customizable eCommerce layout, retail web template, online store Next.js",
 }
 
-const HomePage = () =>{
+/** Newest first, so the grid moves as the catalogue does. */
+const HomePage = async () =>{
+    const page = await catalogueApi.listProducts({ page_size: 8, sort: 'newest' });
+
     return( 
         <Fragment>
             <MainLayout>
-                <MainSection />
+                <MainSection products={page.items} />
             </MainLayout>
         </Fragment>
     )

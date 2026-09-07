@@ -1,6 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
+
+import { formatDate, formatMoney } from '@/lib/format';
+import type { OrderStatus, OrderSummary } from '@/types/orders';
 
 function ArrowUpRightIcon({ className }: { className?: string }) {
   return (
@@ -39,113 +43,54 @@ function PackageSearchIcon({ className }: { className?: string }) {
   );
 }
 
-type OrderStatus = 'in_progress' | 'delayed' | 'canceled' | 'delivered';
-
-interface Order {
-  id: string;
-  date: string;
-  amount: number;
-  status: OrderStatus;
-}
-
 interface StatusMeta {
   label: string;
   dotClassName: string;
   textClassName: string;
 }
 
-const ORDERS: Order[] = [
-  { id: '34VB5540K83', date: '2025-01-21', amount: 358.75, status: 'in_progress' },
-  { id: '78A643CD409', date: '2025-02-09', amount: 760.5, status: 'canceled' },
-  { id: '112P45A9OV2', date: '2025-01-15', amount: 1264.0, status: 'delayed' },
-  { id: '28BA67UO981', date: '2025-01-19', amount: 198.35, status: 'delivered' },
-  { id: '5O2TR872W2', date: '2025-01-04', amount: 2133.9, status: 'delivered' },
-  { id: '47H76GO9F33', date: '2025-01-30', amount: 86.4, status: 'delivered' },
-  { id: '53U76GO9E38', date: '2025-01-21', amount: 86.4, status: 'delivered' },
-  { id: '31M76GO9G76', date: '2025-01-07', amount: 112.4, status: 'delivered' },
-];
-
+/** The backend's six statuses, mapped onto the template's four badge colours. */
 const STATUS_META: Record<OrderStatus, StatusMeta> = {
-  in_progress: {
-    label: 'In progress',
-    dotClassName: 'myorderDotBlue',
-    textClassName: 'myorderTextBlue',
-  },
-  delayed: {
-    label: 'Delayed',
+  PENDING: {
+    label: 'Pending',
     dotClassName: 'myorderDotAmber',
     textClassName: 'myorderTextAmber',
   },
-  canceled: {
-    label: 'Canceled',
-    dotClassName: 'myorderDotRose',
-    textClassName: 'myorderTextRose',
+  CONFIRMED: {
+    label: 'Confirmed',
+    dotClassName: 'myorderDotBlue',
+    textClassName: 'myorderTextBlue',
   },
-  delivered: {
+  PROCESSING: {
+    label: 'Processing',
+    dotClassName: 'myorderDotBlue',
+    textClassName: 'myorderTextBlue',
+  },
+  SHIPPED: {
+    label: 'Shipped',
+    dotClassName: 'myorderDotBlue',
+    textClassName: 'myorderTextBlue',
+  },
+  DELIVERED: {
     label: 'Delivered',
     dotClassName: 'myorderDotEmerald',
     textClassName: 'myorderTextEmerald',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    dotClassName: 'myorderDotRose',
+    textClassName: 'myorderTextRose',
   },
 };
 
 type FilterValue = 'all' | OrderStatus;
 
-const FILTERS: FilterValue[] = ['all', 'in_progress', 'delayed', 'delivered', 'canceled'];
+const FILTERS: FilterValue[] = ['all', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 
-function formatDate(iso: string): string {
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-}
-
-function formatAmount(n: number): string {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-}
-
-export default function MyOrders() {
+export default function MyOrders({ orders: allOrders }: { orders: OrderSummary[] }) {
   const [filter, setFilter] = useState<FilterValue>('all');
 
-  const orders = filter === 'all' ? ORDERS : ORDERS.filter(o => o.status === filter);
-
-  //   const [orders, setOrders] = useState([]);
-  // const [loading, setLoading] = useState(true);
-  // const [error, setError] = useState('');
-
-  // useEffect(() => {
-  //   const fetchOrders = async () => {
-  //     try {
-  //       setLoading(true);
-  //       setError('');
-
-  //       const response = await fetch(
-  //         'http://localhost:5000/api/orders/my-orders',
-  //         {
-  //           method: 'GET',
-  //           credentials: 'include',
-  //         }
-  //       );
-
-  //       const data = await response.json();
-
-  //       if (!response.ok) {
-  //         throw new Error(data.message || 'Failed to fetch orders');
-  //       }
-
-  //       setOrders(data.orders);
-  //     } catch (error) {
-  //       console.error('Failed to fetch orders:', error);
-
-  //       if (error instanceof Error) {
-  //         setError(error.message);
-  //       } else {
-  //         setError('Something went wrong while fetching orders');
-  //       }
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-
-  //   fetchOrders();
-  // }, []);
+  const orders = filter === 'all' ? allOrders : allOrders.filter(order => order.status === filter);
 
   return (
     <div className="myorderPage">
@@ -192,9 +137,11 @@ export default function MyOrders() {
                   const isLast = i === orders.length - 1;
                   return (
                     <tr key={order.id} className={`myorderRow ${!isLast ? 'myorderRowBorder' : ''}`}>
-                      <td className="myorderTd myorderTdOrderId">#{order.id}</td>
-                      <td className="myorderTd myorderTdDate">{formatDate(order.date)}</td>
-                      <td className="myorderTd myorderTdAmount">{formatAmount(order.amount)}</td>
+                      <td className="myorderTd myorderTdOrderId">#{order.order_number}</td>
+                      <td className="myorderTd myorderTdDate">{formatDate(order.created_at)}</td>
+                      <td className="myorderTd myorderTdAmount">
+                        {formatMoney(order.total_amount, order.currency)}
+                      </td>
                       <td className="myorderTd">
                         <span className={`myorderStatusBadge ${meta.textClassName}`}>
                           <span className={`myorderStatusDot ${meta.dotClassName}`} />
@@ -202,10 +149,10 @@ export default function MyOrders() {
                         </span>
                       </td>
                       <td className="myorderTd myorderTdAction">
-                        <button type="button" className="myorderViewButton">
+                        <Link href={`/order-success/${order.id}`} className="myorderViewButton">
                           View
                           <ArrowUpRightIcon className="myorderViewIcon" />
-                        </button>
+                        </Link>
                       </td>
                     </tr>
                   );

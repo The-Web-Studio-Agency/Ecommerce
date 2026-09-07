@@ -1,38 +1,42 @@
+import { notFound } from 'next/navigation';
+
 import CommanLayout from '@/components/CommanLayout';
-import SingleProduct from '@/elements/SingleProductPage/SingleProduct';
 import CommonBanner2 from '@/components/CommonBanner2';
+import SingleProduct from '@/elements/SingleProductPage/SingleProduct';
+import { catalogueApi } from '@/lib/api/catalogue';
+import { ApiError } from '@/lib/api/errors';
+import { reviewApi } from '@/lib/api/reviews';
+import type { ProductStorefront } from '@/types/catalogue';
 
 const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
 
-  const product = {
-    id: id,
-    // Single Product only
-    images: ['/assets/cloth-0.webp', '/assets/cloth-1.webp', '/assets/cloth-2.webp'],
-    name: 'Ribbed Knit Cardigan',
-    price: 1485.04,
-    oldPrice: 1765,
-    discount: 16,
-    rating: 4.5,
-    stockCount: 10,
-    colors: ['#000000', '#FFFFFF', '#1C1C1C', '#36454F'],
-    sizes: ['XS', 'SM', 'MD', 'LG', 'XL', 'XXL'],
-    description: 'A beautifully crafted cardigan that blends rich texture with effortless sophistication.',
-  };
+  let product: ProductStorefront;
+
+  try {
+    product = await catalogueApi.getProduct(id);
+  } catch (error) {
+    if (error instanceof ApiError && error.isNotFound) notFound();
+    throw error;
+  }
+
+  /* A product with no reviews still renders, with an empty star row, and
+     "you might also like" falls back to nothing rather than to filler. */
+  const [summary, related] = await Promise.all([
+    reviewApi.summary(id).catch(() => null),
+    catalogueApi
+      .listProducts({ category_id: product.category.id, page_size: 4 })
+      .then(page => page.items.filter(item => item.id !== product.id).slice(0, 3))
+      .catch(() => []),
+  ]);
 
   return (
     <CommanLayout>
-      <CommonBanner2 parentText="Shop" currentText="Ribbed Knit Cardigan" mainText="Shop Standard"></CommonBanner2>
+      <CommonBanner2 parentText="Shop" currentText={product.name} mainText={product.category.name} />
       <SingleProduct
-        productId={product.id}
-        name={product.name}
-        price={product.price}
-        images={product.images}
-        colors={product.colors}
-        sizes={product.sizes}
-        rating={product.rating}
-        stockCount={product.stockCount}
-        description={product.description}
+        product={product}
+        rating={summary ? summary.average_rating : 0}
+        related={related}
       />
     </CommanLayout>
   );

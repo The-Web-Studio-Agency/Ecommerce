@@ -1,14 +1,19 @@
 import CommanLayout from '@/components/CommanLayout';
-import CommonBanner2 from '@/components/CommonBanner2';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { orderApi } from '@/lib/api/orders';
+import { getAccessToken } from '@/lib/auth/session';
 import MyOrders from './_components/MyOrders';
 
-export default function MyOrdersPage() {
+/** Order history. Middleware guarantees a session by the time this runs. */
+export default async function MyOrdersPage() {
+  const token = await getAccessToken();
+  const page = token ? await orderApi.list(token, { page_size: 50 }) : null;
+
   return (
     <CommanLayout>
-      {/* <ProtectedRoute> */}
-      <CommonBanner2 parentText="Home" currentText="My Orders" mainText="Shop Standard" />
-      <MyOrders />
-      {/* </ProtectedRoute> */}
+      <ProtectedRoute>
+        <MyOrders orders={page ? page.items : []} />
+      </ProtectedRoute>
     </CommanLayout>
   );
 }

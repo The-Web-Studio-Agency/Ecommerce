@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 
+import { formatMoney } from '@/lib/format';
+import type { PaymentStatus } from '@/types/orders';
+
 function PackageSearchIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -22,13 +25,14 @@ function PackageSearchIcon({ className }: { className?: string }) {
   );
 }
 
-type PaymentStatus = 'paid' | 'pending' | 'failed' | 'refunded';
-
-interface Payment {
+/** One order's payment, as the table shows it. */
+export interface PaymentRow {
   orderId: string;
+  orderNumber: string;
   paymentId: string;
   method: string;
   amount: string;
+  currency: string;
   status: PaymentStatus;
 }
 
@@ -38,35 +42,23 @@ interface StatusMeta {
   textClassName: string;
 }
 
-const PAYMENTS: Payment[] = [
-  { orderId: 'ORD-1234', paymentId: 'pay_ABC123', method: 'UPI', amount: '₹2,814', status: 'paid' },
-
-  { orderId: 'ORD-1235', paymentId: '—', method: 'COD', amount: '₹1,500', status: 'pending' },
-
-  { orderId: 'ORD-1236', paymentId: 'pay_DEF456', method: 'Card', amount: '₹4,999', status: 'paid' },
-
-  { orderId: 'ORD-1237', paymentId: 'pay_GHI789', method: 'Net Banking', amount: '₹899', status: 'failed' },
-
-  { orderId: 'ORD-1238', paymentId: 'pay_JKL012', method: 'UPI', amount: '₹1,250', status: 'refunded' },
-];
-
 const STATUS_META: Record<PaymentStatus, StatusMeta> = {
-  paid: {
+  PAID: {
     label: 'Paid',
     dotClassName: 'myorderDotEmerald',
     textClassName: 'myorderTextEmerald',
   },
-  pending: {
+  PENDING: {
     label: 'Pending',
     dotClassName: 'myorderDotAmber',
     textClassName: 'myorderTextAmber',
   },
-  failed: {
+  FAILED: {
     label: 'Failed',
     dotClassName: 'myorderDotRose',
     textClassName: 'myorderTextRose',
   },
-  refunded: {
+  REFUNDED: {
     label: 'Refunded',
     dotClassName: 'myorderDotBlue',
     textClassName: 'myorderTextBlue',
@@ -75,53 +67,12 @@ const STATUS_META: Record<PaymentStatus, StatusMeta> = {
 
 type FilterValue = 'all' | PaymentStatus;
 
-const FILTERS: FilterValue[] = ['all', 'paid', 'pending', 'failed', 'refunded'];
+const FILTERS: FilterValue[] = ['all', 'PAID', 'PENDING', 'FAILED', 'REFUNDED'];
 
-export default function PaymentHistory() {
+export default function PaymentHistory({ payments: allPayments }: { payments: PaymentRow[] }) {
   const [filter, setFilter] = useState<FilterValue>('all');
 
-  const payments = filter === 'all' ? PAYMENTS : PAYMENTS.filter(p => p.status === filter);
-
-  //   const [payments, setPayments] = useState([]);
-  // const [loading, setLoading] = useState(true);
-  // const [error, setError] = useState('');
-
-  // useEffect(() => {
-  //   const fetchPayments = async () => {
-  //     try {
-  //       setLoading(true);
-  //       setError('');
-
-  //       const response = await fetch(
-  //         'http://localhost:5000/api/payments/my-payments',
-  //         {
-  //           method: 'GET',
-  //           credentials: 'include',
-  //         }
-  //       );
-
-  //       const data = await response.json();
-
-  //       if (!response.ok) {
-  //         throw new Error(data.message || 'Failed to fetch payments');
-  //       }
-
-  //       setPayments(data.payments);
-  //     } catch (error) {
-  //       console.error('Failed to fetch payments:', error);
-
-  //       if (error instanceof Error) {
-  //         setError(error.message);
-  //       } else {
-  //         setError('Something went wrong while fetching payments');
-  //       }
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-
-  //   fetchPayments();
-  // }, []);
+  const payments = filter === 'all' ? allPayments : allPayments.filter(p => p.status === filter);
 
   return (
     <div className="myorderPage">
@@ -169,10 +120,12 @@ export default function PaymentHistory() {
                   const isLast = i === payments.length - 1;
                   return (
                     <tr key={payment.orderId} className={`myorderRow ${!isLast ? 'myorderRowBorder' : ''}`}>
-                      <td className="myorderTd myorderTdOrderId">{payment.orderId}</td>
+                      <td className="myorderTd myorderTdOrderId">{payment.orderNumber}</td>
                       <td className="myorderTd myorderTdDate">{payment.paymentId}</td>
                       <td className="myorderTd myorderTdDate">{payment.method}</td>
-                      <td className="myorderTd myorderTdAmount">{payment.amount}</td>
+                      <td className="myorderTd myorderTdAmount">
+                        {formatMoney(payment.amount, payment.currency)}
+                      </td>
                       <td className="myorderTd">
                         <span className={`myorderStatusBadge ${meta.textClassName}`}>
                           <span className={`myorderStatusDot ${meta.dotClassName}`} />

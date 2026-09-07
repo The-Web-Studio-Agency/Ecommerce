@@ -57,7 +57,7 @@ export async function requestOtp(
     return toFormState(error);
   }
 
-  redirect(`/signin/verify?phone=${encodeURIComponent(phone)}`);
+  redirect(`/otp-verification?phone=${encodeURIComponent(phone)}`);
 }
 
 /**
@@ -72,7 +72,7 @@ export async function verifyOtp(
 ): Promise<AuthFormState> {
   const phone = String(formData.get('phone') ?? '').trim();
   const otp = String(formData.get('otp') ?? '').trim();
-  const next = String(formData.get('next') ?? '/account');
+  const next = String(formData.get('next') ?? '/my-account');
 
   if (!phone) return { error: 'Start again from the sign-in page.' };
 
@@ -113,7 +113,7 @@ export async function passwordLogin(
     return toFormState(error);
   }
 
-  redirect('/admin');
+  redirect('/');
 }
 
 /** End the session, revoking the refresh token server-side as well. */
@@ -140,6 +140,6 @@ export async function logout(): Promise<void> {
  * link to a sign-in that lands on their own domain afterwards.
  */
 function safeRedirect(target: string): string {
-  if (!target.startsWith('/') || target.startsWith('//')) return '/account';
+  if (!target.startsWith('/') || target.startsWith('//')) return '/my-account';
   return target;
 }

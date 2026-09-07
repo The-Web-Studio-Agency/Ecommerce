@@ -1,60 +1,30 @@
-'use client';
+import StorefrontShell from '@/components/StorefrontShell';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { getCart } from '@/lib/cart/read';
+import type { UserProfile } from '@/types/auth';
+import type { Cart } from '@/types/cart';
 
-import 'lightgallery/css/lightgallery.css';
-import 'lightgallery/css/lg-zoom.css';
-import 'lightgallery/css/lg-thumbnail.css';
-import 'lightgallery/css/lg-autoplay.css';
-import 'lightgallery/css/lg-fullscreen.css';
-import 'lightgallery/css/lg-share.css';
-import 'lightgallery/css/lg-zoom.css';
+const EMPTY_CART: Cart = { id: 'guest', items: [], subtotal: '0.00', item_count: 0 };
 
-import '../../../public/assets/icons/iconly/index.min.css';
-import '../../../public/assets/vendor/swiper/swiper-bundle.min.css';
-import '../../../public/assets/vendor/animate/animate.css';
-import '../../../public/assets/css/style.css';
-import '../../../public/assets/css/skin/skin-1.css';
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-// import SubscribeModal from "@/constant/SubscribeModal";
-import ScrollToTopButton from '@/constant/ScrollToTopButton';
-import { AuthProvider } from '@/context/AuthContext';
-import { CartProvider } from '@/context/CartContext';
+/**
+ * Resolve the session and cart for every storefront page.
+ *
+ * A backend that is down degrades to a signed-out visitor with an empty
+ * cart rather than an error page: the catalogue still reads, and the pages
+ * that genuinely need a session say so themselves.
+ */
+async function loadShellData(): Promise<{ user: UserProfile | null; cart: Cart }> {
+  const [user, cart] = await Promise.all([
+    getCurrentUser().catch(() => null),
+    getCart().catch(() => EMPTY_CART),
+  ]);
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const path = usePathname();
+  return { user, cart };
+}
 
-  useEffect(() => {
-    setTimeout(() => {
-      const links = document.querySelectorAll('a[href="#"]');
-      const handleClick = (event: any) => {
-        event.preventDefault();
-      };
-      if (links) {
-        links.forEach(link => {
-          link.addEventListener('click', handleClick);
-        });
-      }
-    }, 600);
-  }, [path]);
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const { user, cart } = await loadShellData();
 
-  useEffect(() => {
-    setTimeout(() => {
-      const { WOW } = require('wowjs');
-      const wow = new WOW({
-        boxClass: 'wow',
-        animateClass: 'animated',
-        offset: 0,
-        mobile: false,
-        once: true,
-        live: false,
-        callback: function (box: HTMLElement) {
-          box.classList.add('will-animate');
-          box.classList.add('animated');
-        },
-      });
-      wow.init();
-    }, 100);
-  }, [path]);
   return (
     <html lang="en">
       <head>
@@ -64,10 +34,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         />
       </head>
       <body>
-        <AuthProvider>
-          <CartProvider>{children}</CartProvider>
-        </AuthProvider>
-        <ScrollToTopButton />
+        <StorefrontShell user={user} cart={cart}>
+          {children}
+        </StorefrontShell>
       </body>
     </html>
   );

@@ -1,31 +1,37 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/context/AuthContext';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useActionState, useEffect, useRef, useState } from 'react';
+
+import { requestOtp, verifyOtp } from '@/lib/auth/actions';
+import { initialAuthState } from '@/lib/auth/form-state';
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
 
-type Status = 'idle' | 'verifying' | 'verified' | 'error';
-
+/**
+ * Verify the code and start a session.
+ *
+ * Verification posts to a server action rather than fetching from here: the
+ * token pair it returns has to land in httpOnly cookies, which only the
+ * server can write. On success the action redirects, so there is no
+ * "verified" state to render.
+ */
 export default function OtpVerification() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn } = useAuth();
-  // Get email or phone from URL
-  const identifier = searchParams.get('identifier') || '';
+
+  const phone = searchParams.get('phone') || '';
+  const next = searchParams.get('next') || '/my-account';
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
-
   const [seconds, setSeconds] = useState<number>(RESEND_SECONDS);
 
-  const [status, setStatus] = useState<Status>('idle');
-
-  const [errorMessage, setErrorMessage] = useState('');
-
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+
+  const [state, formAction, pending] = useActionState(verifyOtp, initialAuthState);
+  const [resendState, resendAction, resending] = useActionState(requestOtp, initialAuthState);
 
   /*
    * -----------------------------------------
@@ -34,10 +40,10 @@ export default function OtpVerification() {
    */
 
   useEffect(() => {
-    if (!identifier) {
+    if (!phone) {
       router.push('/signin');
     }
-  }, [identifier, router]);
+  }, [phone, router]);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -56,220 +62,42 @@ export default function OtpVerification() {
    */
 
   const updateDigit = (index: number, value: string) => {
-    // Only allow numbers
-    if (!/^\d?$/.test(value)) {
-      return;
-    }
+    if (!/^\d?$/.test(value)) return;
 
-    const newOtp = [...otp];
+    setOtp(previous => {
+      const next = [...previous];
+      next[index] = value;
+      return next;
+    });
 
-    newOtp[index] = value;
-
-    setOtp(newOtp);
-
-    setStatus('idle');
-    setErrorMessage('');
-
-    // Move to next input
     if (value && index < OTP_LENGTH - 1) {
       inputsRef.current[index + 1]?.focus();
     }
   };
 
-  /*
-   * -----------------------------------------
-   * BACKSPACE
-   * -----------------------------------------
-   */
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key === 'Backspace' && !otp[index] && index > 0) {
       inputsRef.current[index - 1]?.focus();
     }
   };
 
-  /*
-   * -----------------------------------------
-   * PASTE OTP
-   * -----------------------------------------
-   */
+  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+    if (!pasted) return;
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    e.preventDefault();
+    event.preventDefault();
 
-    const pastedOtp = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
-
-    if (!pastedOtp) return;
-
-    const newOtp = Array(OTP_LENGTH).fill('');
-
-    pastedOtp.split('').forEach((digit, index) => {
-      newOtp[index] = digit;
+    const digits = Array(OTP_LENGTH).fill('');
+    pasted.split('').forEach((digit, index) => {
+      digits[index] = digit;
     });
 
-    setOtp(newOtp);
-
-    setStatus('idle');
-    setErrorMessage('');
-
-    const focusIndex = Math.min(pastedOtp.length, OTP_LENGTH - 1);
-
-    inputsRef.current[focusIndex]?.focus();
+    setOtp(digits);
+    inputsRef.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus();
   };
 
-  /*
-   * -----------------------------------------
-   * VERIFY OTP
-   * -----------------------------------------
-   */
-
-  const handleVerify = async () => {
-    const enteredOtp = otp.join('');
-
-    // Identifier check
-    if (!identifier) {
-      setErrorMessage('Email or phone number is missing.');
-      setStatus('error');
-      return;
-    }
-
-    // OTP validation
-    if (!enteredOtp) {
-      setErrorMessage('Please enter the OTP.');
-      setStatus('error');
-      return;
-    }
-
-    if (!/^\d{6}$/.test(enteredOtp)) {
-      setErrorMessage('Please enter a valid 6-digit OTP.');
-      setStatus('error');
-      return;
-    }
-
-    try {
-      //   setStatus('verifying');
-      //   setErrorMessage('');
-
-      //   const response = await fetch('http://localhost:5000/api/auth/verify-otp', {
-      //     method: 'POST',
-
-      //     headers: {
-      //       'Content-Type': 'application/json',
-      //     },
-
-      //     // Important if backend uses cookies
-      //     credentials: 'include',
-
-      //     body: JSON.stringify({
-      //       identifier: identifier,
-      //       otp: enteredOtp,
-      //     }),
-      //   });
-
-      //   const data = await response.json();
-      //    signIn(data.user)  // context auth
-
-      //   if (!response.ok) {
-      //     setStatus('error');
-
-      //     setErrorMessage(data.message || 'Invalid or expired OTP.');
-
-      //     return;
-      //   }
-
-      /*
-       * OTP successfully verified
-       */
-
-      // console.log('OTP verified successfully:', data);
-
-      setStatus('verified');
-
-      /*
-       * Backend should have created the
-       * authentication session/cookie here.
-       */
-
-      router.push('/');
-    } catch (error) {
-      console.error('OTP verification failed:', error);
-
-      setStatus('error');
-
-      setErrorMessage('Something went wrong. Please try again.');
-    }
-  };
-
-  /*
-   * -----------------------------------------
-   * RESEND OTP
-   * -----------------------------------------
-   */
-
-  const handleResend = async () => {
-    if (seconds > 0) {
-      return;
-    }
-
-    if (!identifier) {
-      setErrorMessage('Email or phone number is missing.');
-
-      setStatus('error');
-
-      return;
-    }
-
-    try {
-      // setErrorMessage('');
-      // setStatus('idle');
-      // const response = await fetch('http://localhost:5000/api/auth/send-otp', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     identifier: identifier,
-      //   }),
-      // });
-      // const data = await response.json();
-      // if (!response.ok) {
-      //   setStatus('error');
-      //   setErrorMessage(data.message || 'Failed to resend OTP.');
-      //   return;
-      // }
-      // console.log('OTP resent successfully:', data);
-      // // Clear old OTP
-      // setOtp(Array(OTP_LENGTH).fill(''));
-      // // Restart timer
-      // setSeconds(RESEND_SECONDS);
-      // // Focus first box
-      // inputsRef.current[0]?.focus();
-    } catch (error) {
-      console.error('Resend OTP failed:', error);
-
-      setStatus('error');
-
-      setErrorMessage('Something went wrong. Please try again.');
-    }
-  };
-
-  /*
-   * -----------------------------------------
-   * VERIFIED
-   * -----------------------------------------
-   */
-
-  if (status === 'verified') {
-    return (
-      <div className="otpverification-page">
-        <div className="otpverification-success-wrap">
-          <h1 className="otpverification-title">Verified</h1>
-
-          <p className="otpverification-subtitle">Your account has been verified successfully.</p>
-        </div>
-      </div>
-    );
-  }
+  const code = otp.join('');
+  const message = state.fieldErrors?.otp ?? state.error ?? resendState.error;
 
   /*
    * -----------------------------------------
@@ -283,43 +111,50 @@ export default function OtpVerification() {
         <div className="otpverification-card">
           <h1 className="otpverification-title">Verify your account</h1>
 
-          <p className="otpverification-description">Enter the 6-digit OTP sent to your email or phone number.</p>
+          <p className="otpverification-description">
+            Enter the 6-digit OTP sent to {phone || 'your phone number'}.
+          </p>
 
-          {/* OTP INPUTS */}
+          <form action={formAction}>
+            <input type="hidden" name="phone" value={phone} />
+            <input type="hidden" name="next" value={next} />
+            <input type="hidden" name="otp" value={code} />
 
-          <div className="otpverification-otp-row" onPaste={handlePaste}>
-            {otp.map((digit, index) => (
-              <input
-                key={index}
-                ref={element => {
-                  inputsRef.current[index] = element;
-                }}
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={1}
-                value={digit}
-                onChange={e => updateDigit(index, e.target.value)}
-                onKeyDown={e => handleKeyDown(e, index)}
-                className={`otpverification-otp-input${status === 'error' ? ' otpverification-otp-input-error' : ''}`}
-                autoComplete={index === 0 ? 'one-time-code' : 'off'}
-              />
-            ))}
-          </div>
+            {/* OTP INPUTS */}
 
-          {/* ERROR */}
+            <div className="otpverification-otp-row" onPaste={handlePaste}>
+              {otp.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={element => {
+                    inputsRef.current[index] = element;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={1}
+                  value={digit}
+                  onChange={e => updateDigit(index, e.target.value)}
+                  onKeyDown={e => handleKeyDown(e, index)}
+                  className={`otpverification-otp-input${message ? ' otpverification-otp-input-error' : ''}`}
+                  autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                />
+              ))}
+            </div>
 
-          {errorMessage && <p className="otpverification-error-text">{errorMessage}</p>}
+            {/* ERROR */}
 
-          {/* VERIFY */}
+            {message && <p className="otpverification-error-text">{message}</p>}
 
-          <button
-            type="button"
-            onClick={handleVerify}
-            disabled={otp.join('').length !== OTP_LENGTH || status === 'verifying'}
-            className="otpverification-verify-button">
-            {status === 'verifying' ? 'Verifying...' : 'Verify'}
-          </button>
+            {/* VERIFY */}
+
+            <button
+              type="submit"
+              disabled={code.length !== OTP_LENGTH || pending}
+              className="otpverification-verify-button">
+              {pending ? 'Verifying...' : 'Verify'}
+            </button>
+          </form>
 
           {/* RESEND */}
 
@@ -329,20 +164,27 @@ export default function OtpVerification() {
                 Resend code in <span className="otpverification-resend-count">{seconds}s</span>
               </p>
             ) : (
-              <button type="button" onClick={handleResend} className="otpverification-resend-button">
-                Resend code
-              </button>
+              <form action={resendAction}>
+                <input type="hidden" name="phone" value={phone} />
+
+                <button
+                  type="submit"
+                  disabled={resending}
+                  onClick={() => {
+                    setOtp(Array(OTP_LENGTH).fill(''));
+                    setSeconds(RESEND_SECONDS);
+                  }}
+                  className="otpverification-resend-button">
+                  {resending ? 'Sending...' : 'Resend code'}
+                </button>
+              </form>
             )}
           </div>
         </div>
 
         <p className="otpverification-edit-text">
           Wrong details?{' '}
-          <Link
-            href="/signin"
-            type="button"
-            className="otpverification-edit-link"
-            onClick={() => router.push('/signin')}>
+          <Link href="/signin" className="otpverification-edit-link">
             Go back to sign in
           </Link>
         </p>
