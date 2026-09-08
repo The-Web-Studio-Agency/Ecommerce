@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     phone_default_country_code: str = "91"
     phone_national_number_length: int = 10
 
+    # OTP delivery. Without an auth key and template id, development logs the
+    # code instead and production refuses to send one -- see app/auth/sms.py.
+    msg91_auth_key: str | None = None
+    msg91_template_id: str | None = None
+    msg91_sender_id: str | None = None
+    msg91_timeout_seconds: float = 10.0
+
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     docs_enabled: bool | None = None
