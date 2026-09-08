@@ -7,14 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import CurrentUser
 from app.auth.schemas import (
     LogoutPayload,
-    OtpRequestPayload,
-    OtpVerifyPayload,
     PasswordLoginPayload,
     RefreshPayload,
     StaffOtpVerifyPayload,
     TenantResponse,
     TokenPair,
     UserProfile,
+    WidgetLoginPayload,
 )
 from app.auth.security import hash_refresh_token
 from app.auth.service import AuthService
@@ -56,53 +55,38 @@ async def _throttle(
 
 
 @router.post(
-    "/otp/request",
-    status_code=status.HTTP_202_ACCEPTED,
-    response_model=ApiResponse[None],
-    summary="Send a login code to a customer's phone",
-)
-async def request_otp(
-    request: Request,
-    data: OtpRequestPayload,
-    tenant: CurrentTenant,
-    session: AsyncSession = Depends(get_db),
-) -> ApiResponse[None]:
-    settings = get_settings()
-    await _throttle(
-        request,
-        tenant,
-        "otp-request",
-        data.phone,
-        limit=settings.otp_request_rate_limit_attempts,
-        window_seconds=settings.otp_rate_limit_window_seconds,
-    )
-
-    await AuthService(session, tenant).request_customer_otp(data.phone)
-    return ok(message="OTP sent")
-
-
-@router.post(
-    "/otp/verify",
+    "/widget/login",
     response_model=ApiResponse[TokenPair],
-    summary="Verify a customer's code and receive a token pair",
+    summary="Sign a customer in from a MSG91-verified widget token",
 )
-async def verify_otp(
+async def widget_login(
     request: Request,
-    data: OtpVerifyPayload,
+    data: WidgetLoginPayload,
     tenant: CurrentTenant,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[TokenPair]:
+    """
+    The storefront's only customer sign-in. MSG91's widget owns the code
+    itself -- sending, resending, expiry and attempt limits all sit with them
+    -- and hands the browser an access token once a number is verified. All
+    that is left here is to confirm that token with MSG91 and turn the number
+    it attests to into a session.
+    """
     settings = get_settings()
+
+    # Throttled on the token rather than a phone number, since the number is
+    # not known until MSG91 has answered, and anything the caller claimed
+    # before then is unverified. MSG91 rate limits the codes themselves.
     key = await _throttle(
         request,
         tenant,
-        "otp-verify",
-        data.phone,
+        "widget-login",
+        hash_refresh_token(data.access_token),
         limit=settings.otp_verify_rate_limit_attempts,
         window_seconds=settings.otp_rate_limit_window_seconds,
     )
 
-    tokens = await AuthService(session, tenant).verify_customer_otp(data.phone, data.otp)
+    tokens = await AuthService(session, tenant).login_with_widget(data.access_token)
 
     await rate_limit.reset(key)
     return ok(tokens, message="Login successful")

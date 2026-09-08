@@ -2,17 +2,15 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.auth.constants import OtpPurpose, UserRole
-from app.auth.models import OtpRequest
+from app.auth.constants import UserRole
 from app.auth.security import create_access_token
 from app.users.models import User
 from app.users.repository import UserRepository
 from tests.conftest import (
     ADMIN_PASSWORD,
     headers_for,
-    request_otp,
     sign_in_customer,
-    verify_otp,
+    widget_login,
 )
 from tests.helpers import load_data
 
@@ -20,10 +18,10 @@ SHARED_PHONE = load_data(__file__)["shared_phone"]
 
 
 async def test_the_same_phone_may_exist_in_both_tenants(
-    client, other_client, session, tenant, other_tenant, sent_otps
+    client, other_client, session, tenant, other_tenant, msg91
 ):
-    zeen = await sign_in_customer(client, sent_otps, SHARED_PHONE)
-    acme = await sign_in_customer(other_client, sent_otps, SHARED_PHONE)
+    zeen = await sign_in_customer(client, msg91, SHARED_PHONE)
+    acme = await sign_in_customer(other_client, msg91, SHARED_PHONE)
 
     rows = (
         (await session.execute(select(User).where(User.phone == SHARED_PHONE)))
@@ -116,31 +114,31 @@ async def test_query_parameters_cannot_move_the_caller(client, tenant, other_ten
     assert response.json()["data"]["tenant_id"] == str(tenant.id)
 
 
-async def test_codes_are_scoped_to_the_tenant_that_issued_them(
-    client, other_client, tenant, other_tenant, sent_otps
+async def test_a_widget_token_signs_in_at_the_storefront_it_was_presented_to(
+    client, other_client, session, tenant, other_tenant, msg91
 ):
-    await request_otp(client, SHARED_PHONE)
-    zeen_code = sent_otps[-1].otp
+    """One verified number, presented at two storefronts, is two customers."""
+    token = msg91.token_for(SHARED_PHONE)
 
-    crossed = await verify_otp(other_client, SHARED_PHONE, zeen_code)
-    assert crossed.status_code == 401
+    assert (await widget_login(client, token)).status_code == 200
+    assert (await widget_login(other_client, token)).status_code == 200
 
-    assert (await verify_otp(client, SHARED_PHONE, zeen_code)).status_code == 200
-
-
-async def test_an_otp_row_belongs_to_one_tenant(client, session, tenant, sent_otps):
-    await request_otp(client, SHARED_PHONE)
-
-    record = await session.scalar(
-        select(OtpRequest).where(OtpRequest.purpose == OtpPurpose.CUSTOMER_LOGIN.value)
+    rows = (
+        (await session.execute(select(User).where(User.phone == SHARED_PHONE)))
+        .scalars()
+        .all()
     )
-    assert record.tenant_id == tenant.id
+    assert {row.tenant_id for row in rows} == {tenant.id, other_tenant.id}
+
+
+async def test_an_unverified_token_is_refused(client, tenant, msg91):
+    assert (await widget_login(client, "never-verified")).status_code == 401
 
 
 async def test_a_refresh_token_cannot_be_rotated_at_another_storefront(
-    client, other_client, tenant, other_tenant, user, sent_otps
+    client, other_client, tenant, other_tenant, user, msg91
 ):
-    tokens = await sign_in_customer(client, sent_otps, user.phone)
+    tokens = await sign_in_customer(client, msg91, user.phone)
 
     crossed = await other_client.post(
         "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
@@ -155,9 +153,9 @@ async def test_a_refresh_token_cannot_be_rotated_at_another_storefront(
 
 
 async def test_a_refresh_token_cannot_be_revoked_from_another_storefront(
-    client, other_client, tenant, other_tenant, user, sent_otps
+    client, other_client, tenant, other_tenant, user, msg91
 ):
-    tokens = await sign_in_customer(client, sent_otps, user.phone)
+    tokens = await sign_in_customer(client, msg91, user.phone)
 
     await other_client.post(
         "/api/v1/auth/logout", json={"refresh_token": tokens["refresh_token"]}
@@ -171,16 +169,18 @@ async def test_a_refresh_token_cannot_be_revoked_from_another_storefront(
 
 
 async def test_suspending_one_tenant_does_not_affect_another(
-    client, other_client, session, tenant, other_tenant, sent_otps
+    client, other_client, session, tenant, other_tenant, msg91
 ):
     tenant.is_active = False
     await session.commit()
 
-    blocked = await request_otp(client, SHARED_PHONE)
+    blocked = await widget_login(client, msg91.token_for(SHARED_PHONE))
     assert blocked.status_code == 404
     assert blocked.json()["error"]["code"] == "UNKNOWN_STOREFRONT"
 
-    assert (await request_otp(other_client, "+919555000222")).status_code == 202
+    assert (
+        await widget_login(other_client, msg91.token_for("+919555000222"))
+    ).status_code == 200
 
 
 async def test_users_from_both_tenants_coexist(session, tenant, other_tenant, make_user):
@@ -194,16 +194,16 @@ async def test_users_from_both_tenants_coexist(session, tenant, other_tenant, ma
 
 
 async def test_the_domain_decides_which_tenant_a_new_customer_joins(
-    client, other_client, session, tenant, other_tenant, sent_otps
+    client, other_client, session, tenant, other_tenant, msg91
 ):
-    await sign_in_customer(other_client, sent_otps, SHARED_PHONE)
+    await sign_in_customer(other_client, msg91, SHARED_PHONE)
 
     created = await session.scalar(select(User).where(User.phone == SHARED_PHONE))
     assert created.tenant_id == other_tenant.id
 
 
 async def test_a_staff_challenge_from_one_tenant_cannot_be_verified_at_another(
-    client, other_client, tenant, other_tenant, make_user, sent_otps
+    client, other_client, tenant, other_tenant, make_user, msg91
 ):
     await make_user(tenant=tenant, email="staff@zeen.com", role=UserRole.STAFF.value)
 
@@ -226,9 +226,9 @@ async def test_a_staff_challenge_from_one_tenant_cannot_be_verified_at_another(
 
 
 async def test_presenting_a_token_to_the_wrong_tenant_does_not_revoke_it(
-    client, other_client, tenant, other_tenant, user, sent_otps
+    client, other_client, tenant, other_tenant, user, msg91
 ):
-    tokens = await sign_in_customer(client, sent_otps, user.phone)
+    tokens = await sign_in_customer(client, msg91, user.phone)
 
     for _ in range(3):
         crossed = await other_client.post(

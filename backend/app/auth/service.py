@@ -7,7 +7,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.constants import (
-    OTP_EXPIRE_MINUTES,
     OTP_MAX_ATTEMPTS,
     OtpPurpose,
     UserRole,
@@ -24,14 +23,12 @@ from app.auth.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
-    generate_otp,
-    hash_otp,
     hash_refresh_token,
     spend_dummy_verification,
     verify_otp,
     verify_password,
 )
-from app.auth.sms import send_otp
+from app.auth.widget import verify_access_token
 from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError
 from app.core.logging import get_logger
@@ -55,39 +52,33 @@ class AuthService:
         self.challenges = AdminChallengeRepository(session)
         self.tokens = RefreshTokenRepository(session)
 
-    async def request_customer_otp(self, phone: str) -> None:
-        user = await self.users.get_by_phone(tenant_id=self.tenant.id, phone=phone)
+    async def login_with_widget(self, access_token: str) -> TokenPair:
+        """
+        Sign a customer in from a MSG91-verified widget token.
 
-        await self._issue_otp(
-            phone=phone,
-            purpose=OtpPurpose.CUSTOMER_LOGIN.value,
-            user_id=user.id if user else None,
-        )
-        await self.session.commit()
+        This is registration as well as sign-in: a verified number with no
+        account gets one created here, which is what lets the storefront offer
+        a single "continue with mobile number" rather than asking someone
+        whether they are new.
 
-        logger.info(
-            "auth.otp_requested tenant_id=%s purpose=%s existing_user=%s",
-            self.tenant.id,
-            OtpPurpose.CUSTOMER_LOGIN.value,
-            user is not None,
-        )
-
-    async def verify_customer_otp(self, phone: str, otp: str) -> TokenPair:
-        record = await self.otps.get_latest(
-            tenant_id=self.tenant.id,
-            phone=phone,
-            purpose=OtpPurpose.CUSTOMER_LOGIN.value,
-        )
-        await self._consume_otp(record, otp)
+        The phone is whatever MSG91 attests to, never what the browser sent,
+        so a forged or replayed token cannot name an account of its choosing.
+        """
+        phone = await verify_access_token(access_token)
 
         user = await self.users.get_by_phone(tenant_id=self.tenant.id, phone=phone)
+
         if user is None:
             user = await self._create_customer(phone)
             logger.info("auth.customer_created user_id=%s tenant_id=%s", user.id, self.tenant.id)
         elif not user.is_active or user.role != UserRole.CUSTOMER.value:
+            # Staff and admins hold passwords and sign in through their own
+            # routes; letting them in here would sidestep that.
             logger.info("auth.login_rejected user_id=%s tenant_id=%s", user.id, self.tenant.id)
             raise AuthenticationError(INVALID_CREDENTIALS)
 
+        # MSG91 confirmed possession of the number, which is the whole of what
+        # verification means for a customer.
         user.is_verified = True
         tokens = await self._issue_tokens(user)
         await self.session.commit()
@@ -262,26 +253,6 @@ class AuthService:
         except IntegrityError as exc:
             await self.session.rollback()
             raise AuthenticationError(INVALID_CREDENTIALS) from exc
-
-    async def _issue_otp(
-        self, *, phone: str, purpose: str, user_id: UUID | None
-    ) -> OtpRequest:
-        await self.otps.expire_active(
-            tenant_id=self.tenant.id, phone=phone, purpose=purpose
-        )
-
-        otp = generate_otp()
-        record = await self.otps.create(
-            tenant_id=self.tenant.id,
-            user_id=user_id,
-            phone=phone,
-            purpose=purpose,
-            otp_hash=await hash_otp(otp),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRE_MINUTES),
-        )
-
-        await send_otp(phone, otp)
-        return record
 
     async def _consume_otp(self, record: OtpRequest | None, otp: str) -> None:
         now = datetime.now(timezone.utc)
