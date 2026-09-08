@@ -21,13 +21,14 @@ NormalizedPhone = Annotated[
 OtpCode = Annotated[str, Field(min_length=OTP_LENGTH, max_length=OTP_LENGTH, pattern=r"^\d+$")]
 
 
-class OtpRequestPayload(StrictModel):
-    phone: NormalizedPhone
+class WidgetLoginPayload(StrictModel):
+    """The access token MSG91's widget hands back once it has verified a number.
 
+    No phone field: the number is read from MSG91's confirmation of this
+    token, so there is nothing here for a caller to assert an identity with.
+    """
 
-class OtpVerifyPayload(StrictModel):
-    phone: NormalizedPhone
-    otp: OtpCode
+    access_token: str = Field(min_length=1, max_length=4096)
 
 
 class PasswordLoginPayload(StrictModel):

@@ -1,0 +1,118 @@
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+from app.auth.phone import normalize_phone
+from app.core.config import get_settings
+from app.core.exceptions import AuthenticationError, ServiceUnavailableError
+from app.core.logging import get_logger
+
+logger = get_logger("auth.widget")
+
+UNVERIFIED = "Could not verify that number"
+UNAVAILABLE = "Unable to verify your number right now"
+_IDENTIFIER_KEYS = ("message", "mobile", "identifier", "phone", "number")
+_MAX_SEARCH_DEPTH = 3
+_OUR_FAULT_CODES = frozenset({"201", "418"})
+
+
+async def verify_access_token(access_token: str) -> str:
+    """
+    Ask MSG91 to verify a widget access token, and return the number it attests to.
+    """
+    settings = get_settings()
+
+    if not settings.msg91_auth_key:
+        logger.error("widget.verification_not_configured")
+        raise ServiceUnavailableError(UNAVAILABLE)
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.msg91_timeout_seconds) as client:
+            response = await client.post(
+                settings.msg91_widget_verify_url,
+                json={
+                    "authkey": settings.msg91_auth_key,
+                    "access-token": access_token,
+                },
+                headers={"Content-Type": "application/json"},
+            )
+    except httpx.HTTPError as exc:
+        logger.error("widget.verify_transport_error error=%s", type(exc).__name__)
+        raise ServiceUnavailableError(UNAVAILABLE) from exc
+
+    return _identity_from(response)
+
+
+def _identity_from(response: httpx.Response) -> str:
+    try:
+        payload: Any = response.json()
+    except ValueError:
+        payload = None
+
+    outcome = ""
+    if isinstance(payload, dict):
+        outcome = str(payload.get("type", "")).lower()
+
+    if response.status_code >= httpx.codes.INTERNAL_SERVER_ERROR or (
+        response.status_code == httpx.codes.TOO_MANY_REQUESTS
+    ):
+        logger.error("widget.provider_error status=%s", response.status_code)
+        raise ServiceUnavailableError(UNAVAILABLE)
+
+    code = str(payload.get("code", "")) if isinstance(payload, dict) else ""
+    if code in _OUR_FAULT_CODES:
+        logger.error(
+            "widget.provider_misconfigured code=%s detail=%s "
+            "(201=auth key rejected, 418=this server's IP is not whitelisted "
+            "against the auth key in MSG91)",
+            code,
+            payload.get("message") if isinstance(payload, dict) else "-",
+        )
+        raise ServiceUnavailableError(UNAVAILABLE)
+
+    if response.status_code != httpx.codes.OK or outcome != "success":
+        logger.info(
+            "widget.token_rejected status=%s type=%s",
+            response.status_code,
+            outcome or "-",
+        )
+        raise AuthenticationError(UNVERIFIED)
+
+    phone = _phone_from(payload)
+
+    if phone is None:
+        logger.error("widget.identifier_missing keys=%s", sorted(payload))
+        raise AuthenticationError(UNVERIFIED)
+
+    return phone
+
+
+def _phone_from(payload: dict[str, Any], depth: int = 0) -> str | None:
+    """
+    Look for a phone number in the payload, which may be nested.
+    """
+    if depth > _MAX_SEARCH_DEPTH:
+        return None
+
+    for key in _IDENTIFIER_KEYS:
+        value = payload.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int | float):
+            value = format(int(value), "d")
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            return normalize_phone(value)
+        except ValueError:
+            continue
+
+    for nested in payload.values():
+        if isinstance(nested, dict):
+            found = _phone_from(nested, depth + 1)
+            if found is not None:
+                return found
+
+    return None

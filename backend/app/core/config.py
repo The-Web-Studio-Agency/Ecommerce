@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     phone_default_country_code: str = "91"
     phone_national_number_length: int = 10
 
+    # MSG91 owns the OTP itself -- generation, delivery, expiry, retries and
+    # attempt limits all sit with the widget. The account auth key is only
+    # used to confirm, server-side, that a widget token really is verified;
+    # it is never sent to the browser. See app/auth/widget.py.
+    msg91_auth_key: str | None = None
+    msg91_widget_verify_url: str = "https://control.msg91.com/api/v5/widget/verifyAccessToken"
+    msg91_timeout_seconds: float = 10.0
+
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     docs_enabled: bool | None = None

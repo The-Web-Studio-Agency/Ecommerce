@@ -14,6 +14,7 @@ from app.auth.security import create_access_token, hash_password
 from app.core import cache
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.exceptions import AuthenticationError
 from app.models.registry import Base
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
@@ -125,21 +126,35 @@ async def _flush_rate_limiter() -> AsyncGenerator[None, None]:
     yield
 
 
-@dataclass(frozen=True)
-class SentOtp:
-    phone: str
-    otp: str
+@dataclass
+class FakeMsg91:
+    """Stands in for MSG91's widget verification.
+
+    The real exchange is covered against a mocked transport in
+    tests/auth/test_widget.py; here it is stubbed so that every other suite
+    can sign a customer in without reaching the network.
+    """
+
+    verified: dict[str, str]
+
+    def token_for(self, phone: str) -> str:
+        token = f"widget-token-{len(self.verified) + 1}"
+        self.verified[token] = phone
+        return token
 
 
 @pytest_asyncio.fixture(autouse=True, loop_scope="session")
-async def sent_otps(monkeypatch) -> list[SentOtp]:
-    delivered: list[SentOtp] = []
+async def msg91(monkeypatch) -> FakeMsg91:
+    fake = FakeMsg91(verified={})
 
-    async def capture(phone: str, otp: str) -> None:
-        delivered.append(SentOtp(phone=phone, otp=otp))
+    async def verify(access_token: str) -> str:
+        phone = fake.verified.get(access_token)
+        if phone is None:
+            raise AuthenticationError("Could not verify that number")
+        return phone
 
-    monkeypatch.setattr("app.auth.service.send_otp", capture)
-    return delivered
+    monkeypatch.setattr("app.auth.service.verify_access_token", verify)
+    return fake
 
 
 @pytest_asyncio.fixture(loop_scope="session")
@@ -211,19 +226,14 @@ def headers_for(user: User) -> dict[str, str]:
     return {"Authorization": f"Bearer {token_for(user)}"}
 
 
-async def request_otp(client: AsyncClient, phone: str):
-    return await client.post("/api/v1/auth/otp/request", json={"phone": phone})
+async def widget_login(client: AsyncClient, access_token: str):
+    return await client.post(
+        "/api/v1/auth/widget/login", json={"access_token": access_token}
+    )
 
 
-async def verify_otp(client: AsyncClient, phone: str, otp: str):
-    return await client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": otp})
-
-
-async def sign_in_customer(client: AsyncClient, sent_otps: list[SentOtp], phone: str) -> dict:
-    requested = await request_otp(client, phone)
-    assert requested.status_code == 202, requested.text
-
-    response = await verify_otp(client, phone, sent_otps[-1].otp)
+async def sign_in_customer(client: AsyncClient, msg91: FakeMsg91, phone: str) -> dict:
+    response = await widget_login(client, msg91.token_for(phone))
     assert response.status_code == 200, response.text
     return response.json()["data"]
 
@@ -251,7 +261,6 @@ async def sign_in_admin(
 
 async def sign_in_staff(
     client: AsyncClient,
-    sent_otps: list[SentOtp],
     identifier: str,
     password: str = ADMIN_PASSWORD,
 ) -> dict:
