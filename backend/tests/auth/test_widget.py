@@ -103,7 +103,6 @@ async def test_an_unreachable_provider_is_not_reported_as_a_bad_code(msg91_repli
 
     msg91_replies(explode)
 
-    # 503, not 401: the caller's code may well have been right.
     with pytest.raises(ServiceUnavailableError):
         await widget.verify_access_token("tok")
 
@@ -143,7 +142,6 @@ async def test_a_timestamp_is_not_mistaken_for_a_number(msg91_replies):
 async def test_a_provider_server_error_is_not_a_bad_code(msg91_replies):
     msg91_replies(replies({"type": "error"}, status_code=502))
 
-    # 503, not 401: MSG91 fell over, the caller's code may have been fine.
     with pytest.raises(ServiceUnavailableError):
         await widget.verify_access_token("tok")
 
@@ -160,3 +158,30 @@ async def test_a_boolean_is_never_read_as_a_number(msg91_replies):
 
     with pytest.raises(AuthenticationError):
         await widget.verify_access_token("tok")
+
+
+async def test_an_unwhitelisted_ip_is_not_reported_as_a_bad_code(msg91_replies):
+    """MSG91's 418: the auth key is fine, this server's IP is not whitelisted."""
+    msg91_replies(
+        replies({"message": "AuthenticationFailure", "type": "error", "code": "418"})
+    )
+
+    with pytest.raises(ServiceUnavailableError):
+        await widget.verify_access_token("a-perfectly-good-token")
+
+
+async def test_a_rejected_auth_key_is_not_reported_as_a_bad_code(msg91_replies):
+    msg91_replies(
+        replies({"message": "AuthenticationFailure", "type": "error", "code": "201"})
+    )
+
+    with pytest.raises(ServiceUnavailableError):
+        await widget.verify_access_token("a-perfectly-good-token")
+
+
+async def test_a_genuinely_bad_token_is_still_a_401(msg91_replies):
+    """Codes that are not ours to fix must stay an authentication failure."""
+    msg91_replies(replies({"message": "Invalid token", "type": "error", "code": "500"}))
+
+    with pytest.raises(AuthenticationError):
+        await widget.verify_access_token("forged")
