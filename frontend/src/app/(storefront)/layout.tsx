@@ -35,7 +35,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="en">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Roboto:wght@100;300;400;500;700;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&family=Playfair+Display:ital,wght@1,400;1,500&family=Roboto:wght@100;300;400;500;700;900&display=swap"
           rel="stylesheet"
         />
       </head>

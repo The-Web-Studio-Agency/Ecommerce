@@ -3,29 +3,20 @@ import type { Tenant, TokenPair, UserProfile } from '@/types/auth';
 
 export const authApi = {
   /**
-   * Send a login code to a customer's phone.
+   * Exchange an MSG91 widget token for a session.
    *
-   * Also serves as resend -- there is no separate endpoint, and each call
-   * expires the previous code. Rate limited to 5 per 5 minutes per phone.
-   */
-  requestOtp(phone: string): Promise<null> {
-    return apiRequest<null>('/auth/otp/request', {
-      method: 'POST',
-      body: { phone },
-      cache: 'no-store',
-    });
-  },
-
-  /**
-   * Verify a code and receive a token pair.
+   * The storefront's only customer sign-in, and registration too: a verified
+   * number with no account gets one created here.
    *
-   * This is registration as well as sign-in: a phone with no account gets
-   * one created on the first successful verification.
+   * No phone is sent. MSG91 owns the code -- sending, resending, expiry and
+   * attempt limits all sit with the widget -- and the server reads the
+   * number from its confirmation of this token, so the browser cannot assert
+   * an identity of its choosing.
    */
-  verifyOtp(phone: string, otp: string): Promise<TokenPair> {
-    return apiRequest<TokenPair>('/auth/otp/verify', {
+  widgetLogin(accessToken: string): Promise<TokenPair> {
+    return apiRequest<TokenPair>('/auth/widget/login', {
       method: 'POST',
-      body: { phone, otp },
+      body: { access_token: accessToken },
       cache: 'no-store',
     });
   },

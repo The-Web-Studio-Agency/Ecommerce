@@ -2,11 +2,11 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
-import type { ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
+import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
 
 import styles from './Home.module.css';
 import {
@@ -37,58 +37,89 @@ const NAV_LINKS = [
   { label: 'Contact', href: '/contact-us-1' },
 ];
 
-const FILTERS = ['Best Sellers', 'New Arrivals', 'Limited Edition', 'Accessories'];
+const ALL_FILTER = 'All';
 
-const CATEGORY_FALLBACK = ['Bucket Bags', 'Flap Bags', 'Shoulder Bags', 'Crossbody Bags', 'Shopper & Tote'];
+const CATEGORY_FALLBACK = ['Casual Wear', 'Ethnic Wear', 'Cotton', 'Rayon', 'Printed'];
 const CATEGORY_IMAGES = [
-  '/home/cat-bucket.jpg',
-  '/home/cat-flap.jpg',
-  '/home/cat-shoulder.jpg',
-  '/home/cat-crossbody.jpg',
-  '/home/cat-shopper.jpg',
+  '/home/home2.jpg',
+  '/home/home3.jpg',
+  '/home/home4.jpg',
+  '/home/home5.jpg',
+  '/home/home6.jpg',
 ];
 
-const GRID_IMAGES = ['/home/prod-elan.jpg', '/home/prod-marais.jpg', '/home/prod-noire.jpg', '/home/prod-lumiere.jpg', '/home/prod-aveline.jpg'];
+const GRID_IMAGES = ['/home/home1.jpg', '/home/home2.jpg', '/home/home3.jpg', '/home/home4.jpg', '/home/home5.jpg'];
 
-const SIZES = ['Small', 'Medium', 'Large'];
-const COLOR_SWATCHES = ['/home/prod-elan.jpg', '/home/spotlight-model.jpg', '/home/cat-flap.jpg', '/home/cat-shoulder.jpg'];
+/* One slide per outfit. The thumbnail rail, the counter and the main frame
+   all read from this, so they cannot drift apart. */
+const HERO_SLIDES = [
+  { image: '/home/home6.jpg', alt: 'Model in a green embroidered kurta with dupatta and maroon palazzo' },
+  { image: '/home/home3.jpg', alt: 'Model in a pink floral kurta and matching palazzo' },
+  { image: '/home/home5.jpg', alt: 'Model in a maroon printed kurta with cream block-print palazzo' },
+];
+
+const CAMPAIGN_IMAGES = [
+  '/home/home1.jpg',
+  '/home/home2.jpg',
+  '/home/home3.jpg',
+  '/home/home4.jpg',
+  '/home/home5.jpg',
+  '/home/home6.jpg',
+];
+
+/**
+ * Stand in for the seeded catalogue's placeholder photography.
+ *
+ * The dev catalogue ships picsum URLs -- landscapes and street scenes that
+ * have nothing to do with the collection. Until real product shots are
+ * loaded, those fall back to the brand's own campaign images so the page
+ * reads as one shoot. Any real catalogue URL passes through untouched, so
+ * this stops applying on its own once photography lands.
+ */
+function campaignImage(url: string | null | undefined, index: number): string {
+  if (url && !url.includes('picsum.photos')) return url;
+  return CAMPAIGN_IMAGES[index % CAMPAIGN_IMAGES.length];
+}
+
+const SIZE_FALLBACK = ['S', 'M', 'L', 'XL'];
+const COLOR_SWATCHES = ['/home/home1.jpg', '/home/home2.jpg', '/home/home3.jpg', '/home/home4.jpg'];
 
 const TESTIMONIALS = [
   {
     quote:
-      '“The Lumière is everything I was looking for — beautifully crafted, lightweight, versatile enough for both work and weekends. It’s become my everyday essential.”',
+      '“Exactly what I was looking for — soft cotton, a clean fit, and comfortable enough to wear all day at work. It has become my everyday churidar.”',
     name: 'Rosella Milly',
-    thumb: '/home/testimonial-thumb.jpg',
+    thumb: '/home/home3.jpg',
   },
   {
     quote:
-      '“From the stitching to the hardware, every detail feels intentional. Two years in and mine still looks brand new.”',
+      '“From the stitching to the finishing at the hem, every detail feels considered. Six washes in and the colour has not faded.”',
     name: 'Amara Whitfield',
-    thumb: '/home/prod-marais.jpg',
+    thumb: '/home/home2.jpg',
   },
   {
     quote:
-      '“Customer care shipped a replacement strap within days. Rare to see that kind of service paired with this kind of craftsmanship.”',
+      '“I ordered the wrong size and the exchange was picked up and replaced within days. Rare to see that kind of service from a new label.”',
     name: 'Delphine Cross',
-    thumb: '/home/spotlight-detail-1.jpg',
+    thumb: '/home/home5.jpg',
   },
 ];
 
 const COMMITMENTS = [
   {
     icon: GiftIcon,
-    title: 'Premium Craftsmanship',
-    text: 'Handmade with meticulous attention to detail using premium materials.',
+    title: 'Considered Fabrics',
+    text: 'Cotton, rayon and blends chosen for how they wear through the day.',
   },
   {
     icon: TruckIcon,
-    title: 'Free Worldwide Shipping',
-    text: 'Complimentary shipping on every order with secure packaging.',
+    title: 'Free Shipping Across India',
+    text: 'Complimentary delivery on every order, packed with care.',
   },
   {
     icon: HandshakeIcon,
     title: 'Secure Payment',
-    text: 'Multiple trusted payment methods with protected transactions.',
+    text: 'UPI, cards, net banking, wallets and Cash on Delivery.',
   },
 ];
 
@@ -129,42 +160,113 @@ function money(product: { price_from: string | null; price_to: string | null } |
 
 export default function HomeClient({
   products,
+  categories,
   spotlightProduct,
 }: {
   products: ProductSummaryStorefront[];
+  categories: CategoryStorefront[];
   spotlightProduct: ProductStorefront | null;
 }) {
+  // The catalogue drives the option lists, so they are read before the state
+  // that has to be seeded from them.
+  const sizeOption = spotlightProduct?.options.find(option => /size/i.test(option.name));
+  const colorOption = spotlightProduct?.options.find(option => /colou?r/i.test(option.name));
+  const sizes = sizeOption?.values.length ? sizeOption.values : SIZE_FALLBACK;
+
+  /* Variants carry no imagery of their own, so each colour borrows one of the
+     product's photos and falls back to a stock swatch when there are fewer
+     photos than colours. */
+  const colors = colorOption?.values.length
+    ? colorOption.values.map((value, i) => ({
+        value,
+        image: campaignImage(spotlightProduct?.images[i]?.url ?? spotlightProduct?.images[0]?.url, i),
+      }))
+    : COLOR_SWATCHES.map((image, i) => ({ value: `Option ${i + 1}`, image }));
+
+  const filters = [ALL_FILTER, ...categories.slice(0, 3).map(category => category.name)];
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [heroThumb, setHeroThumb] = useState(0);
-  const [activeFilter, setActiveFilter] = useState(FILTERS[0]);
-  const [size, setSize] = useState('Medium');
+  const [activeFilter, setActiveFilter] = useState(ALL_FILTER);
+  const [size, setSize] = useState(sizes[0]);
   const [color, setColor] = useState(0);
   const [qty, setQty] = useState(1);
   const [testiIndex, setTestiIndex] = useState(0);
+  const pageRef = useRef<HTMLDivElement>(null);
 
-  const heroThumbs = ['/home/hero-thumb-1.jpg', '/home/hero-thumb-2.jpg', '/home/hero-thumb-3.jpg'];
   const heroProduct = products[0];
   const gridProducts = products.slice(0, 5);
-  const signatureProducts = products.slice(0, 4);
 
-  // A styled "shop by silhouette" strip -- decorative wayfinding, not bound
-  // to the live category taxonomy, so its imagery always matches its label.
-  const strip = CATEGORY_FALLBACK.map((label, i) => ({
-    label,
-    image: CATEGORY_IMAGES[i],
+  // Filtering happens over the page already fetched, so switching tabs costs
+  // no round trip.
+  const activeCategory = categories.find(category => category.name === activeFilter);
+  const signatureProducts = (
+    activeCategory ? products.filter(product => product.category_id === activeCategory.id) : products
+  ).slice(0, 4);
+
+  /* The strip is the live taxonomy. Categories carry no image of their own,
+     so each tile borrows the primary photo of a product filed under it. */
+  const categoryImages = new Map<string, string>();
+  for (const product of products) {
+    const url = product.primary_image?.url;
+    if (url && !categoryImages.has(product.category_id)) categoryImages.set(product.category_id, url);
+  }
+
+  const strip = (
+    categories.length
+      ? categories.slice(0, 5).map(category => ({ label: category.name, id: category.id }))
+      : CATEGORY_FALLBACK.map(label => ({ label, id: label }))
+  ).map((category, i) => ({
+    label: category.label,
+    image: campaignImage(categoryImages.get(category.id), i + 1),
   }));
 
   const spotlightImages = spotlightProduct?.images?.length
     ? spotlightProduct.images.slice(0, 3).map(img => img.url)
     : [];
-  const spotlightMainImage = spotlightImages[0] ?? '/home/spotlight-model.jpg';
-  const spotlightDetail1 = spotlightImages[1] ?? spotlightImages[0] ?? '/home/spotlight-detail-1.jpg';
-  const spotlightDetail2 = spotlightImages[2] ?? spotlightImages[0] ?? '/home/spotlight-detail-2.jpg';
+  const spotlightMainImage = '/home/1.png';
+  const spotlightDetail1 = '/home/2.jpg';
+  const spotlightDetail2 = '/home/3.jpg';
 
   const testimonial = TESTIMONIALS[testiIndex];
 
+  /*
+   * Scroll reveals run in CSS wherever the browser supports scroll-driven
+   * animations. This covers the browsers that do not: it flags the root,
+   * which is what switches the hidden state on, then reveals each element
+   * once. Nothing here runs -- and nothing is ever hidden -- otherwise.
+   */
+  useEffect(() => {
+    const root = pageRef.current;
+    if (!root) return;
+
+    const nativeTimelines =
+      typeof CSS !== 'undefined' &&
+      typeof CSS.supports === 'function' &&
+      CSS.supports('animation-timeline: view()');
+
+    if (nativeTimelines || typeof IntersectionObserver === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    root.setAttribute('data-js-reveal', '');
+
+    const observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.setAttribute('data-revealed', '');
+          observer.unobserve(entry.target);
+        }
+      },
+      { rootMargin: '0px 0px -10% 0px', threshold: 0.08 },
+    );
+
+    root.querySelectorAll('[data-reveal]').forEach(node => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className={styles.page}>
+    <div className={styles.page} ref={pageRef}>
       {/* ---------------------------------- Header ---------------------------------- */}
       <header className={styles.header}>
         <div className={`${styles.container} ${styles.headerInner}`}>
@@ -182,7 +284,7 @@ export default function HomeClient({
           </nav>
 
           <Link href="/" className={styles.logo}>
-            AVERA
+            ZEEN
           </Link>
 
           <div className={styles.headerRight}>
@@ -218,14 +320,14 @@ export default function HomeClient({
 
       {/* ---------------------------------- Hero ---------------------------------- */}
       <section className={styles.hero}>
-        <div className={styles.heroWatermark}>LUMIÈRE AVERA</div>
+        <div className={styles.heroWatermark}>CHURIDARS ZEEN</div>
         <div className={`${styles.container} ${styles.heroGrid}`}>
           <div className={styles.heroCopy}>
             <span className={styles.eyebrow}>New Arrival</span>
             <h1 className={styles.heroTitle}>The Art of Everyday Luxury</h1>
             <p className={styles.heroDesc}>
-              Discover the signature Lumière bag, thoughtfully designed with premium materials and enduring
-              style.
+              Discover the new churidar collection, thoughtfully cut in premium fabrics for everyday
+              ease.
             </p>
             <Link href={heroProduct ? `/single-product/${heroProduct.id}` : '/shop-list'} className={styles.pill}>
               Explore Collection
@@ -233,51 +335,45 @@ export default function HomeClient({
                 <ArrowRightIcon size={15} />
               </span>
             </Link>
-          </div>
 
-          <div className={styles.heroImageWrap}>
-            <Image
-              src="/home/hero-model.jpg"
-              alt="Model carrying the signature Lumière tote bag"
-              width={800}
-              height={960}
-              className={styles.heroImage}
-              priority
-            />
-          </div>
-
-          <div className={styles.heroSide}>
-            {heroThumbs.map((src, i) => (
-              <button
-                key={src}
-                type="button"
-                className={`${styles.heroThumb} ${i === heroThumb ? styles.active : ''}`}
-                onClick={() => setHeroThumb(i)}
-                aria-label={`View angle ${i + 1}`}
-              >
-                <img src={src} alt="" />
-              </button>
-            ))}
-            <div className={styles.heroCounter}>
-              <button
-                type="button"
-                className={styles.btnCircle}
-                onClick={() => setHeroThumb(v => Math.max(0, v - 1))}
-                disabled={heroThumb === 0}
-                aria-label="Previous"
-              >
-                <ChevronLeftIcon size={14} />
-              </button>
-              <span>0{heroThumb + 1}/03</span>
-              <button
-                type="button"
-                className={styles.btnCircle}
-                onClick={() => setHeroThumb(v => Math.min(2, v + 1))}
-                disabled={heroThumb === 2}
-                aria-label="Next"
-              >
-                <ChevronRightIcon size={14} />
-              </button>
+            <div className={styles.heroSide}>
+              <div className={styles.heroThumbRow}>
+                {HERO_SLIDES.map((slide, i) => (
+                  <button
+                    key={slide.image}
+                    type="button"
+                    className={`${styles.heroThumb} ${i === heroThumb ? styles.active : ''}`}
+                    onClick={() => setHeroThumb(i)}
+                    aria-label={`Show slide ${i + 1}`}
+                    aria-pressed={i === heroThumb}
+                  >
+                    <img src={slide.image} alt="" />
+                  </button>
+                ))}
+              </div>
+              <div className={styles.heroCounter}>
+                <button
+                  type="button"
+                  className={styles.btnCircle}
+                  onClick={() => setHeroThumb(v => Math.max(0, v - 1))}
+                  disabled={heroThumb === 0}
+                  aria-label="Previous"
+                >
+                  <ChevronLeftIcon size={16} />
+                </button>
+                <span>
+                  {String(heroThumb + 1).padStart(2, '0')}/{String(HERO_SLIDES.length).padStart(2, '0')}
+                </span>
+                <button
+                  type="button"
+                  className={styles.btnCircleDark}
+                  onClick={() => setHeroThumb(v => Math.min(HERO_SLIDES.length - 1, v + 1))}
+                  disabled={heroThumb >= HERO_SLIDES.length - 1}
+                  aria-label="Next"
+                >
+                  <ChevronRightIcon size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -286,13 +382,13 @@ export default function HomeClient({
       {/* ---------------------------------- Signature pieces ---------------------------------- */}
       <section className={styles.section}>
         <div className={styles.container}>
-          <div className={styles.sectionHead}>
+          <div className={styles.sectionHead} data-reveal>
             <div>
               <span className={styles.eyebrow}>Featured</span>
               <h2 className={styles.h2}>Our Signature Pieces</h2>
             </div>
             <div className={styles.filterRow}>
-              {FILTERS.map(f => (
+              {filters.map(f => (
                 <button
                   key={f}
                   type="button"
@@ -307,12 +403,18 @@ export default function HomeClient({
 
           {signatureProducts.length > 0 ? (
             <div className={styles.productGrid}>
-              {signatureProducts.map(product => (
-                <Link key={product.id} href={`/single-product/${product.id}`} className={styles.productCard}>
+              {signatureProducts.map((product, i) => (
+                <Link
+                  key={product.id}
+                  href={`/single-product/${product.id}`}
+                  className={styles.productCard}
+                  data-reveal
+                  style={{ '--reveal-delay': `${i * 80}ms` } as CSSProperties}
+                >
                   <div className={styles.productMedia}>
                     {product.primary_image ? (
                       <Image
-                        src={product.primary_image.url}
+                        src={campaignImage(product.primary_image.url, i)}
                         alt={product.primary_image.alt_text ?? product.name}
                         width={480}
                         height={520}
@@ -335,7 +437,7 @@ export default function HomeClient({
       {/* ---------------------------------- Category price grid ---------------------------------- */}
       <section className={styles.section}>
         <div className={styles.container}>
-          <div className={styles.sectionHead}>
+          <div className={styles.sectionHead} data-reveal>
             <div>
               <span className={styles.eyebrow}>Our Collection</span>
               <h2 className={styles.h2}>Shop by Category</h2>
@@ -343,8 +445,8 @@ export default function HomeClient({
           </div>
 
           <div className={styles.priceCardGrid}>
-            <div className={styles.introCard}>
-              <h3 className={styles.introTitle}>Crafted to Be Carried</h3>
+            <div className={styles.introCard} data-reveal>
+              <h3 className={styles.introTitle}>Made to Be Worn Often</h3>
               <p className={styles.introText}>
                 Each design reflects our commitment to timeless style, exceptional craftsmanship, and everyday
                 functionality.
@@ -358,9 +460,15 @@ export default function HomeClient({
             </div>
 
             {gridProducts.map((product, i) => (
-              <Link key={product.id} href={`/single-product/${product.id}`} className={styles.priceCard}>
+              <Link
+                key={product.id}
+                href={`/single-product/${product.id}`}
+                className={styles.priceCard}
+                data-reveal
+                style={{ '--reveal-delay': `${(i + 1) * 80}ms` } as CSSProperties}
+              >
                 <div className={styles.priceMedia}>
-                  <img src={product.primary_image?.url ?? GRID_IMAGES[i % GRID_IMAGES.length]} alt={product.name} />
+                  <img src={campaignImage(product.primary_image?.url, i)} alt={product.name} />
                 </div>
                 <div className={styles.priceRow}>
                   <span className={styles.priceName}>{product.name}</span>
@@ -375,18 +483,18 @@ export default function HomeClient({
       {/* ---------------------------------- Spotlight ---------------------------------- */}
       <section className={styles.section}>
         <div className={styles.container}>
-          <div className={styles.spotlightHead}>
+          <div className={styles.spotlightHead} data-reveal>
             <span className={styles.eyebrow}>New Collection</span>
             <h2 className={styles.h2}>Designed to Last Beyond Trends</h2>
             <hr className={styles.spotlightRule} />
           </div>
 
           <div className={styles.spotlightGrid}>
-            <div className={styles.spotlightModel}>
+            <div className={styles.spotlightModel} data-reveal="scale">
               <img src={spotlightMainImage} alt={spotlightProduct?.name ?? 'Featured piece'} />
             </div>
 
-            <div className={styles.spotlightDetails}>
+            <div className={styles.spotlightDetails} data-reveal>
               <div className={styles.spotlightDetail}>
                 <img src={spotlightDetail1} alt="" />
               </div>
@@ -395,7 +503,7 @@ export default function HomeClient({
               </div>
             </div>
 
-            <div className={styles.spotlightInfo}>
+            <div className={styles.spotlightInfo} data-reveal>
               <p className={styles.spotlightCategory}>{spotlightProduct?.category.name ?? 'Featured Piece'}</p>
               <h3 className={styles.spotlightTitle}>{spotlightProduct?.name ?? 'The Signature Piece'}</h3>
               <p className={styles.spotlightPrice}>{spotlightProduct ? money(spotlightProduct) : '—'}</p>
@@ -405,31 +513,31 @@ export default function HomeClient({
                 <span className={styles.sizeGuide}>Size Guide</span>
               </div>
               <div className={styles.sizeRow}>
-                {SIZES.map(s => (
+                {sizes.map(s => (
                   <button
                     key={s}
                     type="button"
                     className={`${styles.sizeBtn} ${size === s ? styles.active : ''}`}
                     onClick={() => setSize(s)}
                   >
-                    {s.slice(0, 1).toUpperCase() + s.slice(1).toLowerCase()}
+                    {s}
                   </button>
                 ))}
               </div>
 
               <div className={styles.optionRow}>
-                <span className={styles.optionLabel}>Color: Beige</span>
+                <span className={styles.optionLabel}>Color: {colors[color]?.value ?? '--'}</span>
               </div>
               <div className={styles.colorRow}>
-                {COLOR_SWATCHES.map((src, i) => (
+                {colors.map((swatch, i) => (
                   <button
-                    key={src + i}
+                    key={swatch.value}
                     type="button"
                     className={`${styles.colorSwatch} ${color === i ? styles.active : ''}`}
                     onClick={() => setColor(i)}
-                    aria-label={`Color option ${i + 1}`}
+                    aria-label={swatch.value}
                   >
-                    <img src={src} alt="" />
+                    <img src={swatch.image} alt="" />
                   </button>
                 ))}
               </div>
@@ -462,8 +570,14 @@ export default function HomeClient({
       <section className={styles.sectionTight}>
         <div className={styles.container}>
           <div className={styles.catStrip}>
-            {strip.map(cat => (
-              <Link key={cat.label} href="/shop-list" className={styles.catCard}>
+            {strip.map((cat, i) => (
+              <Link
+                key={cat.label}
+                href="/shop-list"
+                className={styles.catCard}
+                data-reveal
+                style={{ '--reveal-delay': `${i * 70}ms` } as CSSProperties}
+              >
                 <div className={styles.catImage}>
                   <img src={cat.image} alt={cat.label} />
                 </div>
@@ -477,50 +591,52 @@ export default function HomeClient({
       {/* ---------------------------------- Testimonials ---------------------------------- */}
       <section className={styles.section}>
         <div className={styles.container}>
-          <span className={styles.eyebrow}>Testimonial</span>
-          <h2 className={styles.h2}>What Our Customers Say</h2>
-
-          <div className={styles.testiTop}>
-            <div className={styles.testiSub}>
-              <span>Loved by Women Around the World</span>
-              <div className={styles.testiRule} />
-            </div>
-            <div className={styles.testiArrows}>
-              <button
-                type="button"
-                className={styles.btnCircle}
-                onClick={() => setTestiIndex(v => (v - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
-                aria-label="Previous testimonial"
-              >
-                <ChevronLeftIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className={styles.btnCircleDark}
-                onClick={() => setTestiIndex(v => (v + 1) % TESTIMONIALS.length)}
-                aria-label="Next testimonial"
-              >
-                <ChevronRightIcon size={14} />
-              </button>
-            </div>
-          </div>
-
           <div className={styles.testiGrid}>
-            <div className={styles.testiCard}>
-              <div className={styles.testiThumb}>
-                <img src={testimonial.thumb} alt={testimonial.name} />
+            <div className={styles.testiLeft}>
+              <span className={styles.eyebrow}>Testimonial</span>
+              <h2 className={`${styles.h2} ${styles.testiHeading}`}>What Our Customers Say</h2>
+
+              <div className={styles.testiTop}>
+                <div className={styles.testiSub}>
+                  <span>Loved by Women Across India</span>
+                  <div className={styles.testiRule} />
+                </div>
+                <div className={styles.testiArrows}>
+                  <button
+                    type="button"
+                    className={styles.btnCircle}
+                    onClick={() => setTestiIndex(v => (v - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
+                    aria-label="Previous testimonial"
+                  >
+                    <ChevronLeftIcon size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.btnCircleDark}
+                    onClick={() => setTestiIndex(v => (v + 1) % TESTIMONIALS.length)}
+                    aria-label="Next testimonial"
+                  >
+                    <ChevronRightIcon size={15} />
+                  </button>
+                </div>
               </div>
-              <div className={styles.stars}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <StarIcon key={i} />
-                ))}
+
+              <div className={styles.testiCard} data-reveal>
+                <div className={styles.testiThumb}>
+                  <img src={testimonial.thumb} alt={testimonial.name} />
+                </div>
+                <div className={styles.stars}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <StarIcon key={i} size={14} />
+                  ))}
+                </div>
+                <p className={styles.testiQuote}>{testimonial.quote}</p>
+                <p className={styles.testiName}>{testimonial.name}</p>
               </div>
-              <p className={styles.testiQuote}>{testimonial.quote}</p>
-              <p className={styles.testiName}>{testimonial.name}</p>
             </div>
 
-            <div className={styles.testiHero}>
-              <img src="/home/testimonial-hero.jpg" alt="Customer wearing an Avera woven shoulder bag" />
+            <div className={styles.testiHero} data-reveal="scale">
+              <img src="/home/home1.jpg" alt="Customer wearing a Zeen printed churidar" />
               <div className={styles.testiBadge}>
                 <span className={styles.testiBadgeNum}>15K+</span>
                 <span className={styles.testiBadgeText}>
@@ -537,14 +653,19 @@ export default function HomeClient({
       {/* ---------------------------------- Commitment ---------------------------------- */}
       <section className={`${styles.section} ${styles.commitment}`}>
         <div className={styles.container}>
-          <div className={styles.commitmentHead}>
+          <div className={styles.commitmentHead} data-reveal>
             <span className={styles.eyebrow}>Our Commitment</span>
             <h2 className={styles.h2}>Luxury Beyond the Product</h2>
           </div>
 
           <div className={styles.commitGrid}>
-            {COMMITMENTS.map(item => (
-              <div key={item.title} className={styles.commitItem}>
+            {COMMITMENTS.map((item, i) => (
+              <div
+                key={item.title}
+                className={styles.commitItem}
+                data-reveal
+                style={{ '--reveal-delay': `${i * 110}ms` } as CSSProperties}
+              >
                 <div className={styles.commitIcon}>
                   <item.icon />
                 </div>
@@ -556,20 +677,20 @@ export default function HomeClient({
 
           <div className={styles.commitStrip}>
             <div className={styles.commitStripImg}>
-              <img src="/home/life-1.jpg" alt="" />
+              <img src="/home/home2.jpg" alt="" />
             </div>
             <div className={styles.commitStripImg}>
-              <img src="/home/life-2.jpg" alt="" />
+              <img src="/home/home4.jpg" alt="" />
             </div>
             <div className={styles.commitStripImg}>
-              <img src="/home/life-3.jpg" alt="" />
+              <img src="/home/home6.jpg" alt="" />
             </div>
           </div>
         </div>
       </section>
 
       {/* ---------------------------------- CTA ---------------------------------- */}
-      <div className={styles.ctaWrap}>
+      <div className={styles.ctaWrap} data-reveal>
         <Link href="/shop-list" className={styles.pill}>
           Shop Now
           <span className={styles.pillIcon}>
@@ -583,26 +704,31 @@ export default function HomeClient({
         <div className={styles.container}>
           <div className={styles.footerTop}>
             <div>
-              <p className={styles.footerBrand}>AVERA</p>
+              <p className={styles.footerBrand}>Zeen</p>
               <p className={styles.footerTagline}>
-                Crafting timeless leather handbags with exceptional craftsmanship, premium materials, and modern
-                elegance.
+                Everyday and ethnic wear for women, cut in considered fabrics with careful finishing and
+                quiet modern ease.
               </p>
               <div className={styles.footerSocials}>
                 <a href="#" aria-label="X (Twitter)">
-                  <XSocialIcon />
+                  <XSocialIcon size={21} />
                 </a>
                 <a href="#" aria-label="Instagram">
-                  <InstagramIcon />
+                  <InstagramIcon size={22} />
                 </a>
                 <a href="#" aria-label="TikTok">
-                  <TikTokIcon />
+                  <TikTokIcon size={21} />
                 </a>
               </div>
             </div>
 
-            {FOOTER_COLUMNS.map(col => (
-              <div key={col.title} className={styles.footerCol}>
+            {FOOTER_COLUMNS.map((col, i) => (
+              <div
+                key={col.title}
+                className={styles.footerCol}
+                data-reveal
+                style={{ '--reveal-delay': `${(i + 1) * 90}ms` } as CSSProperties}
+              >
                 <p className={styles.footerColTitle}>{col.title}</p>
                 <ul>
                   {col.links.map(link => (
@@ -614,15 +740,13 @@ export default function HomeClient({
               </div>
             ))}
           </div>
+        </div>
 
-          <div className={styles.footerImage}>
-            <img src="/home/footer-showroom.jpg" alt="Avera flagship showroom" />
-          </div>
-
-          <div className={styles.footerBottom}>
-            <span>© {new Date().getFullYear()} Avera. All rights reserved.</span>
-            <span>Crafted with care.</span>
-          </div>
+        <div className={styles.footerImage}>
+          <img src="/home/footer.png" alt="Women wearing the Zeen collection" />
+          <span className={styles.footerWatermark} aria-hidden="true">
+            ZEEN
+          </span>
         </div>
       </footer>
     </div>

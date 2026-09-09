@@ -47,7 +47,6 @@ export const AllMenu = [
           { children: "Order Tracking", to: "/shop-order-tracking" },          
           { children: "Login", to: "/login" },          
           { children: "Registration", to: "/registration" },          
-          { children: "Forget Password", to: "/forget-password" },          
         ],
       },
     ],

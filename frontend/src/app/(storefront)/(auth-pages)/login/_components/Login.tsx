@@ -46,9 +46,6 @@ export default function Login(){
                                             <label className="form-check-label" htmlFor="basic_checkbox_1">Remember Me</label>
                                         </div>
                                     </div>
-                                    <div className="form-group">
-                                        <Link className="text-primary" href="/forget-password">Forgot Password</Link>
-                                    </div>
                                 </div>
                                 <div className="text-center">
                                     <Link href="/account-dashboard" className="btn btn-secondary btnhover text-uppercase me-2 sign-btn">Sign In</Link>
