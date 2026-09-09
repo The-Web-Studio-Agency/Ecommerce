@@ -1,7 +1,8 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import CommanLayout from '@/components/CommanLayout';
-import CommonBanner2 from '@/components/CommonBanner2';
+import LuxeFooter from '@/components/luxe/LuxeFooter';
+import LuxeHeader from '@/components/luxe/LuxeHeader';
 import ProductReviews from '@/elements/SingleProductPage/ProductReviews';
 import SingleProduct from '@/elements/SingleProductPage/SingleProduct';
 import { catalogueApi } from '@/lib/api/catalogue';
@@ -9,6 +10,10 @@ import { ApiError } from '@/lib/api/errors';
 import { reviewApi } from '@/lib/api/reviews';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import type { ProductStorefront } from '@/types/catalogue';
+
+import homeStyles from '../../../(home)/home/_components/luxe/Home.module.css';
+import listingStyles from '../../shop-list/_components/luxe/Listing.module.css';
+import productStyles from '@/elements/SingleProductPage/luxe/Product.module.css';
 
 const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
@@ -38,20 +43,29 @@ const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }
   ]);
 
   return (
-    <CommanLayout>
-      <CommonBanner2 parentText="Shop" currentText={product.name} mainText={product.category.name} />
-      <SingleProduct
-        product={product}
-        rating={summary ? summary.average_rating : 0}
-        related={related}
-      />
-      <ProductReviews
-        productId={id}
-        reviews={reviews}
-        summary={summary}
-        currentUserId={user?.id ?? null}
-      />
-    </CommanLayout>
+    <div className={homeStyles.page}>
+      <LuxeHeader />
+
+      <section className={productStyles.crumbBar}>
+        <div className={homeStyles.container}>
+          <p className={listingStyles.crumb} style={{ margin: 0 }}>
+            <Link href="/">Home</Link>
+            <span>/</span>
+            <Link href="/shop-list">Shop</Link>
+            <span>/</span>
+            <span aria-current="page">{product.name}</span>
+          </p>
+        </div>
+      </section>
+
+      <div className={homeStyles.container}>
+        <SingleProduct product={product} rating={summary ? summary.average_rating : 0} related={related} />
+      </div>
+
+      <ProductReviews productId={id} reviews={reviews} summary={summary} currentUserId={user?.id ?? null} />
+
+      <LuxeFooter />
+    </div>
   );
 };
 

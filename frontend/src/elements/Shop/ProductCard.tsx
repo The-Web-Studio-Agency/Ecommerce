@@ -64,14 +64,24 @@ export default function ProductCard({ product, rating = 0 }: ProductCardProps) {
           )}
 
           {/* Image */}
-          <div className="product-img-container">
+          {/*
+           * The theme's `.product-img-container` is a fixed 250px-tall box;
+           * `cover`-fitting a portrait catalogue photo (~5:7) into it crops
+           * hard from top and bottom and cuts off heads. Overriding to a
+           * portrait aspect box with `fill` + top-anchored `cover` (inline,
+           * so it wins over the shared stylesheet without editing it) keeps
+           * the whole product in frame -- same fix already applied to the
+           * Product Listing page's cards.
+           */}
+          <div className="product-img-container" style={{ position: 'relative', height: 'auto', aspectRatio: '3 / 4' }}>
             {image && (
               <Image
-                width={500}
-                height={700}
                 src={image.url}
                 alt={image.alt_text ?? product.name}
+                fill
+                sizes="(max-width: 720px) 50vw, (max-width: 1080px) 33vw, 25vw"
                 className="product-img"
+                style={{ objectFit: 'cover', objectPosition: 'top center' }}
               />
             )}
           </div>
