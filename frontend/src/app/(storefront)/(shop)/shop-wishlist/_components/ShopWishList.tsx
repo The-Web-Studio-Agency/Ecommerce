@@ -1,105 +1,61 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
-import { toast } from 'react-toastify';
 
-import CommanBanner from '@/components/CommanBanner';
-import IMAGES from '@/constant/theme';
-import { useCart } from '@/context/CartContext';
+import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
+import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
 import { useWishlist } from '@/context/WishlistContext';
-import { STOREFRONT_CURRENCY } from '@/lib/currency';
-import { formatMoney } from '@/lib/format';
-import type { WishlistItem } from '@/types/cart';
 
-function WishlistRow({ item }: { item: WishlistItem }) {
-  const { removeItem, pending: wishlistPending } = useWishlist();
-  const { addToCart, pending: cartPending } = useCart();
+import wishlistStyles from './luxe/Wishlist.module.css';
+import WishlistCard from './luxe/WishlistCard';
 
-  async function handleRemove() {
-    const error = await removeItem(item.id);
-    if (error) toast.error(error);
-    else toast.info('Removed from your wishlist');
-  }
-
-  async function handleAddToCart() {
-    await addToCart(item.variant_id, 1);
-    toast.success('Added to your cart');
-  }
-
-  return (
-    <tr>
-      <td className="product-item-img">
-        {item.image && <Image src={item.image.url} alt={item.image.alt_text ?? item.product_name} width={80} height={100} />}
-      </td>
-      <td className="product-item-name">
-        <Link href={`/single-product/${item.product_id}`}>{item.product_name}</Link>
-        <div>{item.variant_name}</div>
-      </td>
-      <td className="product-item-price">
-        <span>{formatMoney(String(item.unit_price), STOREFRONT_CURRENCY)}</span>
-      </td>
-      <td className="product-item-stock">In Stock</td>
-      <td className="product-item-totle">
-        <button
-          type="button"
-          onClick={handleAddToCart}
-          disabled={cartPending}
-          className="btn btn-secondary btnhover text-nowrap">
-          {cartPending ? 'Adding...' : 'Add To Cart'}
-        </button>
-      </td>
-      <td className="product-item-close">
-        <Link href="#" onClick={event => { event.preventDefault(); if (!wishlistPending) handleRemove(); }}>
-          <i className="ti-close" />
-        </Link>
-      </td>
-    </tr>
-  );
-}
-
+/**
+ * The Wishlist page's content, styled to the same Zeen design system
+ * as the Product Listing page (reusing its banner/breadcrumb and card media
+ * classes directly -- see Wishlist.module.css). Real data throughout:
+ * `wishlist` comes from `WishlistContext`, which the layout seeds from the
+ * backend and every mutation (add/remove/toggle) keeps in sync with --
+ * nothing here is mocked or static.
+ */
 export default function ShopWishList() {
   const { wishlist } = useWishlist();
 
   return (
-    <div className="page-content bg-light">
-      <CommanBanner parentText="Home" currentText="Wishlist" mainText="Wishlist" image={IMAGES.BackBg1.src} />
-      <div className="content-inner-1">
-        <div className="container">
-          <div className="row justify-content-center">
-            <div className="col-lg-9">
-              {wishlist.items.length === 0 ? (
-                <div className="text-center py-5">
-                  <p className="mb-4">Your wishlist is empty.</p>
-                  <Link href="/shop-standard" className="btn btn-secondary btnhover">
-                    Continue Shopping
-                  </Link>
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table check-tbl style-1">
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th></th>
-                        <th>Price</th>
-                        <th>Stock</th>
-                        <th></th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {wishlist.items.map(item => (
-                        <WishlistRow key={item.id} item={item} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+    <>
+      <section className={listingStyles.banner}>
+        <div className={homeStyles.container}>
+          <p className={listingStyles.crumb}>
+            <Link href="/">Home</Link>
+            <span>/</span>
+            <span aria-current="page">Wishlist</span>
+          </p>
+          <h1 className={homeStyles.h2}>Wishlist</h1>
+          <p className={listingStyles.subtitle}>
+            {wishlist.items.length === 0
+              ? 'Nothing saved yet.'
+              : `${wishlist.items.length} saved item${wishlist.items.length === 1 ? '' : 's'}.`}
+          </p>
         </div>
-      </div>
-    </div>
+      </section>
+
+      <section className={wishlistStyles.listingSection}>
+        <div className={homeStyles.container}>
+          {wishlist.items.length === 0 ? (
+            <div className={wishlistStyles.emptyState}>
+              <p>Your wishlist is empty.</p>
+              <Link href="/shop-list" className={homeStyles.pillOutline}>
+                Continue Shopping
+              </Link>
+            </div>
+          ) : (
+            <div className={wishlistStyles.grid}>
+              {wishlist.items.map(item => (
+                <WishlistCard key={item.id} item={item} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    </>
   );
 }

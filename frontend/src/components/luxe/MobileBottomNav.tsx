@@ -3,22 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { BagIcon, UserIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
+import { BagIcon, HeartIcon, HomeIcon, UserIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import { useWishlist } from '@/context/WishlistContext';
 
-import { HeartIcon, HomeIcon } from './Icons';
-import listingStyles from './Listing.module.css';
+// Shared with the Product Listing page, which already needs it for its own
+// grid/card styles -- this reuses `.mobileBottomNav`/`.mobileNavItem`/etc.
+// from there rather than duplicating the CSS.
+import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
 
 /**
- * App-style bottom tab bar, shown only on small viewports (see
- * `.mobileBottomNav` in Listing.module.css) -- matches the reference mobile
- * mockup's Home/Shop/Wishlist/Account bar. Scoped to the Product Listing
- * page only, not the shared layout, per the task's "modify only the Product
- * Listing page" constraint.
+ * App-style bottom tab bar (Home/Shop/Wishlist/Account), shown only on small
+ * viewports. Originally built for the Product Listing page; promoted here
+ * once the Wishlist page needed the same nav, so both pages render the one
+ * real component instead of two copies drifting apart.
  *
  * The wishlist badge is the real saved-item count from WishlistContext; the
  * other tabs carry no counts because nothing real backs one here (cart count
- * already lives on the header's cart pill, untouched by this page).
+ * already lives on the header's cart pill).
  */
 export default function MobileBottomNav() {
   const pathname = usePathname();

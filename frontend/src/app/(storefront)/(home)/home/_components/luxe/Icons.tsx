@@ -134,6 +134,41 @@ export const InstagramIcon = ({ size = 16, className }: IconProps) => (
   </svg>
 );
 
+/*
+ * A properly symmetric heart -- mirror-imaged left/right around x=12, so it
+ * sits dead-center in its viewBox at any size. Used for wishlist toggles
+ * (Product Listing cards, the mobile bottom nav's Wishlist tab).
+ */
+const HEART_PATH =
+  'M12 20.5c-.24 0-.47-.08-.66-.23C6.6 16.87 3.5 14 3.5 10.5 3.5 7.8 5.6 5.75 8.25 5.75c1.53 0 2.97.73 3.75 1.9.78-1.17 2.22-1.9 3.75-1.9 2.65 0 4.75 2.05 4.75 4.75 0 3.5-3.1 6.37-7.84 9.77-.19.15-.42.23-.66.23Z';
+
+export const HeartIcon = ({
+  size = 16,
+  filled = false,
+  className,
+}: IconProps & { filled?: boolean }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    className={className}
+    fill={filled ? 'currentColor' : 'none'}
+    stroke="currentColor"
+    strokeWidth={filled ? 0 : 1.6}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d={HEART_PATH} />
+  </svg>
+);
+
+export const HomeIcon = ({ size = 20, className }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M4 11.5 12 4l8 7.5" />
+    <path d="M6 10v9h12v-9" />
+  </svg>
+);
+
 export const TikTokIcon = ({ size = 15, className }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className={className} fill="currentColor">
     <path d="M14.5 3h2.9c.2 1.6 1.4 3 3.1 3.3v2.9c-1.5-.1-2.9-.6-4-1.4v6.6a5.6 5.6 0 1 1-5.6-5.6c.3 0 .6 0 .9.1V12a2.7 2.7 0 1 0 1.9 2.6V3Z" />
