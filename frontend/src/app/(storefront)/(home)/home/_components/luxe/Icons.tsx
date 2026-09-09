@@ -1,4 +1,4 @@
-/** Small inline line-icons for the Avera-style home page, kept dependency-free. */
+/** Small inline line-icons for the Zeen-style home page, kept dependency-free. */
 
 type IconProps = { size?: number; className?: string };
 

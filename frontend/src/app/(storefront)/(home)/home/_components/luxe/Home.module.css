@@ -1,5 +1,5 @@
 /*
- * "Avera" luxury-handbag home page.
+ * "Zeen" women's ethnic and casual wear home page.
  * Scoped as a CSS module so none of this leaks into the Bootstrap-based
  * theme the rest of the storefront still uses.
  */
@@ -130,7 +130,9 @@
   color: #fff;
 }
 .btnCircle:disabled {
-  opacity: 0.35;
+  background: #f1f1f2;
+  border-color: transparent;
+  color: var(--muted);
   cursor: default;
 }
 .btnCircleDark {
@@ -148,7 +150,6 @@
   z-index: 40;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
 }
 
 .headerInner {
@@ -169,8 +170,10 @@
   padding: 0;
 }
 .nav a {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--ink);
   text-decoration: none;
   display: inline-flex;
@@ -248,6 +251,31 @@
   position: relative;
   padding-top: 56px;
   overflow: hidden;
+  background-image: url('/home/hero-model.png');
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: cover;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    #fff 0%,
+    rgba(255, 255, 255, 0.94) 26%,
+    rgba(255, 255, 255, 0.6) 42%,
+    rgba(255, 255, 255, 0) 58%
+  );
+  pointer-events: none;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 22%;
+  background: linear-gradient(rgba(255, 255, 255, 0), #fff 92%);
+  pointer-events: none;
 }
 
 .heroWatermark {
@@ -259,8 +287,8 @@
   font-size: clamp(64px, 13vw, 190px);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--ink);
-  opacity: 0.045;
+  color: #fff;
+  opacity: 0.3;
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
@@ -270,10 +298,10 @@
 .heroGrid {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(280px, 460px) 1fr auto;
+  grid-template-columns: minmax(300px, 470px) 1fr;
   align-items: center;
   gap: 24px;
-  min-height: 640px;
+  min-height: 780px;
 }
 
 .heroCopy {
@@ -283,8 +311,9 @@
 }
 
 .heroTitle {
-  font-size: clamp(34px, 4.6vw, 52px);
+  font-size: clamp(32px, 3.4vw, 47px);
   line-height: 1.08;
+  max-width: 400px;
   font-weight: 500;
   letter-spacing: -0.01em;
   margin: 0 0 18px;
@@ -295,22 +324,7 @@
   line-height: 1.6;
   color: var(--ink-soft);
   max-width: 380px;
-  margin: 0 0 34px;
-}
-
-.heroImageWrap {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: center;
-  align-self: flex-end;
-}
-.heroImage {
-  width: 100%;
-  max-width: 640px;
-  height: auto;
-  object-fit: contain;
-  display: block;
+  margin: 0 0 40px;
 }
 
 .heroSide {
@@ -318,40 +332,44 @@
   z-index: 2;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
+  gap: 18px;
+  margin-top: 44px;
+}
+.heroThumbRow {
+  display: flex;
   gap: 14px;
-  padding-bottom: 40px;
 }
 .heroThumb {
-  width: 92px;
-  height: 92px;
-  border-radius: var(--radius-sm);
-  background: var(--card);
+  width: 88px;
+  height: 88px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.75);
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 10px;
 }
 .heroThumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .heroThumb.active {
-  border-color: var(--ink);
+  background: var(--card-deep);
 }
 .heroCounter {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-  margin-top: 4px;
+  gap: 14px;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin-top: 0;
 }
 .heroCounter .btnCircle {
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
 }
 
 /* ---------------------------------- Signature pieces ---------------------------------- */
@@ -401,6 +419,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   transition: transform 0.5s ease;
 }
 .productCard:hover .productMedia img {
@@ -449,11 +468,13 @@
   align-items: center;
   justify-content: center;
 }
+/* Matches the product cards. `contain` with a multiply blend suits cut-out
+   packshots; against photography it letterboxes and muddies the tint. */
 .catImage img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  mix-blend-mode: multiply;
+  object-fit: cover;
+  object-position: center top;
 }
 .catLabel {
   font-size: 15px;
@@ -484,7 +505,7 @@
   background: var(--card);
   aspect-ratio: 3 / 4;
 }
-.spotlightModel img { width: 100%; height: 100%; object-fit: cover; }
+.spotlightModel img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
 
 .spotlightDetails {
   display: flex;
@@ -497,7 +518,7 @@
   background: var(--card);
   aspect-ratio: 1 / 1;
 }
-.spotlightDetail img { width: 100%; height: 100%; object-fit: cover; }
+.spotlightDetail img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
 
 .spotlightInfo {
   padding-top: 4px;
@@ -580,7 +601,7 @@
   padding: 0;
   background: var(--card);
 }
-.colorSwatch img { width: 100%; height: 100%; object-fit: cover; }
+.colorSwatch img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
 .colorSwatch.active { border-color: var(--ink); }
 
 .buyRow {
@@ -689,7 +710,7 @@
   overflow: hidden;
   margin-bottom: 16px;
 }
-.priceMedia img { width: 100%; height: 100%; object-fit: cover; }
+.priceMedia img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
 .priceRow {
   display: flex;
   align-items: baseline;
@@ -702,13 +723,25 @@
 
 /* ---------------------------------- Testimonials ---------------------------------- */
 
+/* The heading, the strapline row and the quote card all sit in the left
+   column so the photograph can run the full height of the section beside
+   them. */
+.testiLeft {
+  display: flex;
+  flex-direction: column;
+}
+.testiHeading {
+  /* Holds the reference's two-line break: "What Our" / "Customers Say". */
+  max-width: 340px;
+}
 .testiTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
-  margin: 40px 0 28px;
+  margin: auto 0 24px;
+  padding-top: 40px;
 }
 .testiSub {
   display: flex;
@@ -732,51 +765,69 @@
   display: flex;
   gap: 10px;
 }
+.testiArrows .btnCircle {
+  width: 36px;
+  height: 36px;
+  background: #f1f1f2;
+  border-color: transparent;
+  color: var(--muted);
+}
+.testiArrows .btnCircle:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.testiArrows .btnCircleDark {
+  width: 36px;
+  height: 36px;
+}
 
 .testiGrid {
   display: grid;
-  grid-template-columns: 0.95fr 1.15fr;
-  gap: 28px;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
   align-items: stretch;
 }
 
 .testiCard {
   position: relative;
   background: var(--terracotta);
-  border-radius: var(--radius-lg);
-  padding: 34px 30px 30px;
+  border-radius: 26px;
+  /* Right padding clears the inset portrait. */
+  padding: 30px 214px 30px 30px;
   color: #fff;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  min-height: 300px;
+  justify-content: center;
+  min-height: 250px;
 }
 .testiThumb {
   position: absolute;
-  top: 24px;
-  right: 24px;
-  width: 96px;
-  height: 118px;
-  border-radius: var(--radius-sm);
+  top: 22px;
+  right: 22px;
+  bottom: 22px;
+  width: 164px;
+  border-radius: 14px;
   overflow: hidden;
 }
-.testiThumb img { width: 100%; height: 100%; object-fit: cover; }
+.testiThumb img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
 .stars {
   display: flex;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: 7px;
+  margin-bottom: 20px;
   color: #fff;
 }
 .testiQuote {
+  font-family: 'Playfair Display', Georgia, serif;
   font-style: italic;
-  font-size: 17px;
-  line-height: 1.55;
-  margin: 0 0 20px;
-  max-width: 320px;
+  font-size: 20px;
+  line-height: 1.45;
+  margin: 0 0 22px;
+  max-width: 352px;
 }
 .testiName {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   margin: 0;
 }
 
@@ -785,8 +836,12 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--card);
+  /* Fixes the row height. Left to the photograph's own proportions the
+     column ran ~100px taller than the reference, which opened an
+     unreasonable gap under the heading. */
+  aspect-ratio: 20 / 21;
 }
-.testiHero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.testiHero img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
 .testiBadge {
   position: absolute;
   right: 20px;
@@ -862,13 +917,15 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
 }
+/* Was 4:3. A landscape box fed portrait fashion shots crops straight through
+   the model's head no matter where it is anchored. */
 .commitStripImg {
   border-radius: var(--radius-lg);
   overflow: hidden;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
   background: var(--card);
 }
-.commitStripImg img { width: 100%; height: 100%; object-fit: cover; }
+.commitStripImg img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
 
 /* ---------------------------------- CTA + Footer ---------------------------------- */
 
@@ -880,44 +937,51 @@
 .footer {
   background: #fff;
   padding-top: 72px;
+  /* The Bootstrap theme styles the bare `footer` element for its own dark
+     footer, including a cream `color`. Anything here that does not set a
+     colour of its own would inherit that and vanish against the white. */
+  color: var(--ink);
 }
+/* Column starts are what the eye reads, so the brand keeps the left 55% and
+   the three link columns split the rest evenly. */
 .footerTop {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: 1.3fr repeat(3, 1fr);
-  gap: 32px;
-  padding-bottom: 48px;
+  grid-template-columns: 3.6fr 1fr 1fr 1.05fr;
+  gap: 24px;
+  padding-bottom: 40px;
 }
 .footerBrand {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  margin: 0 0 16px;
+  font-family: 'Anton', 'DM Sans', sans-serif;
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.005em;
+  color: var(--ink);
+  margin: 0 0 20px;
 }
 .footerTagline {
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.7;
   color: var(--ink-soft);
-  max-width: 300px;
-  margin: 0 0 22px;
+  max-width: 350px;
+  margin: 0 0 26px;
 }
 .footerSocials {
   display: flex;
-  gap: 14px;
+  gap: 26px;
 }
 .footerSocials a {
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
   color: var(--ink);
 }
+.footerSocials a:hover { color: var(--rust); }
 .footerColTitle {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  margin: 0 0 18px;
+  color: var(--ink);
+  margin: 0 0 20px;
 }
 .footerCol ul {
   list-style: none;
@@ -925,34 +989,51 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 .footerCol a {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--ink-soft);
   text-decoration: none;
 }
 .footerCol a:hover { color: var(--ink); }
 
+/* Full-bleed, and pulled up far enough that the socials sit over its top
+   edge -- the white gradient below is what makes that overlap read as the
+   photo rising out of the page rather than as a seam. */
 .footerImage {
   position: relative;
-  border-radius: 32px 32px 0 0;
+  /* Own stacking context, so the gradient below stays behind .footerTop
+     instead of tying with it on z-index and winning on document order. */
+  z-index: 0;
+  margin-top: -44px;
+  aspect-ratio: 2.62;
   overflow: hidden;
-  aspect-ratio: 16 / 6;
 }
 .footerImage img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-.footerBottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 22px 0;
-  font-size: 13px;
-  color: var(--muted);
-  border-top: 1px solid var(--line);
-  margin-top: 12px;
-  flex-wrap: wrap;
-  gap: 10px;
+.footerImage::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 42%;
+  background: linear-gradient(#fff 12%, rgba(255, 255, 255, 0));
+  z-index: 1;
+}
+.footerWatermark {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  transform: translate(-50%, -50%);
+  /* Sized past the viewport on purpose: the outer A's are meant to run off
+     both edges. */
+  font-size: 30vw;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.36);
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ---------------------------------- Section spacing ---------------------------------- */
@@ -960,23 +1041,167 @@
 .section { padding: 88px 0; }
 .sectionTight { padding: 64px 0 0; }
 
+/* ---------------------------------- Scroll animation ---------------------------------- */
+
+/*
+ * Reveals are opt-in per element with `data-reveal`, and are driven two ways.
+ *
+ * Where the browser has scroll-driven animations they run entirely in CSS --
+ * no JS, nothing to hydrate, and no chance of content being stranded
+ * invisible if a script fails. Everywhere else HomeClient sets
+ * `data-js-reveal` on the root and falls back to an IntersectionObserver.
+ * The hidden state is deliberately gated behind that attribute so a page
+ * with no JS at all still paints in full.
+ *
+ * Both paths sit inside a reduced-motion guard.
+ */
+
+@keyframes revealRise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes revealScale {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .page [data-reveal] {
+      animation-name: revealRise;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: view();
+      animation-range: entry 8% cover 24%;
+    }
+    .page [data-reveal='scale'] {
+      animation-name: revealScale;
+    }
+  }
+
+  /* Fallback path. Only ever applies once the script has confirmed the
+     browser cannot do the above. */
+  .page[data-js-reveal] [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms),
+      transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms);
+  }
+  .page[data-js-reveal] [data-reveal='scale'] {
+    transform: scale(1.05);
+  }
+  .page[data-js-reveal] [data-reveal][data-revealed] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Continuous, scroll-linked motion. Progressive enhancement only -- there is
+   no JS fallback, because a browser without scroll timelines simply gets the
+   static composition, which is the design either way. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    .heroWatermark {
+      animation-name: watermarkDrift;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: scroll(root block);
+      animation-range: 0 80vh;
+    }
+    .headerInner {
+      animation-name: headerCondense;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: scroll(root block);
+      animation-range: 0 140px;
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    .footerWatermark {
+      animation-name: watermarkLift;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: view();
+      animation-range: entry 0% cover 85%;
+    }
+    .spotlightModel img {
+      animation-name: mediaPan;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: view();
+      animation-range: entry 0% cover 100%;
+    }
+  }
+}
+
+@keyframes watermarkDrift {
+  to {
+    transform: translate3d(-4%, -22%, 0);
+  }
+}
+
+@keyframes watermarkLift {
+  from {
+    transform: translate(-50%, -35%) scale(1.06);
+  }
+  to {
+    transform: translate(-50%, -62%) scale(1);
+  }
+}
+
+@keyframes headerCondense {
+  to {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* A slow drift across the frame as the section passes, so the largest image
+   on the page is not completely inert. */
+@keyframes mediaPan {
+  from {
+    transform: scale(1.08) translateY(-1.2%);
+  }
+  to {
+    transform: scale(1.08) translateY(1.2%);
+  }
+}
+
 /* ---------------------------------- Responsive ---------------------------------- */
 
 @media (max-width: 1080px) {
   .heroGrid { grid-template-columns: 1fr; min-height: auto; }
-  .heroSide { flex-direction: row; padding: 24px 0 0; }
+  .heroSide { flex-direction: row; align-items: center; padding: 0; margin-top: 32px; }
   .heroThumb { width: 76px; height: 76px; }
   .heroCounter { margin: 0; }
-  .heroImageWrap { order: -1; }
   .productGrid { grid-template-columns: repeat(2, 1fr); }
   .catStrip { grid-template-columns: repeat(3, 1fr); row-gap: 32px; }
   .spotlightGrid { grid-template-columns: 1fr 1fr; }
   .spotlightInfo { grid-column: 1 / -1; }
   .priceCardGrid { grid-template-columns: repeat(2, 1fr); }
   .introCard { grid-column: 1 / -1; }
-  .testiGrid { grid-template-columns: 1fr; }
+  .testiGrid { grid-template-columns: 1fr; gap: 28px; }
+  .testiHeading { max-width: none; }
+  .testiTop { margin-top: 32px; padding-top: 0; }
+  .testiHero { min-height: 420px; }
   .commitGrid, .commitStrip { grid-template-columns: repeat(3, 1fr); }
-  .footerTop { grid-template-columns: 1fr 1fr; }
+  .footerTop { grid-template-columns: 1fr 1fr; gap: 40px 24px; }
+  .footerImage { margin-top: -36px; aspect-ratio: 2.1; }
 }
 
 @media (max-width: 720px) {
@@ -987,15 +1212,28 @@
   .headerInner { grid-template-columns: auto 1fr auto; }
   .logo { justify-self: start; }
   .hero { padding-top: 24px; }
-  .heroTitle { font-size: 34px; }
+  .heroTitle { font-size: 34px; max-width: none; }
+  .heroDesc { margin-bottom: 28px; }
+  .heroSide { margin-top: 24px; flex-wrap: wrap; gap: 14px; }
+  .heroThumb { width: 68px; height: 68px; }
+  .heroWatermark { font-size: 17vw; }
   .productGrid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
   .catStrip { grid-template-columns: repeat(2, 1fr); }
   .spotlightGrid { grid-template-columns: 1fr; }
   .spotlightDetails { flex-direction: row; }
+  .testiCard { padding: 26px; min-height: 0; }
+  .testiThumb { position: static; width: 100%; height: 200px; margin-bottom: 20px; }
+  .testiQuote { font-size: 18px; max-width: none; }
   .priceCardGrid { grid-template-columns: 1fr; }
   .commitGrid { grid-template-columns: 1fr; gap: 40px; }
   .commitStrip { grid-template-columns: 1fr; }
-  .footerTop { grid-template-columns: 1fr; }
+  .footerTop { grid-template-columns: 1fr; gap: 36px; }
+  .footerBrand { font-size: 36px; }
+  /* Too little height left at this width for the overlap to read as
+     anything but a collision. */
+  .footerImage { margin-top: 0; aspect-ratio: 1.5; }
+  .footerImage::before { height: 22%; }
+  .footerWatermark { font-size: 34vw; }
   .section { padding: 56px 0; }
   .sectionHead { flex-direction: column; align-items: flex-start; }
 }

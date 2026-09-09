@@ -1584,7 +1584,6 @@ export const menuDataOne: MenuItemOne[] = [
       { name: 'Order Tracking', path: '/shop-order-tracking' },
       { name: 'Login', path: '/login' },
       { name: 'Registration', path: '/registration' },
-      { name: 'Forget Password', path: '/forget-password' },
     ],
   },
 ];
