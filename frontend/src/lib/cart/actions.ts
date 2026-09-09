@@ -227,3 +227,14 @@ export async function removeCartLine(itemId: string): Promise<CartMutation> {
     await writeGuestCart(lines.filter(line => line.variant_id !== itemId));
   });
 }
+
+export async function clearCart(): Promise<CartMutation> {
+  return mutate(async token => {
+    if (token) {
+      await cartApi.clear(token);
+      return;
+    }
+
+    await clearGuestCart();
+  });
+}

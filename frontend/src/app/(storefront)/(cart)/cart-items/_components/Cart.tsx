@@ -2,44 +2,44 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { toast } from 'react-toastify';
 
+import MobileBottomNav from '@/components/MobileBottomNav';
 import { useCart } from '@/context/CartContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { CartItem } from '@/types/cart';
 import type { CheckoutPreview } from '@/types/orders';
 
+import styles from './Cart.module.css';
+
 // -----------------------------------
-// QUANTITY CONTROL
+// ROW
 // -----------------------------------
 
-function QuantityControl({
-  quantity,
+function QtyStepper({
+  item,
   disabled,
-  onChange,
+  onQtyChange,
 }: {
-  quantity: number;
+  item: CartItem;
   disabled: boolean;
-  onChange: (quantity: number) => void;
+  onQtyChange: (itemId: string, quantity: number) => void;
 }) {
   return (
-    <div className="cart-items-qty">
+    <div className={styles.qtyStepper}>
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => onChange(quantity === 1 ? quantity : quantity - 1)}
-        className="cart-items-qty-btn"
+        disabled={disabled || item.quantity <= 1}
+        onClick={() => onQtyChange(item.id, item.quantity - 1)}
         aria-label="Decrease quantity">
         −
       </button>
-
-      <span className="cart-items-qty-value">{quantity}</span>
-
+      <span>{item.quantity}</span>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => onChange(quantity + 1)}
-        className="cart-items-qty-btn"
+        onClick={() => onQtyChange(item.id, item.quantity + 1)}
         aria-label="Increase quantity">
         +
       </button>
@@ -47,11 +47,40 @@ function QuantityControl({
   );
 }
 
-// -----------------------------------
-// LINE
-// -----------------------------------
+function RemoveButton({
+  item,
+  disabled,
+  onRemove,
+}: {
+  item: CartItem;
+  disabled: boolean;
+  onRemove: (itemId: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.removeBtn}
+      disabled={disabled}
+      onClick={() => onRemove(item.id)}
+      aria-label={`Remove ${item.product_name} from cart`}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M5 5l14 14M19 5 5 19" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
 
-function CartLineItem({
+/**
+ * Below `md` this renders as the reference's stacked phone layout: image,
+ * then name/variant/price/qty stacked underneath with the remove "X" at top
+ * right. At `md` and up the reference switches to a single row -- image,
+ * name/variant/price, then quantity, line total and remove lined up on the
+ * right -- so `.desktopMeta` duplicates the qty stepper and remove button
+ * or that row (CSS shows exactly one copy of each at a time; see
+ * Cart.module.css) rather than reflowing the same nodes, which CSS alone
+ * can't do across a breakpoint that also regroups the surrounding markup.
+ */
+function CartRow({
   item,
   disabled,
   onQtyChange,
@@ -63,71 +92,43 @@ function CartLineItem({
   onRemove: (itemId: string) => void;
 }) {
   return (
-    <div className="cart-items-card">
-      <div className="cart-items-card-inner">
-        {/* IMAGE */}
+    <div className={styles.row}>
+      <div className={styles.thumb}>
+        {item.image && (
+          <Image
+            src={item.image.url}
+            alt={item.image.alt_text ?? item.product_name}
+            fill
+            sizes="(min-width: 992px) 140px, 110px"
+          />
+        )}
+      </div>
 
-        <div className="cart-items-image-wrap">
-          {item.image && (
-            <Image
-              src={item.image.url}
-              alt={item.image.alt_text ?? item.product_name}
-              className="cart-items-image"
-              width={100}
-              height={100}
-            />
-          )}
-        </div>
-
-        {/* DETAILS */}
-
-        <div className="cart-items-details">
-          <div className="cart-items-details-top">
-            <div>
-              <h3 className="cart-items-name">
-                <Link href={`/single-product/${item.product_id}`}>{item.product_name}</Link>
-              </h3>
-
-              <p className="cart-items-variant">{item.variant_name}</p>
-
-              <p className="cart-items-variant">SKU: {item.sku}</p>
-            </div>
+      <div className={styles.info}>
+        <div className={styles.infoTop}>
+          <div>
+            <p className={styles.name}>
+              <Link href={`/single-product/${item.product_id}`}>{item.product_name}</Link>
+            </p>
+            <p className={styles.variant}>{item.variant_name}</p>
           </div>
 
-          <div className="cart-items-quantity-details">
-            <div className="cart-items-actions">
-              <QuantityControl
-                quantity={item.quantity}
-                disabled={disabled}
-                onChange={quantity => onQtyChange(item.id, quantity)}
-              />
-            </div>
+          <div className={styles.removeBtnMobile}>
+            <RemoveButton item={item} disabled={disabled} onRemove={onRemove} />
           </div>
         </div>
 
-        {/* PRICE */}
+        <p className={styles.price}>{formatMoney(item.unit_price, STOREFRONT_CURRENCY)}</p>
 
-        <div className="cart-items-price-details">
-          <div className="cart-items-price-block">
-            <div className="cart-items-price">{formatMoney(item.subtotal, STOREFRONT_CURRENCY)}</div>
-
-            {item.quantity > 1 && (
-              <div className="cart-items-price-each">
-                {formatMoney(item.unit_price, STOREFRONT_CURRENCY)} each
-              </div>
-            )}
-          </div>
-
-          {/* REMOVE */}
-
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => onRemove(item.id)}
-            className="cart-items-link">
-            <Image src="/assets/dustbin.png" alt="remove-button-image" width={20} height={20} />
-          </button>
+        <div className={styles.qtyStepperMobile}>
+          <QtyStepper item={item} disabled={disabled} onQtyChange={onQtyChange} />
         </div>
+      </div>
+
+      <div className={styles.desktopMeta}>
+        <QtyStepper item={item} disabled={disabled} onQtyChange={onQtyChange} />
+        <p className={styles.lineTotal}>{formatMoney(item.subtotal, STOREFRONT_CURRENCY)}</p>
+        <RemoveButton item={item} disabled={disabled} onRemove={onRemove} />
       </div>
     </div>
   );
@@ -140,114 +141,88 @@ function CartLineItem({
 /**
  * The cart page.
  *
- * Line totals and the subtotal are the backend's; shipping and tax only
- * exist once checkout prices them, which needs a session -- so a guest sees
- * the subtotal and is told the rest is worked out at checkout, rather than
- * being shown a guess that changes at the last step.
+ * All data comes from CartContext, the same real, backend-held cart the
+ * header badge and every "Add to Cart" button already use -- there is no
+ * separate fetch or mock data here.
  */
 export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
-  const { cart, items, itemCount, pending, error, updateQuantity, removeFromCart } = useCart();
+  const { cart, items, pending, error, updateQuantity, removeFromCart, clearCart } = useCart();
+
+  async function handleRemove(itemId: string) {
+    await removeFromCart(itemId);
+    toast.info('Removed from your cart');
+  }
+
+  async function handleClearCart() {
+    if (!window.confirm('Remove everything from your cart?')) return;
+    await clearCart();
+    toast.info('Cart cleared');
+  }
+
+  const total = preview ? preview.total_amount : cart.subtotal;
 
   return (
-    <div className="cart-items-page">
-      <div className="cart-items-container">
-        {/* =================================
-            CART LIST
-        ================================= */}
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <h1 className={styles.heading}>My Cart</h1>
+        <p className={styles.subtitle}>Review your items before checkout</p>
 
-        <div className="cart-items-list">
-          <h1 className="cart-items-title">
-            Your Cart{' '}
-            <span className="cart-items-count">
-              ({itemCount} {itemCount === 1 ? 'item' : 'items'})
-            </span>
-          </h1>
+        {error && <div className={styles.error}>{error}</div>}
 
-          {error && <div className="cart-items-empty">{error}</div>}
-
-          {items.length === 0 ? (
-            <div className="cart-items-empty">Your cart is empty.</div>
-          ) : (
-            items.map(item => (
-              <CartLineItem
-                key={item.id}
-                item={item}
-                disabled={pending}
-                onQtyChange={updateQuantity}
-                onRemove={removeFromCart}
-              />
-            ))
-          )}
-        </div>
-
-        {/* =================================
-            ORDER SUMMARY
-        ================================= */}
-        {items.length !== 0 && (
-          <div className="cart-items-summary">
-            <h2 className="cart-items-summary-title">Order Summary</h2>
-
-            <div className="cart-items-summary-rows">
-              {/* SUBTOTAL */}
-
-              <div className="cart-items-summary-row">
-                <span>Subtotal ({itemCount} items)</span>
-
-                <span className="cart-items-summary-value">
-                  {formatMoney(preview ? preview.subtotal : cart.subtotal, STOREFRONT_CURRENCY)}
-                </span>
-              </div>
-
-              {/* SHIPPING */}
-
-              <div className="cart-items-summary-row">
-                <span>Shipping</span>
-
-                <span className="cart-items-summary-value">
-                  {preview ? formatMoney(preview.shipping_amount, STOREFRONT_CURRENCY) : 'At checkout'}
-                </span>
-              </div>
-
-              {/* TAX */}
-
-              <div className="cart-items-summary-row">
-                <span>Tax</span>
-
-                <span className="cart-items-summary-value">
-                  {preview ? formatMoney(preview.tax_amount, STOREFRONT_CURRENCY) : 'At checkout'}
-                </span>
-              </div>
+        {items.length === 0 ? (
+          <div className={styles.empty}>
+            <div className={styles.emptyIcon}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <path d="M6 8h12l1 12.5a1 1 0 0 1-1 1.5H6a1 1 0 0 1-1-1.5L6 8Z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M9 8V6a3 3 0 0 1 6 0v2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
-
-            {/* =================================
-              TOTAL
-              ================================= */}
-
-            <div className="cart-items-total">
-              <span className="cart-items-total-label">Total</span>
-
-              <span className="cart-items-total-value">
-                {formatMoney(preview ? preview.total_amount : cart.subtotal, STOREFRONT_CURRENCY)}
-              </span>
-            </div>
-
-            {/* CHECKOUT */}
-            <Link href={'/check-out'}>
-              <button type="button" className="cart-items-checkout-btn">
-                Proceed to Checkout
-              </button>
+            <p className={styles.emptyHeading}>Your cart is empty</p>
+            <p className={styles.emptyText}>Looks like you haven&apos;t added anything yet.</p>
+            <Link href="/shop-standard" className={styles.continueBtn}>
+              Continue Shopping
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </Link>
-
-            {/* NOTES */}
-
-            <div className="cart-items-notes">
-              <div className="cart-items-note">
-                <span>Secure checkout, encrypted payment</span>
-              </div>
-            </div>
           </div>
+        ) : (
+          <>
+            <div className={styles.list}>
+              {items.map(item => (
+                <CartRow
+                  key={item.id}
+                  item={item}
+                  disabled={pending}
+                  onQtyChange={updateQuantity}
+                  onRemove={handleRemove}
+                />
+              ))}
+            </div>
+
+            <div className={styles.clearCartRow}>
+              <button type="button" className={styles.clearCartBtn} disabled={pending} onClick={handleClearCart}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Clear Cart
+              </button>
+            </div>
+
+            <Link href="/check-out" className={styles.checkoutBar}>
+              <span className={styles.checkoutLabel}>Proceed to Checkout</span>
+              <span className={styles.checkoutRight}>
+                {formatMoney(total, STOREFRONT_CURRENCY)}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </Link>
+          </>
         )}
       </div>
+
+      <MobileBottomNav />
     </div>
   );
 }
