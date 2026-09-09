@@ -9,6 +9,7 @@ from app.auth.router import staff_router as auth_staff_router
 from app.cart.router import router as cart_router
 from app.catalogue.router import router as catalogue_router
 from app.catalogue.storefront import router as storefront_router
+from app.core.config import get_settings
 from app.coupons.router import admin_router as coupons_admin_router
 from app.coupons.router import router as coupons_router
 from app.dashboard.router import router as dashboard_router
@@ -33,6 +34,16 @@ api_router.include_router(users_router)
 
 api_router.include_router(catalogue_router)
 api_router.include_router(storefront_router)
+
+# TEMPORARY DEV-ONLY -- stand-in for the not-yet-built Admin panel, letting
+# any signed-in (non-admin) session populate the catalogue for testing. See
+# app/catalogue/dev_router.py for the full removal note; delete that file and
+# this block together once Admin ships. Never registered in production, so
+# these routes do not exist there regardless of who is signed in.
+if not get_settings().is_production:
+    from app.catalogue.dev_router import router as dev_catalogue_router
+
+    api_router.include_router(dev_catalogue_router)
 
 api_router.include_router(cart_router)
 

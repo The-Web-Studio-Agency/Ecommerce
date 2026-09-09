@@ -73,8 +73,12 @@ async function send<T>(path: string, options: RequestOptions): Promise<ApiEnvelo
   const url = `${apiBaseUrl()}${path}${buildQuery(query)}`;
 
   const requestHeaders: Record<string, string> = { Accept: 'application/json', ...headers };
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
-  if (body !== undefined) {
+  if (body !== undefined && !isFormData) {
+    // A FormData body (file upload) skips this: fetch sets its own
+    // multipart Content-Type, boundary included, and setting one by hand
+    // here would omit that boundary and break the upload.
     requestHeaders['Content-Type'] = 'application/json';
   }
 
@@ -92,7 +96,7 @@ async function send<T>(path: string, options: RequestOptions): Promise<ApiEnvelo
     response = await fetch(url, {
       method,
       headers: requestHeaders,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
       signal,
       ...(cache ? { cache } : {}),
       ...(Object.keys(next).length ? { next } : {}),

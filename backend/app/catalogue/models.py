@@ -235,6 +235,16 @@ class ProductVariant(Base, TimestampMixin):
             name="fk_product_variants_tenant_product_products",
             ondelete="CASCADE",
         ),
+        # A variant may show a specific image (e.g. the swatch photo for its
+        # colour) instead of the product's default. Nullable and SET NULL on
+        # delete: a variant never disappears just because the image it once
+        # pointed at was removed.
+        ForeignKeyConstraint(
+            ["tenant_id", "image_id"],
+            ["product_images.tenant_id", "product_images.id"],
+            name="fk_product_variants_tenant_image_product_images",
+            ondelete="SET NULL",
+        ),
         CheckConstraint("sku = upper(sku)", name="sku_is_uppercase"),
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
@@ -253,6 +263,8 @@ class ProductVariant(Base, TimestampMixin):
     )
 
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    image_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     sku: Mapped[str] = mapped_column(String(MAX_SKU_LENGTH), nullable=False)
 
@@ -356,6 +368,10 @@ class ProductImage(Base, TimestampMixin):
     __tablename__ = "product_images"
 
     __table_args__ = (
+        # Referenced by ProductVariant.image_id's composite FK below, which
+        # (like every other tenant-scoped composite FK in this file) needs a
+        # unique constraint on exactly (tenant_id, id) to point at.
+        UniqueConstraint("tenant_id", "id", name="uq_product_images_tenant_id_id"),
         ForeignKeyConstraint(
             ["tenant_id", "product_id"],
             ["products.tenant_id", "products.id"],

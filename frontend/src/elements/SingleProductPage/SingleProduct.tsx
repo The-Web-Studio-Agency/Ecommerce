@@ -82,6 +82,15 @@ const SingleProduct = ({ product, rating, related }: Props) => {
   const saved = variant ? isVariantSaved(variant.id) : false;
 
   const images = product.images.length > 0 ? product.images : null;
+
+  // A variant with its own image (e.g. a colour's swatch photo) swaps the
+  // gallery to it; one without falls back to whatever the shopper had open
+  // (the default primary image on first load).
+  useEffect(() => {
+    if (!variant?.image_id || !images) return;
+    const index = images.findIndex(image => image.id === variant.image_id);
+    if (index >= 0) setSelectedImage(index);
+  }, [variant, images]);
   const stockCount = variant ? variant.available_quantity : 0;
   const price = variant ? variant.price : product.price_from;
 

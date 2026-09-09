@@ -51,6 +51,7 @@ def admin_variant(variant: ProductVariant) -> VariantRead:
         name=variant.name,
         price=variant.price,
         status=CatalogueStatus(variant.status),
+        image_id=variant.image_id,
         options=variant_options(variant),
         inventory=(
             inventory_status(variant.inventory) if variant.inventory else None
@@ -77,6 +78,7 @@ def storefront_variant(variant: ProductVariant) -> VariantStorefrontRead:
         options=variant_options(variant),
         in_stock=sellable > 0,
         available_quantity=sellable,
+        image_id=variant.image_id,
     )
 
 

@@ -12,11 +12,19 @@ import listingStyles from './_components/luxe/Listing.module.css';
 import ListingControls, { type ListingSort } from './_components/luxe/ListingControls';
 import MobileBottomNav from './_components/luxe/MobileBottomNav';
 import ProductCard from './_components/luxe/ProductCard';
+// TEMPORARY DEV-ONLY -- remove this import and its one use below (guarded by
+// DEV_TOOLS_ENABLED) together with src/lib/dev-catalogue/ and this folder's
+// dev-catalogue/ subfolder once the real Admin panel ships. See
+// src/lib/dev-catalogue/api.ts for the full removal note.
+import DevCatalogueTools from './_components/dev-catalogue/DevCatalogueTools';
 
 export const metadata = {
   title: 'Shop All | Avera',
   description: 'Browse the Avera collection of kurtas and tops.',
 };
+
+// TEMPORARY DEV-ONLY -- see the import above.
+const DEV_TOOLS_ENABLED = process.env.NODE_ENV !== 'production';
 
 const PAGE_SIZE = 12;
 /** The catalogue also carries a handful of empty/QA categories left over from
@@ -275,6 +283,9 @@ export default async function ShopListPage({
 
       <section className={listingStyles.listingSection}>
         <div className={homeStyles.container}>
+          {/* TEMPORARY DEV-ONLY -- see the import above for the removal note. */}
+          {DEV_TOOLS_ENABLED && <DevCatalogueTools />}
+
           <div className={listingStyles.toolbarRow}>
             <div className={listingStyles.chipRow}>
               <Link

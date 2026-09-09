@@ -28,6 +28,8 @@ export interface VariantStorefront {
   options: Record<string, string>;
   in_stock: boolean;
   available_quantity: number;
+  /** Which of the product's `images` to show when this variant is selected, if any. */
+  image_id: string | null;
 }
 
 /** An option and the values an in-stock variant actually offers. */

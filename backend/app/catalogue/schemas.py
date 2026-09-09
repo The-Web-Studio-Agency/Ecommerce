@@ -232,6 +232,11 @@ class VariantCreate(StrictModel):
     price: Decimal = Price
     status: CatalogueStatus = CatalogueStatus.DRAFT
 
+    # Must belong to the same product the variant is being created on --
+    # checked in VariantService, since that needs a DB lookup a schema can't
+    # do.
+    image_id: UUID | None = None
+
     options: list[VariantOptionValue] = Field(
         default_factory=list, max_length=MAX_OPTIONS_PER_PRODUCT
     )
@@ -260,6 +265,9 @@ class VariantUpdate(PartialUpdate):
         default=None, ge=0, max_digits=PRICE_PRECISION, decimal_places=PRICE_SCALE
     )
     status: CatalogueStatus | None = None
+    # Explicit null clears it back to "use the product's default image";
+    # omitting the field (PartialUpdate's usual behaviour) leaves it as-is.
+    image_id: UUID | None = None
     options: list[VariantOptionValue] | None = Field(
         default=None, max_length=MAX_OPTIONS_PER_PRODUCT
     )
@@ -277,6 +285,7 @@ class VariantRead(BaseModel):
     name: str
     price: Decimal
     status: CatalogueStatus
+    image_id: UUID | None = None
 
     options: dict[str, str] = {}
     inventory: InventoryStatus | None = None
@@ -293,6 +302,9 @@ class VariantStorefrontRead(BaseModel):
     options: dict[str, str] = {}
     in_stock: bool
     available_quantity: int
+    # Which of the product's `images` to show when this variant is selected.
+    # None means "no specific image -- show the product's usual primary".
+    image_id: UUID | None = None
 
 
 class ProductCreate(StrictModel):

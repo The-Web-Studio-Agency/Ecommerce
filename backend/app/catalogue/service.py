@@ -317,12 +317,22 @@ class VariantService:
         self.options = ProductOptionRepository(session, tenant_id)
         self.variant_options = VariantOptionRepository(session, tenant_id)
         self.inventory = InventoryRepository(session, tenant_id)
+        self.images = ProductImageRepository(session, tenant_id)
 
     async def _require_product(self, product_id: UUID) -> Product:
         product = await self.products.get(product_id)
         if product is None:
             raise NotFoundError(PRODUCT_NOT_FOUND)
         return product
+
+    async def _validate_image(self, product_id: UUID, image_id: UUID | None) -> None:
+        """A variant's image must be one of its own product's images -- a
+        stray or cross-product id would show the wrong photo silently."""
+        if image_id is None:
+            return
+        image = await self.images.get(image_id)
+        if image is None or image.product_id != product_id:
+            raise NotFoundError(IMAGE_NOT_FOUND)
 
     async def _sync_options(
         self, product_id: UUID, variant_id: UUID, options: list[VariantOptionValue]
@@ -367,12 +377,15 @@ class VariantService:
         if await self.variants.get_by_sku(sku) is not None:
             raise ConflictError("A variant with this SKU already exists")
 
+        await self._validate_image(product_id, data.image_id)
+
         variant = ProductVariant(
             product_id=product_id,
             sku=sku,
             name=data.name,
             price=data.price,
             status=data.status.value,
+            image_id=data.image_id,
         )
 
         try:
@@ -435,6 +448,9 @@ class VariantService:
 
         if changes.get("status") is not None:
             changes["status"] = changes["status"].value
+
+        if "image_id" in changes:
+            await self._validate_image(variant.product_id, changes["image_id"])
 
         for field, value in changes.items():
             setattr(variant, field, value)
