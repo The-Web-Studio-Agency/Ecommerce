@@ -332,13 +332,15 @@
 }
 
 /*
- * Real catalogue photos are full-length portrait model shots -- a taller
- * box plus top-anchored `cover` keeps the face and garment in frame at
- * every breakpoint without letterboxing or distorting the image.
+ * Real catalogue photos are full-length portrait model shots -- top-anchored
+ * `cover` keeps the face and garment in frame at every breakpoint without
+ * letterboxing or distorting the image. The box itself is a compact,
+ * near-square 4:5 (was a taller 3:4) to match the reference layout; only
+ * how much of the frame shows changes, not how the image fills it.
  */
 .cardMedia {
   position: relative;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 4 / 5;
   border-radius: var(--radius-md, 16px);
   background: var(--card, #f4f1ec);
   overflow: hidden;
