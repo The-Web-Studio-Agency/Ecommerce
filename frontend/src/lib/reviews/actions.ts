@@ -4,7 +4,7 @@ import { revalidateTag } from 'next/cache';
 
 import { reviewApi } from '@/lib/api/reviews';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
-import { getAccessToken } from '@/lib/auth/session';
+import { getActionAccessToken } from '@/lib/auth/session';
 import type { CheckoutState } from '@/lib/orders/state';
 
 function toState(error: unknown): CheckoutState {
@@ -31,7 +31,7 @@ export async function submitReview(
   _previous: CheckoutState,
   formData: FormData,
 ): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to write a review.' };
 
   const productId = String(formData.get('product_id') ?? '');
@@ -67,7 +67,7 @@ export async function deleteReview(
   _previous: CheckoutState,
   formData: FormData,
 ): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in again.' };
 
   const reviewId = String(formData.get('review_id') ?? '');

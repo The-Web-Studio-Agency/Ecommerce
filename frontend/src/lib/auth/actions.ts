@@ -5,7 +5,12 @@ import { redirect } from 'next/navigation';
 import { authApi } from '@/lib/api/auth';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
 import type { AuthFormState } from '@/lib/auth/form-state';
-import { clearSession, getAccessToken, getRefreshToken, setSession } from '@/lib/auth/session';
+import {
+  clearSession,
+  getActionAccessToken,
+  getRefreshToken,
+  setSession,
+} from '@/lib/auth/session';
 import { mergeGuestCart } from '@/lib/cart/actions';
 
 /**
@@ -110,7 +115,7 @@ export async function logout(): Promise<void> {
  * signed in to an account they just asked to leave.
  */
 export async function deleteAccount(): Promise<void> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
 
   if (token) {
     try {

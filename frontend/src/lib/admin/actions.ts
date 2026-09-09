@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { adminApi } from '@/lib/api/admin';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
-import { getAccessToken } from '@/lib/auth/session';
+import { getActionAccessToken } from '@/lib/auth/session';
 import type { CheckoutState } from '@/lib/orders/state';
 import type { OrderStatus } from '@/types/orders';
 
@@ -21,7 +21,7 @@ export async function updateOrderStatus(
   _previous: CheckoutState,
   formData: FormData,
 ): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in again.' };
 
   const orderId = String(formData.get('order_id') ?? '');
@@ -43,7 +43,7 @@ export async function moderateReview(
   _previous: CheckoutState,
   formData: FormData,
 ): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in again.' };
 
   const reviewId = String(formData.get('review_id') ?? '');

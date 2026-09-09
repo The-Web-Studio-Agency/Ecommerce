@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 
+import { useAuth } from '@/context/AuthContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
@@ -167,6 +168,8 @@ export default function HomeClient({
   categories: CategoryStorefront[];
   spotlightProduct: ProductStorefront | null;
 }) {
+  const { isSignedIn } = useAuth();
+
   // The catalogue drives the option lists, so they are read before the state
   // that has to be seeded from them.
   const sizeOption = spotlightProduct?.options.find(option => /size/i.test(option.name));
@@ -291,7 +294,10 @@ export default function HomeClient({
             <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
               <SearchIcon />
             </Link>
-            <Link href="/signin" className={styles.headerIconBtn} aria-label="Account">
+            <Link
+              href={isSignedIn ? '/my-account' : '/signin'}
+              className={styles.headerIconBtn}
+              aria-label={isSignedIn ? 'My account' : 'Sign in'}>
               <UserIcon />
             </Link>
             <Link href="/cart-items" className={styles.cartPill}>

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { useAuth } from '@/context/AuthContext';
+
 import styles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
 import {
   BagIcon,
@@ -28,6 +30,7 @@ const NAV_LINKS = [
  */
 export default function LuxeHeader() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { isSignedIn } = useAuth();
 
   return (
     <header className={styles.header}>
@@ -53,7 +56,10 @@ export default function LuxeHeader() {
           <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
             <SearchIcon />
           </Link>
-          <Link href="/signin" className={styles.headerIconBtn} aria-label="Account">
+          <Link
+            href={isSignedIn ? '/my-account' : '/signin'}
+            className={styles.headerIconBtn}
+            aria-label={isSignedIn ? 'My account' : 'Sign in'}>
             <UserIcon />
           </Link>
           <Link href="/cart-items" className={styles.cartPill}>
