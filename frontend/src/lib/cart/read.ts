@@ -32,7 +32,12 @@ export async function getCart(): Promise<Cart> {
   const variants = await Promise.all(
     lines.map(async (line) => {
       try {
-        return { line, variant: await catalogueApi.getVariant(line.variant_id) };
+        const variant = await catalogueApi.getVariant(line.variant_id);
+        // The variant alone has no product name or image -- both live on
+        // the product, fetched separately here so a guest's cart row shows
+        // the same real name/photo a signed-in shopper's does.
+        const product = await catalogueApi.getProduct(variant.product_id).catch(() => null);
+        return { line, variant, product };
       } catch {
         // A variant that has gone away simply drops out of the cart.
         return null;
@@ -46,22 +51,24 @@ export async function getCart(): Promise<Cart> {
   for (const entry of variants) {
     if (!entry) continue;
 
-    const { line, variant } = entry;
+    const { line, variant, product } = entry;
     const unitPrice = Number(variant.price);
     const lineTotal = unitPrice * line.quantity;
     subtotal += lineTotal;
+
+    const primaryImage = product ? product.images.find((image) => image.is_primary) ?? product.images[0] : undefined;
 
     items.push({
       id: variant.id,
       variant_id: variant.id,
       product_id: variant.product_id,
-      product_name: variant.name,
+      product_name: product?.name ?? variant.name,
       variant_name: variant.name,
       sku: variant.sku,
       quantity: line.quantity,
       unit_price: variant.price,
       subtotal: lineTotal.toFixed(2),
-      image: null,
+      image: primaryImage ? { url: primaryImage.url, alt_text: primaryImage.alt_text } : null,
     });
   }
 

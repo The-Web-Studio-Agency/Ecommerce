@@ -13,6 +13,7 @@ import {
 } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
 import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
+import { useCart } from '@/context/CartContext';
 
 const NAV_LINKS = [
   { label: 'Shop', href: '/shop-list', chevron: true },
@@ -22,13 +23,14 @@ const NAV_LINKS = [
 ];
 
 /**
- * The Avera header, shared by every page that opts into the luxe design
+ * The Zeen header, shared by every page that opts into the luxe design
  * system. Lifted verbatim out of the Home page's header markup (Home.module.css
  * stays the single source of truth for its styling) so other pages can look
  * identical without the Home page itself importing or re-exporting anything.
  */
 export default function LuxeHeader() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { itemCount } = useCart();
 
   return (
     <header className={styles.header}>
@@ -47,7 +49,7 @@ export default function LuxeHeader() {
         </nav>
 
         <Link href="/" className={styles.logo}>
-          AVERA
+          ZEEN
         </Link>
 
         <div className={styles.headerRight}>
@@ -56,8 +58,16 @@ export default function LuxeHeader() {
           </Link>
           <LuxeAccountNav />
           <LuxeWishlistButton />
-          <Link href="/cart-items" className={styles.headerRoundBtn} aria-label="My cart">
+          <Link
+            href="/cart-items"
+            className={styles.headerRoundBtn}
+            aria-label={itemCount > 0 ? `Cart, ${itemCount} items` : 'My cart'}>
             <BagIcon size={17} />
+            {itemCount > 0 && (
+              <span className={styles.headerBadge} aria-hidden="true">
+                {itemCount > 99 ? '99+' : itemCount}
+              </span>
+            )}
           </Link>
           <button
             type="button"

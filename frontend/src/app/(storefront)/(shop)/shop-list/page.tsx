@@ -10,12 +10,12 @@ import type { SearchSort } from '@/types/search';
 import homeStyles from '../../(home)/home/_components/luxe/Home.module.css';
 import listingStyles from './_components/luxe/Listing.module.css';
 import ListingControls, { type ListingSort } from './_components/luxe/ListingControls';
-import MobileBottomNav from './_components/luxe/MobileBottomNav';
+import MobileBottomNav from '@/components/luxe/MobileBottomNav';
 import ProductCard from './_components/luxe/ProductCard';
 
 export const metadata = {
-  title: 'Shop All | Avera',
-  description: 'Browse the Avera collection of kurtas and tops.',
+  title: 'Shop All | Zeen',
+  description: 'Browse the Zeen collection of kurtas and tops.',
 };
 
 const PAGE_SIZE = 12;

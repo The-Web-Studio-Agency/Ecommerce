@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useState, useTransition } from 'react';
 
-import { addCartItem, removeCartLine, setCartItemQuantity } from '@/lib/cart/actions';
+import { addCartItem, clearCart, removeCartLine, setCartItemQuantity } from '@/lib/cart/actions';
 import type { Cart, CartItem } from '@/types/cart';
 
 interface CartContextType {
@@ -15,6 +15,7 @@ interface CartContextType {
   addToCart: (variantId: string, quantity: number) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
+  clearCart: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -57,6 +58,7 @@ export function CartProvider({ initialCart, children }: { initialCart: Cart; chi
         addToCart: (variantId, quantity) => run(addCartItem(variantId, quantity)),
         updateQuantity: (itemId, quantity) => run(setCartItemQuantity(itemId, quantity)),
         removeFromCart: itemId => run(removeCartLine(itemId)),
+        clearCart: () => run(clearCart()),
       }}>
       {children}
     </CartContext.Provider>
