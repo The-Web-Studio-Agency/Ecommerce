@@ -168,7 +168,7 @@ const Header6 = () => {
                             <div className="extra-cell">						
                                 <ul className="header-right">
                                     <li className="nav-item login-link">
-                                        <Link className="nav-link" href="/login">
+                                        <Link className="nav-link" href="/signin">
                                             Login / Register
                                         </Link>
                                     </li>

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { cartApi, wishlistApi } from '@/lib/api/cart';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
-import { getAccessToken } from '@/lib/auth/session';
+import { getActionAccessToken } from '@/lib/auth/session';
 import { addLine, clearGuestCart, readGuestCart, writeGuestCart } from '@/lib/cart/guest-cart';
 import { getCart } from '@/lib/cart/read';
 import type { CartActionState, CartMutation } from '@/lib/cart/state';
@@ -46,7 +46,7 @@ export async function addToCart(
     return { status: 'error', message: 'Choose a quantity.' };
   }
 
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
 
   if (token) {
     try {
@@ -70,7 +70,7 @@ export async function updateCartQuantity(
   const itemId = String(formData.get('item_id') ?? '');
   const quantity = Number(formData.get('quantity') ?? 1);
 
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
 
   if (token) {
     try {
@@ -94,7 +94,7 @@ export async function removeCartItem(
   formData: FormData,
 ): Promise<CartActionState> {
   const itemId = String(formData.get('item_id') ?? '');
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
 
   if (token) {
     try {
@@ -147,7 +147,7 @@ export async function toggleWishlist(
   const variantId = String(formData.get('variant_id') ?? '');
   const itemId = String(formData.get('item_id') ?? '');
 
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to save pieces to your wishlist.' };
 
   try {
@@ -173,7 +173,7 @@ export async function toggleWishlist(
  * form-shaped actions above stay for anything driven by a <form>.
  */
 async function mutate(apply: (token: string | null) => Promise<void>): Promise<CartMutation> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
 
   try {
     await apply(token);

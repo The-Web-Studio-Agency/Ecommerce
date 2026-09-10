@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
@@ -12,16 +12,20 @@ import { useAuth } from '@/context/AuthContext';
  * calls behind them, so this exists to keep a stale client-side navigation
  * from flashing an empty page. There is no loading state: the session is
  * resolved on the server before the tree renders.
+ *
+ * The path is carried across so signing in returns the shopper to the page
+ * they asked for, rather than dropping them on the account page.
  */
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isSignedIn } = useAuth();
+  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     if (!isSignedIn) {
-      router.replace('/signin');
+      router.replace(`/signin?next=${encodeURIComponent(pathname)}`);
     }
-  }, [isSignedIn, router]);
+  }, [isSignedIn, pathname, router]);
 
   if (!isSignedIn) {
     return null;

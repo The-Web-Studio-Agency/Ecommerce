@@ -1,14 +1,18 @@
 'use client';
 
 import Image from 'next/image';
-import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 
-import ProductCard from '../Shop/ProductCard';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatPriceRange } from '@/lib/format';
 import type { ProductStorefront, ProductSummaryStorefront, VariantStorefront } from '@/types/catalogue';
+
+import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
+import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
+import productStyles from './luxe/Product.module.css';
 
 type Props = {
   product: ProductStorefront;
@@ -40,15 +44,29 @@ function findVariant(product: ProductStorefront, selection: Selection): VariantS
 }
 
 /**
- * Whether a value can be painted as a swatch.
+ * Which of a set of values can be painted as a swatch.
  *
  * Option values are free text on the backend -- "Black" is a CSS colour but
  * "Sand Dune" is not, and a chip with an unpaintable value would render as
  * an invisible blank, so those fall back to showing the name.
+ *
+ * `CSS.supports` doesn't exist during server rendering, so this starts
+ * empty (everything renders as a chip, same on the server and on React's
+ * first client pass) and fills in after mount -- checking eagerly there
+ * would make the server and the first client render disagree, which React
+ * "fixes" by discarding the server markup for that subtree.
  */
-function isPaintable(value: string): boolean {
-  if (typeof CSS === 'undefined' || !CSS.supports) return false;
-  return CSS.supports('color', value.replace(/\s+/g, ''));
+const EMPTY_VALUES: string[] = [];
+
+function usePaintableValues(values: string[]): Set<string> {
+  const [paintable, setPaintable] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (typeof CSS === 'undefined' || !CSS.supports) return;
+    setPaintable(new Set(values.filter(value => CSS.supports('color', value.replace(/\s+/g, '')))));
+  }, [values]);
+
+  return paintable;
 }
 
 const SingleProduct = ({ product, rating, related }: Props) => {
@@ -72,6 +90,7 @@ const SingleProduct = ({ product, rating, related }: Props) => {
   const otherOptions = product.options.filter(
     option => option !== colorOption && option !== sizeOption,
   );
+  const paintableColors = usePaintableValues(colorOption?.values ?? EMPTY_VALUES);
 
   function choose(name: string, value: string) {
     setSelection(previous => ({ ...previous, [name]: value }));
@@ -99,146 +118,171 @@ const SingleProduct = ({ product, rating, related }: Props) => {
   }
 
   return (
-    <section className="wrapper">
-      {/* Single Product */}
-      <div className="single-product-container">
-        {/* Images */}
-        <div className="single-product-image-section">
-          {images && (
-            <div className="product-thumbnail-gallery">
-              {images.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`${
-                    selectedImage === index ? 'selected-product-thumdbnail' : 'unselected-products-thumbnail'
-                  } product-thumbnail`}>
-                  <Image
-                    src={item.url}
-                    alt={item.alt_text ?? product.name}
-                    width={200}
-                    height={200}
-                    onClick={() => setSelectedImage(index)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {images && (
-            <div className="product-main-image">
+    <>
+      <div className={productStyles.layout}>
+        {/* Gallery */}
+        <div className={productStyles.gallery}>
+          <div className={productStyles.galleryMain}>
+            {images ? (
               <Image
                 src={images[selectedImage].url}
                 alt={images[selectedImage].alt_text ?? product.name}
-                width={1000}
-                height={1000}
+                fill
+                sizes="(max-width: 720px) 100vw, 50vw"
+                className={productStyles.galleryMainImg}
+                priority
               />
+            ) : (
+              <div className={productStyles.galleryMainEmpty}>No image yet</div>
+            )}
+          </div>
+
+          {images && images.length > 1 && (
+            <div className={productStyles.thumbRow}>
+              {images.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedImage(index)}
+                  className={`${productStyles.thumb} ${selectedImage === index ? productStyles.thumbActive : ''}`}
+                  aria-label={`Show image ${index + 1}`}
+                  aria-current={selectedImage === index}
+                >
+                  <Image
+                    src={item.url}
+                    alt={item.alt_text ?? product.name}
+                    fill
+                    sizes="76px"
+                    className={productStyles.thumbImg}
+                  />
+                </button>
+              ))}
             </div>
           )}
         </div>
 
         {/* Details */}
-        <div className="single-product-details-section">
-          {/* Name + Price */}
-          <div className="product-name-price">
-            <p className="product-type">{product.category.name}</p>
+        <div className={productStyles.info}>
+          <span className={productStyles.category}>{product.category.name}</span>
+          <h1 className={productStyles.title}>{product.name}</h1>
+          <p className={productStyles.price}>
+            {price != null
+              ? formatMoney(price, STOREFRONT_CURRENCY)
+              : formatPriceRange(product.price_from, product.price_to, STOREFRONT_CURRENCY) || 'Price on request'}
+          </p>
 
-            <p className="product-name">{product.name}</p>
-
-            <div className="product-price">
-              <span>{formatMoney(price, STOREFRONT_CURRENCY)}</span>
-            </div>
-          </div>
-
-          {/* Colors */}
-          {colorOption && (
-            <div className="product-colors-container">
-              <p>Colors :</p>
-
-              {colorOption.values.map(value => {
-                const active = selection[colorOption.name] === value;
-
-                return isPaintable(value) ? (
-                  <p
-                    key={value}
-                    title={value}
-                    onClick={() => choose(colorOption.name, value)}
-                    className={`product-color ${active ? 'active' : ''}`}
-                    style={{ backgroundColor: value.replace(/\s+/g, '') }}
-                  />
-                ) : (
-                  <p
-                    key={value}
-                    onClick={() => choose(colorOption.name, value)}
-                    className={`product-size ${active ? 'active' : ''}`}>
-                    {value}
-                  </p>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Sizes */}
-          {sizeOption && (
-            <div className="product-size-container">
-              <p>Sizes :</p>
-
-              {sizeOption.values.map(value => (
-                <p
-                  key={value}
-                  onClick={() => choose(sizeOption.name, value)}
-                  className={`product-size ${selection[sizeOption.name] === value ? 'active' : ''}`}>
-                  {value}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {otherOptions.map(option => (
-            <div className="product-size-container" key={option.name}>
-              <p>{option.name} :</p>
-
-              {option.values.map(value => (
-                <p
-                  key={value}
-                  onClick={() => choose(option.name, value)}
-                  className={`product-size ${selection[option.name] === value ? 'active' : ''}`}>
-                  {value}
-                </p>
-              ))}
-            </div>
-          ))}
-
-          <div className="single-product-rating">
+          <div className={productStyles.stars}>
             {Array.from({ length: 5 }).map((_, index) => {
-              if (index < Math.floor(rating)) {
-                return <i key={index} className="fa-solid fa-star filled" />;
-              }
-              if (index < rating) {
-                return <i key={index} className="fa-solid fa-star-half-stroke filled" />;
-              }
+              if (index < Math.floor(rating)) return <i key={index} className="fa-solid fa-star filled" />;
+              if (index < rating) return <i key={index} className="fa-solid fa-star-half-stroke filled" />;
               return <i key={index} className="fa-regular fa-star" />;
             })}
           </div>
 
-          {/* Quantity + Cart */}
-          <div className="product-quantity-cart-container">
-            <div className="product-quantity-container">
-              <p>Quantity</p>
+          {colorOption && (
+            <div className={productStyles.optionGroup}>
+              <span className={productStyles.optionLabel}>Color</span>
+              <div className={productStyles.swatchRow}>
+                {colorOption.values.map(value => {
+                  const active = selection[colorOption.name] === value;
 
-              <div className="quantity-button">
-                <button onClick={() => setQuantity(prev => (prev <= 1 ? prev : prev - 1))}>-</button>
-
-                <p>{quantity}</p>
-
-                <button onClick={() => setQuantity(prev => (prev < stockCount ? prev + 1 : prev))}>+</button>
+                  return paintableColors.has(value) ? (
+                    <button
+                      key={value}
+                      type="button"
+                      title={value}
+                      onClick={() => choose(colorOption.name, value)}
+                      className={`${productStyles.swatch} ${active ? productStyles.swatchActive : ''}`}
+                      style={{ backgroundColor: value.replace(/\s+/g, '') }}
+                    />
+                  ) : (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => choose(colorOption.name, value)}
+                      className={`${productStyles.chip} ${active ? productStyles.chipActive : ''}`}
+                    >
+                      {value}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
+          )}
+
+          {sizeOption && (
+            <div className={productStyles.optionGroup}>
+              <span className={productStyles.optionLabel}>Size</span>
+              <div className={productStyles.swatchRow}>
+                {sizeOption.values.map(value => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => choose(sizeOption.name, value)}
+                    className={`${productStyles.chip} ${selection[sizeOption.name] === value ? productStyles.chipActive : ''}`}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {otherOptions.map(option => (
+            <div className={productStyles.optionGroup} key={option.name}>
+              <span className={productStyles.optionLabel}>{option.name}</span>
+              <div className={productStyles.swatchRow}>
+                {option.values.map(value => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => choose(option.name, value)}
+                    className={`${productStyles.chip} ${selection[option.name] === value ? productStyles.chipActive : ''}`}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className={productStyles.stockRow}>
+            <span className={`${productStyles.stockDot} ${stockCount === 0 ? productStyles.stockDotOut : ''}`} />
+            <span className={stockCount === 0 ? productStyles.stockOut : productStyles.stockIn}>
+              {stockCount === 0 ? 'Out of stock' : 'In stock'}
+            </span>
+          </div>
+
+          <div className={productStyles.actionsRow}>
+            <div className={productStyles.qtyStepper}>
+              <button
+                type="button"
+                className={productStyles.qtyBtn}
+                onClick={() => setQuantity(prev => (prev <= 1 ? prev : prev - 1))}
+                disabled={quantity <= 1}
+                aria-label="Decrease quantity"
+              >
+                –
+              </button>
+              <span className={productStyles.qtyValue}>{quantity}</span>
+              <button
+                type="button"
+                className={productStyles.qtyBtn}
+                onClick={() => setQuantity(prev => (prev < stockCount ? prev + 1 : prev))}
+                disabled={quantity >= stockCount}
+                aria-label="Increase quantity"
+              >
+                +
+              </button>
             </div>
 
             <button
+              type="button"
               onClick={handleAddToCart}
               disabled={pending || stockCount === 0}
-              className="add-to-cart-btn">
-              {stockCount === 0 ? 'OUT OF STOCK' : pending ? 'ADDING...' : 'ADD TO CART'}
+              className={productStyles.addToCartBtn}
+            >
+              {stockCount === 0 ? 'Out of stock' : pending ? 'Adding...' : 'Add to Cart'}
             </button>
 
             <button
@@ -247,52 +291,57 @@ const SingleProduct = ({ product, rating, related }: Props) => {
               disabled={wishlistPending || !variant}
               aria-label={saved ? 'Remove from wishlist' : 'Save to wishlist'}
               title={saved ? 'Remove from wishlist' : 'Save to wishlist'}
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                border: '1px solid #e2e2e2',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#fff',
-                color: saved ? '#cc0d39' : '#333',
-                cursor: wishlistPending || !variant ? 'default' : 'pointer',
-                flexShrink: 0,
-                marginLeft: 12,
-              }}>
+              className={homeStyles.btnCircle}
+            >
               <i
                 className={`heart-icon feather ${saved ? 'icon-heart-on dz-heart-fill' : 'icon-heart dz-heart'}`}
+                style={{ color: saved ? '#a9714a' : 'inherit' }}
               />
             </button>
           </div>
 
-          {message && <p className="product-cart-message">{message}</p>}
+          {message && <p className={productStyles.message}>{message}</p>}
 
-          {/* Description */}
-          <div className="product-description-container">
-            <p className="description-heading">DESCRIPTION</p>
-
-            <p>{product.description ?? product.short_description ?? ''}</p>
+          <div className={productStyles.descriptionBlock}>
+            <p className={productStyles.descriptionHeading}>Description</p>
+            <p className={productStyles.descriptionText}>{product.description ?? product.short_description ?? ''}</p>
           </div>
         </div>
       </div>
 
       {/* Similar Products */}
       {related.length > 0 && (
-        <div className="similiar-products-section">
-          <p className="similiar-products-heading">YOU MIGHT ALSO LIKE</p>
+        <div className={productStyles.relatedSection}>
+          <h2 className={homeStyles.h2} style={{ marginBottom: 32 }}>
+            You Might Also Like
+          </h2>
 
-          <div className="row gx-xl-4 g-3 mt-5 mb-5">
+          <div className={homeStyles.productGrid}>
             {related.map(item => (
-              <div className="col-12 col-sm-6 col-md-4 col-lg-4 col-xl-4" key={item.id}>
-                <ProductCard product={item} />
-              </div>
+              <Link key={item.id} href={`/single-product/${item.id}`} className={homeStyles.productCard}>
+                <div className={listingStyles.cardMedia}>
+                  {item.primary_image ? (
+                    <Image
+                      src={item.primary_image.url}
+                      alt={item.primary_image.alt_text ?? item.name}
+                      fill
+                      sizes="(max-width: 720px) 50vw, (max-width: 1080px) 33vw, 25vw"
+                      className={listingStyles.cardImg}
+                    />
+                  ) : (
+                    <div className={homeStyles.productMediaEmpty}>No image yet</div>
+                  )}
+                </div>
+                <p className={homeStyles.productName}>{item.name}</p>
+                <p className={homeStyles.productPrice}>
+                  {formatPriceRange(item.price_from, item.price_to, STOREFRONT_CURRENCY) || 'Price on request'}
+                </p>
+              </Link>
             ))}
           </div>
         </div>
       )}
-    </section>
+    </>
   );
 };
 
