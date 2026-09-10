@@ -1,0 +1,127 @@
+/*
+ * Wishlist page -- extends the same Zeen design system as the Product
+ * Listing page. Reuses Home.module.css (container/h2/pillOutline/btnCircle)
+ * and the Product Listing's own Listing.module.css (banner/crumb/subtitle,
+ * card media/name/price/swatch, mobile bottom nav) directly rather than
+ * redefining any of it; only what's genuinely different about a wishlist
+ * card -- a fixed 2-column grid at every width, and an always-visible
+ * Add to Cart + Remove action row instead of the listing card's
+ * desktop-hides-the-button behaviour -- lives here.
+ */
+
+.listingSection {
+  padding: 40px 0 88px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px 24px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.cardBody {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding-top: 14px;
+}
+
+.variant {
+  font-size: 12px;
+  color: var(--muted, #8b857e);
+  margin: 0 0 6px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: var(--ink, #1a1714);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.primaryBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #e7e2db);
+  background: #fff;
+  color: var(--ink, #1a1714);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+.secondaryBtn:hover:not(:disabled) {
+  border-color: var(--ink, #1a1714);
+}
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 100px 20px;
+  color: var(--muted, #8b857e);
+}
+.emptyState p {
+  font-size: 15px;
+  margin: 0 0 24px;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    gap: 20px 14px;
+  }
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .secondaryBtn {
+    width: 100%;
+  }
+  .listingSection {
+    padding-bottom: 96px;
+  }
+}
