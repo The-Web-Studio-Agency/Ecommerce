@@ -1,119 +1,85 @@
 import Link from 'next/link';
 
-import { formatDate, formatMoney } from '@/lib/format';
-import type { Order } from '@/types/orders';
+import { formatMoney } from '@/lib/format';
+import type { Order, PaymentProvider } from '@/types/orders';
 
-/** Confirmation for one placed order, rendered from the order itself. */
+import styles from './OrderSuccess.module.css';
+
+const PAYMENT_METHOD_LABELS: Record<PaymentProvider, string> = {
+  COD: 'Cash on Delivery',
+};
+
+function CheckIcon() {
+  return (
+    <svg className={styles.checkIcon} viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="21" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M15 24.5 21 30.5 33 17.5"
+        stroke="currentColor"
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * Order confirmation, rendered entirely from the real order the route
+ * loaded -- order number, total and payment method all come straight off
+ * `order`, nothing here is a placeholder.
+ */
 export default function OrderSuccess({ order }: { order: Order }) {
-  const money = (amount: string) => formatMoney(amount, order.currency);
+  const paymentLabel = order.payment ? PAYMENT_METHOD_LABELS[order.payment.provider] ?? order.payment.provider : '—';
 
   return (
-    <div className="order-success">
-      <div className="order-success-container">
-        {/* Success Icon */}
-        <div className="order-success-icon">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="11" stroke="currentColor" strokeWidth="1.5" />
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <CheckIcon />
 
-            <path
-              d="M7.5 12.5L10.3 15.3L16.5 9"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-
-        {/* Heading */}
-        <h1 className="order-success-title">Order placed successfully</h1>
-
-        <p className="order-success-subtext">
-          {"Thank you for your purchase. Your order is "}{order.status.toLowerCase()}.
+        <h1 className={styles.heading}>Order Placed Successfully</h1>
+        <p className={styles.thanks}>Thank you for your order!</p>
+        <p className={styles.subtext}>
+          Your order has been successfully placed. We&apos;ll keep you updated on your order status.
         </p>
 
-        {/* Order Information */}
-        <div className="order-success-meta">
-          <div className="order-success-meta-item">
-            <span className="order-success-meta-label">Order ID</span>
-
-            <span className="order-success-meta-value">{order.order_number}</span>
+        <div className={styles.infoCard}>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Order Number</span>
+            <span className={styles.infoValue}>#{order.order_number}</span>
           </div>
-
-          <div className="order-success-meta-item">
-            <span className="order-success-meta-label">Placed on</span>
-
-            <span className="order-success-meta-value">{formatDate(order.created_at)}</span>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Total Amount</span>
+            <span className={styles.infoValue}>{formatMoney(order.total_amount, order.currency)}</span>
           </div>
-        </div>
-
-        {/* Order Summary */}
-        <div className="order-success-summary">
-          <h2 className="order-success-summary-title">Order Summary</h2>
-
-          <ul className="order-success-items">
-            {order.items.map(item => (
-              <li key={item.variant_id} className="order-success-item">
-                <div className="order-success-item-info">
-                  <p className="order-success-item-title">{item.product_name}</p>
-
-                  <p className="order-success-item-meta">{item.variant_name}</p>
-
-                  <p className="order-success-item-meta">Qty: {item.quantity}</p>
-                </div>
-
-                <div className="order-success-item-price">{money(item.subtotal)}</div>
-              </li>
-            ))}
-          </ul>
-
-          {/* Totals */}
-          <div className="order-success-totals">
-            <div className="order-success-totals-row">
-              <span>Subtotal</span>
-
-              <span>{money(order.subtotal)}</span>
-            </div>
-
-            {Number(order.discount_amount) > 0 && (
-              <div className="order-success-totals-row">
-                <span>Discount{order.coupon_code ? ` (${order.coupon_code})` : ''}</span>
-
-                <span>−{money(order.discount_amount)}</span>
-              </div>
-            )}
-
-            <div className="order-success-totals-row">
-              <span>Shipping</span>
-
-              <span>{Number(order.shipping_amount) === 0 ? 'Free' : money(order.shipping_amount)}</span>
-            </div>
-
-            <div className="order-success-totals-row">
-              <span>Tax</span>
-
-              <span>{money(order.tax_amount)}</span>
-            </div>
-          </div>
-
-          {/* Final Total */}
-          <div className="order-success-total-row">
-            <span>Total Paid</span>
-
-            <span>{money(order.total_amount)}</span>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Payment Method</span>
+            <span className={styles.infoValue}>{paymentLabel}</span>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="order-success-actions">
-          <Link href={`/invoice/${order.id}`} className="order-success-button order-success-button-primary">
-            View Invoice
+        <div className={styles.actions}>
+          <Link href={`/invoice/${order.id}`} className={styles.primaryBtn}>
+            View My Order
+            <ArrowIcon />
           </Link>
-
-          <Link href="/" className="order-success-button order-success-button-secondary">
+          <Link href="/shop-standard" className={styles.secondaryBtn}>
             Continue Shopping
           </Link>
         </div>
+
+        <p className={styles.caption}>
+          Thank you for shopping with ZEEN
+          <span className={styles.captionRule} />
+        </p>
       </div>
     </div>
   );
