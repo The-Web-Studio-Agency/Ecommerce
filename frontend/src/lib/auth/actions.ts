@@ -136,6 +136,6 @@ export async function deleteAccount(): Promise<void> {
  * link to a sign-in that lands on their own domain afterwards.
  */
 function safeRedirect(target: string): string {
-  if (!target.startsWith('/') || target.startsWith('//')) return '/my-account';
+  if (!target.startsWith('/') || target.startsWith('//')) return '/';
   return target;
 }

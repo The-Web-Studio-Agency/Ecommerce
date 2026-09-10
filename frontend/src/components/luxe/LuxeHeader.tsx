@@ -3,8 +3,6 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { useAuth } from '@/context/AuthContext';
-
 import styles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
 import {
   BagIcon,
@@ -12,8 +10,9 @@ import {
   CloseIcon,
   MenuIcon,
   SearchIcon,
-  UserIcon,
 } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
+import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
+import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
 
 const NAV_LINKS = [
   { label: 'Shop', href: '/shop-list', chevron: true },
@@ -30,7 +29,6 @@ const NAV_LINKS = [
  */
 export default function LuxeHeader() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { isSignedIn } = useAuth();
 
   return (
     <header className={styles.header}>
@@ -56,15 +54,10 @@ export default function LuxeHeader() {
           <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
             <SearchIcon />
           </Link>
-          <Link
-            href={isSignedIn ? '/my-account' : '/signin'}
-            className={styles.headerIconBtn}
-            aria-label={isSignedIn ? 'My account' : 'Sign in'}>
-            <UserIcon />
-          </Link>
-          <Link href="/cart-items" className={styles.cartPill}>
-            <span>My Cart</span>
-            <BagIcon />
+          <LuxeAccountNav />
+          <LuxeWishlistButton />
+          <Link href="/cart-items" className={styles.headerRoundBtn} aria-label="My cart">
+            <BagIcon size={17} />
           </Link>
           <button
             type="button"

@@ -4,7 +4,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 
-import { useAuth } from '@/context/AuthContext';
+import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
+import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
@@ -27,7 +28,6 @@ import {
   StarIcon,
   TikTokIcon,
   TruckIcon,
-  UserIcon,
   XSocialIcon,
 } from './Icons';
 
@@ -168,8 +168,6 @@ export default function HomeClient({
   categories: CategoryStorefront[];
   spotlightProduct: ProductStorefront | null;
 }) {
-  const { isSignedIn } = useAuth();
-
   // The catalogue drives the option lists, so they are read before the state
   // that has to be seeded from them.
   const sizeOption = spotlightProduct?.options.find(option => /size/i.test(option.name));
@@ -294,15 +292,10 @@ export default function HomeClient({
             <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
               <SearchIcon />
             </Link>
-            <Link
-              href={isSignedIn ? '/my-account' : '/signin'}
-              className={styles.headerIconBtn}
-              aria-label={isSignedIn ? 'My account' : 'Sign in'}>
-              <UserIcon />
-            </Link>
-            <Link href="/cart-items" className={styles.cartPill}>
-              <span>My Cart</span>
-              <BagIcon />
+            <LuxeAccountNav />
+            <LuxeWishlistButton />
+            <Link href="/cart-items" className={styles.headerRoundBtn} aria-label="My cart">
+              <BagIcon size={17} />
             </Link>
             <button
               type="button"
