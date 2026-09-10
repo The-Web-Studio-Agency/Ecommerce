@@ -11,7 +11,6 @@ import {
   StarIcon,
 } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
-import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { reviewApi } from '@/lib/api/reviews';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
@@ -19,6 +18,7 @@ import { formatMoney } from '@/lib/format';
 import type { WishlistItem } from '@/types/cart';
 import type { RatingSummary } from '@/types/reviews';
 
+import AddToBagModal from './AddToBagModal';
 import wishlistStyles from './Wishlist.module.css';
 
 interface Props {
@@ -31,9 +31,9 @@ interface Props {
  */
 export default function WishlistCard({ item }: Props) {
   const { removeItem, pending: wishlistPending } = useWishlist();
-  const { addToCart, pending: cartPending } = useCart();
 
   const [rating, setRating] = useState<RatingSummary | null>(null);
+  const [bagModalOpen, setBagModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,10 +68,6 @@ export default function WishlistCard({ item }: Props) {
     }
   }
 
-  async function handleAddToBag() {
-    await addToCart(item.variant_id, 1);
-    toast.success('Added to your bag');
-  }
 
   return (
     <div className={wishlistStyles.card}>
@@ -135,12 +131,13 @@ export default function WishlistCard({ item }: Props) {
       <button
         type="button"
         className={wishlistStyles.addToBagBtn}
-        onClick={handleAddToBag}
-        disabled={cartPending}
+        onClick={() => setBagModalOpen(true)}
       >
         <BagIcon size={14} />
-        {cartPending ? 'Adding…' : 'Add to Bag'}
+        Add to Bag
       </button>
+
+      {bagModalOpen && <AddToBagModal item={item} onClose={() => setBagModalOpen(false)} />}
     </div>
   );
 }
