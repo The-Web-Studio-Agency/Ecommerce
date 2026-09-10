@@ -1,21 +1,15 @@
 /*
  * Wishlist page -- extends the same Zeen design system as the Product
- * Listing page. Reuses Home.module.css (container/h2/pillOutline/btnCircle)
- * and the Product Listing's own Listing.module.css (banner/crumb/subtitle,
- * card media/wishlist-button/name/price) directly rather than redefining
- * any of it; only what's genuinely different about a wishlist card -- a
- * responsive grid, the star rating row and the single "Add to Bag" action --
- * lives here.
+ * Listing page. Reuses Home.module.css and Product Listing styles where
+ * possible; only wishlist-specific layout and actions are defined here.
  */
 
-.listingSection {
+ .listingSection {
   padding: 40px 0 88px;
 }
 
 .grid {
   display: grid;
-  /* Never 1-up, even on the narrowest phones -- see the max-width block
-     below for the compact 2-column mobile sizing this needs. */
   grid-template-columns: repeat(2, 1fr);
   gap: 14px 12px;
 }
@@ -29,11 +23,8 @@
 }
 
 /*
- * Wishlist's own compact, square media box -- applied alongside the Product
- * Listing's shared `.cardMedia` (background/overflow/etc stay reused) to
- * override just its taller 4:5 aspect ratio for this page only. `.card`
- * doubles the specificity so this wins regardless of stylesheet import
- * order, without touching the shared Listing.module.css other pages use.
+ * Compact square wishlist media.
+ * Overrides the taller product-listing media ratio for Wishlist only.
  */
 .card .media {
   aspect-ratio: 1 / 1;
@@ -45,6 +36,12 @@
   text-decoration: none;
   color: inherit;
   padding-top: 14px;
+}
+
+.variant {
+  font-size: 12px;
+  color: var(--muted, #8b857e);
+  margin: 0 0 6px;
 }
 
 .rating {
@@ -67,6 +64,70 @@
   color: var(--muted, #8b857e);
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: var(--ink, #1a1714);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #e7e2db);
+  background: #fff;
+  color: var(--ink, #1a1714);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  border-color: var(--ink, #1a1714);
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .addToBagBtn {
   display: flex;
   align-items: center;
@@ -83,10 +144,12 @@
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
+
 .addToBagBtn:hover:not(:disabled) {
   background: var(--ink, #1a1714);
   color: #fff;
 }
+
 .addToBagBtn:disabled {
   opacity: 0.5;
   cursor: default;
@@ -97,36 +160,51 @@
   padding: 100px 20px;
   color: var(--muted, #8b857e);
 }
+
 .emptyState p {
   font-size: 15px;
   margin: 0 0 24px;
 }
 
+/* Tablet / iPad */
 @media (min-width: 640px) {
   .grid {
-    /* Tablet/iPad: 2 up, same as mobile, just with more breathing room. */
     grid-template-columns: repeat(2, 1fr);
     gap: 20px 18px;
   }
 }
 
+/* Desktop */
 @media (min-width: 1024px) {
   .grid {
-    /* Desktop: at least 3 up. */
     grid-template-columns: repeat(3, 1fr);
     gap: 24px 20px;
   }
 }
 
+/* Large desktop */
 @media (min-width: 1440px) {
   .grid {
-    /* Comfortably wide desktops get a 4th column rather than 3 stretched,
-       oversized cards -- still >= the required minimum of 3. */
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
+/* Mobile */
 @media (max-width: 639.98px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 14px;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .secondaryBtn {
+    width: 100%;
+  }
+
   .listingSection {
     padding-bottom: 96px;
   }
