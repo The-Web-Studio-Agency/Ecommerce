@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useState } from 'react';
+import { toast } from 'react-toastify';
 
 import { useCart } from '@/context/CartContext';
-import { placeOrder, previewCheckoutFor } from '@/lib/orders/actions';
+import { deleteAddress, placeOrder, previewCheckoutFor } from '@/lib/orders/actions';
 import { initialCheckoutState } from '@/lib/orders/state';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
@@ -13,9 +14,17 @@ import type { Address } from '@/types/addresses';
 import type { CheckoutPreview } from '@/types/orders';
 
 import AddressFormModal from './AddressFormModal';
+import DeleteConfirmModal from './DeleteConfirmModal';
 import styles from './Checkout.module.css';
 import CheckoutHeader from './CheckoutHeader';
 import OrderSummaryPanel from './OrderSummaryPanel';
+
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 // -----------------------------------
 // ICONS
@@ -25,6 +34,18 @@ function ChevronRightIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path
+        d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -93,6 +114,7 @@ function AddressSection({
   disabled,
   onSelect,
   onEdit,
+  onDeleteRequest,
   onAddNew,
 }: {
   addresses: Address[];
@@ -100,13 +122,13 @@ function AddressSection({
   disabled: boolean;
   onSelect: (id: string) => void;
   onEdit: (address: Address) => void;
+  onDeleteRequest: (address: Address) => void;
   onAddNew: () => void;
 }) {
   return (
     <section>
       <div className={styles.sectionHeader}>
         <div className={styles.sectionTitleGroup}>
-          <span className={styles.stepNumber}>1</span>
           <h2 className={styles.sectionTitle}>Delivery Address</h2>
         </div>
         <Link href="/account-address" className={styles.manageLink}>
@@ -145,14 +167,24 @@ function AddressSection({
                   </p>
                   <p className={styles.addressLine}>{address.phone}</p>
                 </div>
-                <button
-                  type="button"
-                  className={styles.addressEdit}
-                  onClick={() => onEdit(address)}
-                  disabled={disabled}>
-                  Edit
-                  <ChevronRightIcon />
-                </button>
+                <div className={styles.addressActions}>
+                  <button
+                    type="button"
+                    className={styles.addressEdit}
+                    onClick={() => onEdit(address)}
+                    disabled={disabled}>
+                    Edit
+                    <ChevronRightIcon />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.addressDelete}
+                    onClick={() => onDeleteRequest(address)}
+                    disabled={disabled}
+                    aria-label={`Delete address: ${address.full_name}`}>
+                    <TrashIcon />
+                  </button>
+                </div>
               </div>
             );
           })
@@ -177,7 +209,6 @@ function ShippingSection({ preview }: { preview: CheckoutPreview | null }) {
     <section>
       <div className={styles.sectionHeader}>
         <div className={styles.sectionTitleGroup}>
-          <span className={styles.stepNumber}>2</span>
           <h2 className={styles.sectionTitle}>Shipping Method</h2>
         </div>
       </div>
@@ -223,7 +254,6 @@ function PaymentSection() {
     <section>
       <div className={styles.sectionHeader}>
         <div className={styles.sectionTitleGroup}>
-          <span className={styles.stepNumber}>3</span>
           <h2 className={styles.sectionTitle}>Payment Method</h2>
         </div>
       </div>
@@ -304,17 +334,6 @@ function PaymentSection() {
 // CHECKOUT
 // -----------------------------------
 
-/**
- * The checkout page.
- *
- * Line items and their images come from `CartContext` (the real, backend
- * held cart); pricing (subtotal/discount/shipping/tax/total) comes from
- * `CheckoutPreview`, re-fetched whenever a coupon is applied or removed via
- * `previewCheckoutFor` -- the backend re-validates the coupon against the
- * real cart every time, so nothing about money is computed here. Only the
- * chosen address, coupon code and a stable idempotency key are ever sent to
- * `placeOrder`; the backend computes and charges everything else.
- */
 export default function Checkout({
   initialAddresses,
   initialPreview,
@@ -342,11 +361,14 @@ export default function Checkout({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
 
+  // Address Deletion state
+  const [addressToDelete, setAddressToDelete] = useState<Address | null>(null);
+
   const [couponInput, setCouponInput] = useState('');
   const [couponPending, setCouponPending] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
 
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(generateIdempotencyKey);
   const [placeState, placeFormAction, placePending] = useActionState(placeOrder, initialCheckoutState);
 
   async function handleApplyCoupon() {
@@ -387,10 +409,30 @@ export default function Checkout({
 
   function handleAddressSaved() {
     setModalOpen(false);
-    // `saveAddress`/`updateAddress` already revalidated `/check-out` on the
-    // server; `router.refresh()` re-runs this page's server component so
-    // the fresh address list flows back down as props (same pattern
-    // `CartContext` uses after a mutation), without a full page reload.
+    router.refresh();
+  }
+
+  function handleConfirmDeleteAddress(address: Address) {
+    setAddressToDelete(address);
+  }
+
+  async function executeDeleteAddress() {
+    if (!addressToDelete) return;
+    const targetAddress = addressToDelete;
+    setAddressToDelete(null);
+
+    const formData = new FormData();
+    formData.set('address_id', targetAddress.id);
+
+    const result = await deleteAddress(initialCheckoutState, formData);
+
+    if (result.status === 'error') {
+      toast.error(result.message ?? 'Could not delete that address.');
+      return;
+    }
+
+    toast.info('Address removed');
+    if (selectedAddressId === targetAddress.id) setSelectedAddressId(null);
     router.refresh();
   }
 
@@ -428,6 +470,7 @@ export default function Checkout({
               disabled={placePending}
               onSelect={setSelectedAddressId}
               onEdit={openEditModal}
+              onDeleteRequest={handleConfirmDeleteAddress}
               onAddNew={openAddModal}
             />
             <ShippingSection preview={preview} />
@@ -454,6 +497,14 @@ export default function Checkout({
 
       {modalOpen && (
         <AddressFormModal address={editingAddress} onClose={() => setModalOpen(false)} onSaved={handleAddressSaved} />
+      )}
+
+      {addressToDelete && (
+        <DeleteConfirmModal
+          message={`Are you sure you want to delete the address "${addressToDelete.full_name}"?`}
+          onConfirm={executeDeleteAddress}
+          onCancel={() => setAddressToDelete(null)}
+        />
       )}
     </div>
   );

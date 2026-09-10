@@ -199,6 +199,13 @@
   line-height: 1.5;
 }
 
+.addressActions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .addressEdit {
   flex-shrink: 0;
   display: flex;
@@ -211,6 +218,32 @@
   border: none;
   cursor: pointer;
   padding: 4px;
+}
+
+.addressDelete {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: #9a958f;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.addressDelete:hover:not(:disabled) {
+  color: #b42318;
+  background: #fdecec;
+}
+
+.addressDelete:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .addAddressBtn {
@@ -873,4 +906,60 @@
   .itemCount {
     display: none;
   }
+}
+
+
+/* Coupon list link */
+.viewCouponsLink {
+  background: none;
+  border: none;
+  color: #1a1a1a;
+  text-decoration: underline;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  padding: 0;
+  display: inline-block;
+}
+
+/* Modal Coupon List Styles */
+.couponList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.couponCardItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px dashed #d8d3ca;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #faf8f5;
+}
+
+.couponCodeText {
+  font-size: 15px;
+  color: #1a1a1a;
+  letter-spacing: 0.05em;
+}
+
+.couponDescText {
+  font-size: 12.5px;
+  color: #6f6a64;
+  margin: 2px 0 0;
+}
+
+.couponSelectBtn {
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
 }

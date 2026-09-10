@@ -10,6 +10,13 @@ import type { CheckoutPreview } from '@/types/orders';
 
 import styles from './Checkout.module.css';
 
+// Mock list of available coupons (Replace or connect with backend API as required)
+const AVAILABLE_COUPONS = [
+  { code: 'WELCOME10', description: 'Get 10% off on your first purchase' },
+  { code: 'FREESHIP', description: 'Free shipping on orders above ₹499' },
+  { code: 'FESTIVE20', description: '20% discount on all orders' },
+];
+
 function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
@@ -89,15 +96,6 @@ function SupportIcon() {
   );
 }
 
-/**
- * Items + coupon + totals + trust badges + Place Order, all in one panel.
- *
- * The reference stacks this as a single mobile column (with its own numbered
- * "4"/"5" headings) and as a sticky sidebar on desktop (numbers gone, coupon
- * nested under a collapsible toggle, a trust-badges card added). Rather than
- * two components, this renders once and lets `Checkout.module.css` show the
- * right pieces per breakpoint -- see the CSS file's comments.
- */
 export default function OrderSummaryPanel({
   cartItems,
   preview,
@@ -124,19 +122,22 @@ export default function OrderSummaryPanel({
   placeOrderError: string | null;
 }) {
   const [couponOpen, setCouponOpen] = useState(true);
+  const [couponsModalOpen, setCouponsModalOpen] = useState(false);
 
   const appliedCode = preview?.coupon_code ?? null;
   const discount = preview ? Number(preview.discount_amount) : 0;
   const shippingAmount = preview ? Number(preview.shipping_amount) : 0;
 
+  function selectCoupon(code: string) {
+    onCouponInputChange(code);
+    setCouponsModalOpen(false);
+  }
+
   return (
     <>
       <div className={styles.summaryCard}>
         <div className={styles.summaryHeader}>
-          <p className={styles.summaryTitle}>
-            <span className={`${styles.stepNumber} ${styles.stepNumberMobileOnly}`}>5</span>
-            Order Summary
-          </p>
+          <p className={styles.summaryTitle}>Order Summary</p>
           <span className={styles.itemCount}>
             {cartItems.length} {cartItems.length === 1 ? 'item' : 'items'}
           </span>
@@ -163,7 +164,6 @@ export default function OrderSummaryPanel({
 
         <div className={styles.couponSection}>
           <div className={styles.couponMobileHeader}>
-            <span className={styles.stepNumber}>4</span>
             <p className={styles.sectionTitle}>Apply Coupon</p>
           </div>
 
@@ -176,23 +176,32 @@ export default function OrderSummaryPanel({
           </button>
 
           {couponOpen && !appliedCode && (
-            <div className={styles.couponForm}>
-              <input
-                type="text"
-                placeholder="Enter coupon code"
-                className={styles.couponInput}
-                value={couponInput}
-                disabled={couponPending}
-                onChange={event => onCouponInputChange(event.target.value.toUpperCase())}
-              />
+            <>
+              <div className={styles.couponForm}>
+                <input
+                  type="text"
+                  placeholder="Enter coupon code"
+                  className={styles.couponInput}
+                  value={couponInput}
+                  disabled={couponPending}
+                  onChange={event => onCouponInputChange(event.target.value.toUpperCase())}
+                />
+                <button
+                  type="button"
+                  className={styles.couponApplyBtn}
+                  disabled={couponPending || !couponInput.trim()}
+                  onClick={onApplyCoupon}>
+                  {couponPending ? 'Checking…' : 'Apply'}
+                </button>
+              </div>
+
               <button
                 type="button"
-                className={styles.couponApplyBtn}
-                disabled={couponPending || !couponInput.trim()}
-                onClick={onApplyCoupon}>
-                {couponPending ? 'Checking…' : 'Apply'}
+                className={styles.viewCouponsLink}
+                onClick={() => setCouponsModalOpen(true)}>
+                View Available Coupons
               </button>
-            </div>
+            </>
           )}
 
           {couponError && <p className={styles.couponError}>{couponError}</p>}
@@ -295,6 +304,40 @@ export default function OrderSummaryPanel({
         <LockIcon />
         Your payment information is secure and encrypted.
       </p>
+
+      {/* Available Coupons Modal */}
+      {couponsModalOpen && (
+        <div className={styles.modalOverlay} onClick={() => setCouponsModalOpen(false)}>
+          <div className={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>Available Coupons</h2>
+              <button
+                type="button"
+                className={styles.modalCloseBtn}
+                onClick={() => setCouponsModalOpen(false)}
+                aria-label="Close">
+                <CloseIcon />
+              </button>
+            </div>
+            <div className={styles.couponList}>
+              {AVAILABLE_COUPONS.map(coupon => (
+                <div key={coupon.code} className={styles.couponCardItem}>
+                  <div>
+                    <strong className={styles.couponCodeText}>{coupon.code}</strong>
+                    <p className={styles.couponDescText}>{coupon.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.couponSelectBtn}
+                    onClick={() => selectCoupon(coupon.code)}>
+                    Apply
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
