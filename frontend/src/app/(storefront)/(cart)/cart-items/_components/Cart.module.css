@@ -1,42 +1,32 @@
-.page {
-  background: #faf8f5;
-  min-height: 60vh;
-  padding: 32px 0 48px;
-}
+/*
+ * Cart page -- extends the same Zeen design system as Home/Product
+ * Listing/Wishlist (Home.module.css tokens + the Listing page's banner/
+ * breadcrumb, both reused directly in Cart.tsx). Only what's genuinely
+ * cart-specific -- the row layout, qty stepper, order summary -- is
+ * defined here, same split as Wishlist.module.css.
+ */
 
-@media (max-width: 991.98px) {
-  .page {
-    padding-bottom: 96px; /* clears the fixed mobile bottom nav */
-  }
-}
-
-.container {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-.heading {
-  font-size: 32px;
-  font-weight: 700;
-  margin: 0 0 6px;
-  color: #1a1a1a;
-}
-
-.subtitle {
-  font-size: 15px;
-  color: #8a8580;
-  margin: 0 0 28px;
+.cartSection {
+  padding: 8px 0 88px;
 }
 
 .error {
   background: #fdecec;
   color: #b42318;
-  border-radius: 10px;
+  border-radius: var(--radius-sm, 10px);
   padding: 10px 14px;
   font-size: 14px;
   margin-bottom: 20px;
 }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+/* -------------------------------- list / rows -------------------------------- */
 
 .list {
   display: flex;
@@ -45,9 +35,9 @@
 
 .row {
   display: flex;
-  gap: 18px;
-  padding: 28px 0;
-  border-bottom: 1px solid #e7e2da;
+  gap: 16px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--line, #e7e2db);
 }
 
 .row:first-child {
@@ -57,18 +47,30 @@
 .thumb {
   position: relative;
   flex-shrink: 0;
-  width: 110px;
-  /* Reference crops each product photo near-square, not the tall portrait
-     box the rest of the storefront uses -- fixed width + 1:1 keeps that
-     regardless of the source image's own aspect ratio. */
+  display: block;
+  width: 96px;
   aspect-ratio: 1 / 1;
-  border-radius: 10px;
+  border-radius: var(--radius-md, 16px);
   overflow: hidden;
-  background: #eee;
+  background: var(--card, #f4f1ec);
 }
 
+/* `contain`, not `cover` -- this is the shopper's own chosen photo, so the
+   whole thing stays visible rather than being cropped to fill the box. */
 .thumb img {
-  object-fit: cover;
+  object-fit: contain;
+}
+
+.thumbEmpty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--muted, #8b857e);
+  text-align: center;
+  padding: 8px;
 }
 
 .info {
@@ -76,7 +78,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .infoTop {
@@ -87,9 +89,9 @@
 }
 
 .name {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink, #1a1714);
   margin: 0 0 2px;
 }
 
@@ -99,8 +101,15 @@
 }
 
 .variant {
+  font-size: 12.5px;
+  color: var(--muted, #8b857e);
+  margin: 0;
+}
+
+.price {
   font-size: 14px;
-  color: #9a958f;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
   margin: 0;
 }
 
@@ -108,10 +117,15 @@
   border: none;
   background: none;
   padding: 4px;
-  color: #1a1a1a;
+  color: var(--muted, #8b857e);
   cursor: pointer;
   line-height: 1;
   flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.removeBtn:hover:not(:disabled) {
+  color: var(--ink, #1a1714);
 }
 
 .removeBtn:disabled {
@@ -128,33 +142,11 @@
   flex-shrink: 0;
 }
 
-/* Desktop/tablet-only right-hand cluster (qty, line total, remove) -- see
-   the `CartRow` comment in Cart.tsx for why this duplicates rather than
-   repositions the mobile qty stepper and remove button. */
-.desktopMeta {
-  display: none;
-}
-
-.lineTotal {
-  font-size: 19px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.price {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0;
-}
-
 .qtyStepper {
   display: inline-flex;
   align-items: center;
-  gap: 18px;
-  border: 1px solid #d8d3ca;
+  gap: 16px;
+  border: 1px solid var(--line, #e7e2db);
   border-radius: 999px;
   padding: 6px 16px;
   width: fit-content;
@@ -163,12 +155,12 @@
 .qtyStepper button {
   border: none;
   background: none;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
-  color: #1a1a1a;
+  color: var(--ink, #1a1714);
   cursor: pointer;
   padding: 0;
-  width: 16px;
+  width: 14px;
 }
 
 .qtyStepper button:disabled {
@@ -177,26 +169,42 @@
 }
 
 .qtyStepper span {
-  font-size: 15px;
+  font-size: 14px;
   min-width: 14px;
   text-align: center;
 }
 
-.clearCartRow {
-  margin-top: 24px;
+/* Desktop/tablet-only right-hand cluster (qty, line total, remove) -- one
+   copy shown at a time via the breakpoint below, matching the mobile
+   stacked qty/price/X it replaces rather than reflowing the same nodes. */
+.desktopMeta {
+  display: none;
+}
+
+.lineTotal {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
+  margin: 0;
+  white-space: nowrap;
 }
 
 .clearCartBtn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  align-self: flex-start;
   border: none;
   background: none;
-  color: #4a4540;
-  font-size: 15px;
-  text-decoration: underline;
+  color: var(--muted, #8b857e);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  padding: 0;
+  padding: 20px 0 0;
+}
+
+.clearCartBtn:hover:not(:disabled) {
+  color: var(--ink, #1a1714);
 }
 
 .clearCartBtn:disabled {
@@ -204,143 +212,108 @@
   cursor: default;
 }
 
-.checkoutBar {
+/* -------------------------------- order summary -------------------------------- */
+
+.summary {
+  border: 1px solid var(--line, #e7e2db);
+  border-radius: var(--radius-md, 16px);
+  padding: 24px;
+}
+
+.summaryTitle {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
+  margin: 0 0 18px;
+}
+
+.summaryRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  background: #1a1a1a;
-  color: #fff;
-  border-radius: 16px;
-  padding: 20px 24px;
-  margin-top: 40px;
-  text-decoration: none;
-  transition: opacity 0.15s ease;
+  font-size: 14px;
+  color: var(--ink-soft, #55504b);
+  padding: 8px 0;
 }
 
-.checkoutBar:hover {
-  opacity: 0.9;
-  color: #fff;
+.discountValue {
+  color: var(--rust, #a9714a);
 }
 
-.checkoutLabel {
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.checkoutRight {
+.summaryTotalRow {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  padding-top: 16px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line, #e7e2db);
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--ink, #1a1714);
 }
+
+.checkoutBtn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 20px;
+  padding: 15px 26px;
+}
+
+/* -------------------------------- empty state -------------------------------- */
 
 .empty {
   text-align: center;
-  padding: 80px 20px 64px;
+  padding: 72px 20px;
 }
 
 .emptyIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 88px;
-  height: 88px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
-  background: #f0ece5;
-  color: #9a958f;
-  margin-bottom: 24px;
+  background: var(--card, #f4f1ec);
+  color: var(--muted, #8b857e);
+  margin-bottom: 22px;
 }
 
 .emptyHeading {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
   margin: 0 0 8px;
 }
 
 .emptyText {
-  font-size: 15px;
-  color: #8a8580;
-  margin: 0 0 28px;
+  font-size: 14px;
+  color: var(--muted, #8b857e);
+  margin: 0 0 26px;
 }
 
-.continueBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: #1a1a1a;
-  color: #fff;
-  padding: 14px 32px;
-  border-radius: 999px;
-  text-decoration: none;
-  font-size: 15px;
-  font-weight: 500;
-}
+/* -------------------------------- responsive -------------------------------- */
 
-.continueBtn:hover {
-  color: #fff;
-  opacity: 0.9;
-}
-
-@media (max-width: 380px) {
-  /* At the narrowest phone widths "Proceed to Checkout" + the total needs
-     tighter padding and a smaller label to stay on one line, matching the
-     reference instead of wrapping mid-word. */
-  .checkoutBar {
-    padding: 18px 18px;
-    gap: 8px;
-  }
-  .checkoutLabel {
-    font-size: 14px;
-  }
-  .checkoutRight {
-    font-size: 15px;
-    gap: 10px;
-  }
-}
-
-/* Tablet/desktop reference: one row per item -- image, name/variant/price,
-   then qty, line total and remove lined up on the right -- instead of the
-   phone's stacked layout. Breakpoint matches MobileBottomNav's, so the row
-   layout and the bottom tab bar switch together. */
 @media (min-width: 992px) {
-  .container {
-    max-width: 1180px;
-    padding: 0 60px;
-  }
-
-  .heading {
-    font-size: 40px;
-  }
-
-  .subtitle {
-    font-size: 16px;
-    margin-bottom: 36px;
+  .layout {
+    grid-template-columns: 1.7fr 1fr;
+    gap: 40px;
   }
 
   .row {
     align-items: center;
-    gap: 28px;
-    padding: 32px 0;
+    gap: 24px;
   }
 
   .thumb {
-    width: 140px;
+    width: 130px;
   }
 
   .name {
-    font-size: 19px;
-  }
-
-  .variant {
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .price {
-    font-size: 17px;
+    font-size: 15px;
   }
 
   .qtyStepperMobile,
@@ -351,7 +324,18 @@
   .desktopMeta {
     display: flex;
     align-items: center;
-    gap: 40px;
+    gap: 32px;
     flex-shrink: 0;
+  }
+
+  .summary {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .cartSection {
+    padding-bottom: 96px; /* clears the fixed mobile bottom nav */
   }
 }

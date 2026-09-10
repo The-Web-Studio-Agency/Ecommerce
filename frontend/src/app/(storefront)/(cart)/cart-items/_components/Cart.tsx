@@ -4,6 +4,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
 
+import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
+import { BagIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
+// Reused from the Product Listing page -- same breadcrumb/heading banner
+// every luxe page opens with (see ShopWishList for the identical pattern).
+import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import { useCart } from '@/context/CartContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
@@ -63,7 +68,7 @@ function RemoveButton({
       disabled={disabled}
       onClick={() => onRemove(item.id)}
       aria-label={`Remove ${item.product_name} from cart`}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M5 5l14 14M19 5 5 19" strokeLinecap="round" />
       </svg>
     </button>
@@ -71,14 +76,19 @@ function RemoveButton({
 }
 
 /**
- * Below `md` this renders as the reference's stacked phone layout: image,
- * then name/variant/price/qty stacked underneath with the remove "X" at top
- * right. At `md` and up the reference switches to a single row -- image,
- * name/variant/price, then quantity, line total and remove lined up on the
- * right -- so `.desktopMeta` duplicates the qty stepper and remove button
- * or that row (CSS shows exactly one copy of each at a time; see
- * Cart.module.css) rather than reflowing the same nodes, which CSS alone
- * can't do across a breakpoint that also regroups the surrounding markup.
+ * Below `md` this renders as a stacked row: image, then name/variant/price/
+ * qty stacked underneath with the remove "X" at top right. At `md` and up
+ * it switches to a single row -- image, name/variant/price, then quantity,
+ * line total and remove lined up on the right -- so `.desktopMeta`
+ * duplicates the qty stepper and remove button for that row (CSS shows
+ * exactly one copy of each at a time; see Cart.module.css) rather than
+ * reflowing the same nodes, which CSS alone can't do across a breakpoint
+ * that also regroups the surrounding markup.
+ *
+ * The image box uses `object-fit: contain` rather than the Product Listing
+ * grid's `cover` crop -- a cart line is the shopper's own chosen item, not
+ * a browsing tile, so the whole photo stays visible instead of being cropped
+ * to fill a fixed box.
  */
 function CartRow({
   item,
@@ -93,16 +103,18 @@ function CartRow({
 }) {
   return (
     <div className={styles.row}>
-      <div className={styles.thumb}>
-        {item.image && (
+      <Link href={`/single-product/${item.product_id}`} className={styles.thumb} aria-label={item.product_name}>
+        {item.image ? (
           <Image
             src={item.image.url}
             alt={item.image.alt_text ?? item.product_name}
             fill
             sizes="(min-width: 992px) 140px, 110px"
           />
+        ) : (
+          <div className={styles.thumbEmpty}>No image yet</div>
         )}
-      </div>
+      </Link>
 
       <div className={styles.info}>
         <div className={styles.infoTop}>
@@ -143,7 +155,10 @@ function CartRow({
  *
  * All data comes from CartContext, the same real, backend-held cart the
  * header badge and every "Add to Cart" button already use -- there is no
- * separate fetch or mock data here.
+ * separate fetch or mock data here. Restyled to the same Zeen design system
+ * as Home/Product Listing/Wishlist (their shared header/footer/mobile nav,
+ * `Home.module.css` tokens and the Listing page's banner/breadcrumb), not
+ * just a visual approximation of it.
  */
 export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
   const { cart, items, pending, error, updateQuantity, removeFromCart, clearCart } = useCart();
@@ -162,65 +177,117 @@ export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
   const total = preview ? preview.total_amount : cart.subtotal;
 
   return (
-    <div className={styles.page}>
-      <div className={styles.container}>
-        <h1 className={styles.heading}>My Cart</h1>
-        <p className={styles.subtitle}>Review your items before checkout</p>
+    // Scoped to `homeStyles.page` so the reused Home/Listing classes below
+    // (crumb, h2, pill, --ink/--line/etc tokens) render correctly, without
+    // wrapping -- or restyling -- the page's own header/footer.
+    <div className={homeStyles.page}>
+      <section className={listingStyles.banner}>
+        <div className={homeStyles.container}>
+          <p className={listingStyles.crumb}>
+            <Link href="/">Home</Link>
+            <span>/</span>
+            <span aria-current="page">Cart</span>
+          </p>
+          <h1 className={homeStyles.h2}>My Cart</h1>
+          <p className={listingStyles.subtitle}>
+            {items.length === 0
+              ? 'Your cart is empty.'
+              : `${items.length} item${items.length === 1 ? '' : 's'} in your cart.`}
+          </p>
+        </div>
+      </section>
 
-        {error && <div className={styles.error}>{error}</div>}
+      <section className={styles.cartSection}>
+        <div className={homeStyles.container}>
+          {error && <div className={styles.error}>{error}</div>}
 
-        {items.length === 0 ? (
-          <div className={styles.empty}>
-            <div className={styles.emptyIcon}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
-                <path d="M6 8h12l1 12.5a1 1 0 0 1-1 1.5H6a1 1 0 0 1-1-1.5L6 8Z" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M9 8V6a3 3 0 0 1 6 0v2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+          {items.length === 0 ? (
+            <div className={styles.empty}>
+              <div className={styles.emptyIcon}>
+                <BagIcon size={30} />
+              </div>
+              <p className={styles.emptyHeading}>Your cart is empty</p>
+              <p className={styles.emptyText}>Looks like you haven&apos;t added anything yet.</p>
+              <Link href="/shop-list" className={homeStyles.pillOutline}>
+                Continue Shopping
+              </Link>
             </div>
-            <p className={styles.emptyHeading}>Your cart is empty</p>
-            <p className={styles.emptyText}>Looks like you haven&apos;t added anything yet.</p>
-            <Link href="/shop-standard" className={styles.continueBtn}>
-              Continue Shopping
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className={styles.list}>
-              {items.map(item => (
-                <CartRow
-                  key={item.id}
-                  item={item}
-                  disabled={pending}
-                  onQtyChange={updateQuantity}
-                  onRemove={handleRemove}
-                />
-              ))}
-            </div>
+          ) : (
+            <div className={styles.layout}>
+              <div className={styles.list}>
+                {items.map(item => (
+                  <CartRow
+                    key={item.id}
+                    item={item}
+                    disabled={pending}
+                    onQtyChange={updateQuantity}
+                    onRemove={handleRemove}
+                  />
+                ))}
 
-            <div className={styles.clearCartRow}>
-              <button type="button" className={styles.clearCartBtn} disabled={pending} onClick={handleClearCart}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Clear Cart
-              </button>
-            </div>
+                <button type="button" className={styles.clearCartBtn} disabled={pending} onClick={handleClearCart}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <path
+                      d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Clear Cart
+                </button>
+              </div>
 
-            <Link href="/check-out" className={styles.checkoutBar}>
-              <span className={styles.checkoutLabel}>Proceed to Checkout</span>
-              <span className={styles.checkoutRight}>
-                {formatMoney(total, STOREFRONT_CURRENCY)}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            </Link>
-          </>
-        )}
-      </div>
+              <div className={styles.summary}>
+                <h2 className={styles.summaryTitle}>Order Summary</h2>
+
+                <div className={styles.summaryRow}>
+                  <span>Subtotal</span>
+                  <span>{formatMoney(cart.subtotal, STOREFRONT_CURRENCY)}</span>
+                </div>
+
+                {preview && Number(preview.discount_amount) > 0 && (
+                  <div className={styles.summaryRow}>
+                    <span>Discount{preview.coupon_code ? ` (${preview.coupon_code})` : ''}</span>
+                    <span className={styles.discountValue}>
+                      − {formatMoney(preview.discount_amount, STOREFRONT_CURRENCY)}
+                    </span>
+                  </div>
+                )}
+
+                {preview && (
+                  <div className={styles.summaryRow}>
+                    <span>Shipping</span>
+                    <span>
+                      {Number(preview.shipping_amount) === 0
+                        ? 'Free'
+                        : formatMoney(preview.shipping_amount, STOREFRONT_CURRENCY)}
+                    </span>
+                  </div>
+                )}
+
+                {preview && (
+                  <div className={styles.summaryRow}>
+                    <span>Tax</span>
+                    <span>{formatMoney(preview.tax_amount, STOREFRONT_CURRENCY)}</span>
+                  </div>
+                )}
+
+                <div className={styles.summaryTotalRow}>
+                  <span>Total</span>
+                  <span>{formatMoney(total, STOREFRONT_CURRENCY)}</span>
+                </div>
+
+                <Link href="/check-out" className={`${homeStyles.pill} ${styles.checkoutBtn}`}>
+                  Proceed to Checkout
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
       <MobileBottomNav />
     </div>

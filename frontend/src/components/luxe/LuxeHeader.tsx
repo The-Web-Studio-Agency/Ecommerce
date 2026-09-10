@@ -13,6 +13,7 @@ import {
 } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
 import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
+import { useCart } from '@/context/CartContext';
 
 const NAV_LINKS = [
   { label: 'Shop', href: '/shop-list', chevron: true },
@@ -29,6 +30,7 @@ const NAV_LINKS = [
  */
 export default function LuxeHeader() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { itemCount } = useCart();
 
   return (
     <header className={styles.header}>
@@ -56,8 +58,16 @@ export default function LuxeHeader() {
           </Link>
           <LuxeAccountNav />
           <LuxeWishlistButton />
-          <Link href="/cart-items" className={styles.headerRoundBtn} aria-label="My cart">
+          <Link
+            href="/cart-items"
+            className={styles.headerRoundBtn}
+            aria-label={itemCount > 0 ? `Cart, ${itemCount} items` : 'My cart'}>
             <BagIcon size={17} />
+            {itemCount > 0 && (
+              <span className={styles.headerBadge} aria-hidden="true">
+                {itemCount > 99 ? '99+' : itemCount}
+              </span>
+            )}
           </Link>
           <button
             type="button"
