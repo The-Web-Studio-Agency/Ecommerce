@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { addressApi } from '@/lib/api/addresses';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
 import { checkoutApi, couponApi, orderApi } from '@/lib/api/orders';
-import { getAccessToken } from '@/lib/auth/session';
+import { getActionAccessToken } from '@/lib/auth/session';
 import type { CheckoutState } from '@/lib/orders/state';
 import type { CheckoutPreview } from '@/types/orders';
 
@@ -28,7 +28,7 @@ function toState(error: unknown): CheckoutState {
 }
 
 export async function saveAddress(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to continue.' };
 
   const payload = {
@@ -55,7 +55,7 @@ export async function saveAddress(_previous: CheckoutState, formData: FormData):
 }
 
 export async function deleteAddress(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to continue.' };
 
   try {
@@ -70,7 +70,7 @@ export async function deleteAddress(_previous: CheckoutState, formData: FormData
 
 /** Validates a code against the live cart and reports what it takes off. */
 export async function applyCoupon(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to continue.' };
 
   const code = String(formData.get('code') ?? '').trim();
@@ -94,7 +94,7 @@ export async function applyCoupon(_previous: CheckoutState, formData: FormData):
  * back rather than a second one being created.
  */
 export async function placeOrder(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to continue.' };
 
   const addressId = String(formData.get('address_id') ?? '');
@@ -121,7 +121,7 @@ export async function placeOrder(_previous: CheckoutState, formData: FormData): 
 }
 
 export async function cancelOrder(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to continue.' };
 
   const orderId = String(formData.get('order_id') ?? '');
@@ -149,7 +149,7 @@ export async function placeOrderWithAddress(
   _previous: CheckoutState,
   formData: FormData,
 ): Promise<CheckoutState> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to continue.' };
 
   const address = {
@@ -190,7 +190,7 @@ export async function placeOrderWithAddress(
 
 /** Re-price the cart, so an applied coupon shows its real effect. */
 export async function previewCheckout(couponCode: string | null): Promise<CheckoutPreview | null> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) return null;
 
   try {

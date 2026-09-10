@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { catalogueApi } from '@/lib/api/catalogue';
 import { wishlistApi } from '@/lib/api/cart';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
-import { getAccessToken } from '@/lib/auth/session';
+import { getActionAccessToken } from '@/lib/auth/session';
 import { getWishlist } from '@/lib/wishlist/read';
 import type { Wishlist } from '@/types/cart';
 
@@ -32,7 +32,7 @@ function toMessage(error: unknown): string {
  * client always renders the backend's own state rather than a local guess.
  */
 async function mutate(apply: (token: string) => Promise<Wishlist>): Promise<WishlistMutation> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) {
     return { wishlist: await getWishlist(), error: 'Sign in to save pieces to your wishlist.' };
   }
@@ -64,7 +64,7 @@ export async function removeWishlistItem(itemId: string): Promise<WishlistMutati
  * it there.
  */
 export async function toggleWishlistByProduct(productId: string): Promise<WishlistMutation> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
   if (!token) {
     return { wishlist: await getWishlist(), error: 'Sign in to save pieces to your wishlist.' };
   }

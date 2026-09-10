@@ -2,9 +2,9 @@ import { Metadata } from "next";
 import HomePage from "./(home)/home/page";
 
 export const metadata : Metadata = {
-  title: "Avera | Timeless Leather Handbags",
+  title: "Zeen | Women's Ethnic & Casual Wear",
   description:
-    "Avera crafts timeless leather handbags with exceptional craftsmanship, premium materials, and modern elegance. Discover the signature Lumière collection.",
+    "Zeen makes everyday and ethnic wear for women — churidars cut in considered fabrics with careful finishing and quiet modern ease.",
 };
 
 export default function Home() {

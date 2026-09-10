@@ -8,16 +8,16 @@ import { deleteReview, submitReview } from '@/lib/reviews/actions';
 import { formatDate } from '@/lib/format';
 import type { RatingSummary, Review } from '@/types/reviews';
 
+import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
+import productStyles from './luxe/Product.module.css';
+
 const initialState = { status: 'idle' as const, message: null as string | null };
 
 function Stars({ value }: { value: number }) {
   return (
-    <span className="single-product-rating" style={{ display: 'inline-flex' }}>
+    <span className={productStyles.stars}>
       {Array.from({ length: 5 }).map((_, index) => (
-        <i
-          key={index}
-          className={index < value ? 'fa-solid fa-star filled' : 'fa-regular fa-star'}
-        />
+        <i key={index} className={index < value ? 'fa-solid fa-star filled' : 'fa-regular fa-star'} />
       ))}
     </span>
   );
@@ -28,7 +28,7 @@ function StarPicker({ name, value, onChange }: { name: string; value: number; on
   const [hover, setHover] = useState(0);
 
   return (
-    <div onMouseLeave={() => setHover(0)} style={{ display: 'inline-flex', gap: 4, cursor: 'pointer' }}>
+    <div className={productStyles.starPicker} onMouseLeave={() => setHover(0)}>
       <input type="hidden" name={name} value={value} />
       {Array.from({ length: 5 }).map((_, index) => {
         const star = index + 1;
@@ -40,7 +40,6 @@ function StarPicker({ name, value, onChange }: { name: string; value: number; on
             onMouseEnter={() => setHover(star)}
             onClick={() => onChange(star)}
             className={filled ? 'fa-solid fa-star filled' : 'fa-regular fa-star'}
-            style={{ fontSize: 20 }}
           />
         );
       })}
@@ -58,30 +57,36 @@ function WriteReviewForm({ productId }: { productId: string }) {
   }, [state, router]);
 
   if (state.status === 'success') {
-    return <p className="product-cart-message">{state.message}</p>;
+    return <p className={productStyles.message}>{state.message}</p>;
   }
 
   return (
-    <form action={formAction} className="mt-4">
+    <form action={formAction} className={productStyles.reviewForm}>
       <input type="hidden" name="product_id" value={productId} />
 
-      <div className="mb-3">
-        <p className="mb-2">Your rating</p>
+      <div className={productStyles.formField}>
+        <p>Your rating</p>
         <StarPicker name="rating" value={rating} onChange={setRating} />
-        {state.fieldErrors?.rating && <p className="product-cart-message">{state.fieldErrors.rating}</p>}
+        {state.fieldErrors?.rating && <p className={productStyles.message}>{state.fieldErrors.rating}</p>}
       </div>
 
-      <div className="mb-3">
-        <input type="text" name="title" maxLength={150} placeholder="Title (optional)" className="form-control" />
+      <div className={productStyles.formField}>
+        <input type="text" name="title" maxLength={150} placeholder="Title (optional)" className={productStyles.formInput} />
       </div>
 
-      <div className="mb-3">
-        <textarea name="comment" maxLength={2000} rows={4} placeholder="Tell others what you thought" className="form-control" />
+      <div className={productStyles.formField}>
+        <textarea
+          name="comment"
+          maxLength={2000}
+          rows={4}
+          placeholder="Tell others what you thought"
+          className={productStyles.formTextarea}
+        />
       </div>
 
-      {state.message && state.status === 'error' && <p className="product-cart-message">{state.message}</p>}
+      {state.message && state.status === 'error' && <p className={productStyles.message}>{state.message}</p>}
 
-      <button type="submit" disabled={pending} className="add-to-cart-btn">
+      <button type="submit" disabled={pending} className={productStyles.addToCartBtn}>
         {pending ? 'Submitting...' : 'Submit Review'}
       </button>
     </form>
@@ -100,7 +105,7 @@ function DeleteReviewButton({ reviewId, productId }: { reviewId: string; product
     <form action={formAction}>
       <input type="hidden" name="review_id" value={reviewId} />
       <input type="hidden" name="product_id" value={productId} />
-      <button type="submit" disabled={pending} className="product-cart-message" style={{ background: 'none', border: 'none', textDecoration: 'underline', padding: 0 }}>
+      <button type="submit" disabled={pending} className={productStyles.deleteLink}>
         {pending ? 'Deleting...' : 'Delete'}
       </button>
     </form>
@@ -121,47 +126,43 @@ export default function ProductReviews({
   const total = summary?.total_reviews ?? 0;
 
   return (
-    <section className="wrapper">
-      <div className="single-product-details-section mt-5" style={{ maxWidth: 800 }}>
-        <p className="description-heading">REVIEWS ({total})</p>
+    <section className={productStyles.reviewsSection}>
+      <div className={homeStyles.container}>
+        <h2 className={productStyles.reviewsHeading}>Reviews ({total})</h2>
 
-      {summary && total > 0 && (
-        <div className="d-flex align-items-center gap-3 mb-4">
-          <Stars value={Math.round(summary.average_rating)} />
-          <span>{summary.average_rating.toFixed(1)} out of 5</span>
-        </div>
-      )}
+        {summary && total > 0 && (
+          <div className={productStyles.reviewsSummary}>
+            <Stars value={Math.round(summary.average_rating)} />
+            <span>{summary.average_rating.toFixed(1)} out of 5</span>
+          </div>
+        )}
 
-      {reviews.length === 0 ? (
-        <p>No reviews yet. Be the first to share your thoughts.</p>
-      ) : (
-        <div className="d-flex flex-column gap-4 mb-4">
-          {reviews.map(review => (
-            <div key={review.id} style={{ borderBottom: '1px solid #eee', paddingBottom: 16 }}>
-              <Stars value={review.rating} />
-              {review.is_verified_purchase && (
-                <span className="product-cart-message" style={{ marginLeft: 8 }}>
-                  Verified purchase
-                </span>
-              )}
-              {review.title && <p className="mb-1" style={{ fontWeight: 600 }}>{review.title}</p>}
-              {review.comment && <p className="mb-1">{review.comment}</p>}
-              <p className="product-cart-message">{formatDate(review.created_at)}</p>
-              {currentUserId && review.user_id === currentUserId && (
-                <DeleteReviewButton reviewId={review.id} productId={productId} />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+        {reviews.length === 0 ? (
+          <p className={productStyles.reviewsEmpty}>No reviews yet. Be the first to share your thoughts.</p>
+        ) : (
+          <div>
+            {reviews.map(review => (
+              <div key={review.id} className={productStyles.reviewRow}>
+                <Stars value={review.rating} />
+                {review.is_verified_purchase && <span className={productStyles.verifiedBadge}>Verified purchase</span>}
+                {review.title && <p className={productStyles.reviewTitle}>{review.title}</p>}
+                {review.comment && <p className={productStyles.reviewComment}>{review.comment}</p>}
+                <p className={productStyles.reviewMeta}>{formatDate(review.created_at)}</p>
+                {currentUserId && review.user_id === currentUserId && (
+                  <DeleteReviewButton reviewId={review.id} productId={productId} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
-      {currentUserId ? (
-        <WriteReviewForm productId={productId} />
-      ) : (
-        <p>
-          <Link href={`/signin?next=/single-product/${productId}`}>Sign in</Link> to write a review.
-        </p>
-      )}
+        {currentUserId ? (
+          <WriteReviewForm productId={productId} />
+        ) : (
+          <p className={productStyles.signInPrompt}>
+            <Link href={`/signin?next=/single-product/${productId}`}>Sign in</Link> to write a review.
+          </p>
+        )}
       </div>
     </section>
   );

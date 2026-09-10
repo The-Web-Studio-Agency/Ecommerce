@@ -5,7 +5,12 @@ import { redirect } from 'next/navigation';
 import { authApi } from '@/lib/api/auth';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
 import type { AuthFormState } from '@/lib/auth/form-state';
-import { clearSession, getAccessToken, getRefreshToken, setSession } from '@/lib/auth/session';
+import {
+  clearSession,
+  getActionAccessToken,
+  getRefreshToken,
+  setSession,
+} from '@/lib/auth/session';
 import { mergeGuestCart } from '@/lib/cart/actions';
 
 /**
@@ -36,52 +41,22 @@ function toFormState(error: unknown): AuthFormState {
 }
 
 /**
- * Send a login code.
+ * Turn a verified MSG91 widget token into a session.
  *
- * Doubles as resend: the backend has no separate endpoint, and each request
- * expires the previous code.
+ * The code itself never reaches this server. MSG91's widget collects the
+ * number, sends the SMS and checks the digits in the browser, then hands
+ * back an access token; the backend confirms that token with MSG91 and
+ * reads the number from its answer. Registration happens here too -- a
+ * verified number with no account gets one.
  */
-export async function requestOtp(
-  _previous: AuthFormState,
-  formData: FormData,
+export async function signInWithWidgetToken(
+  accessToken: string,
+  next: string,
 ): Promise<AuthFormState> {
-  const phone = String(formData.get('phone') ?? '').trim();
-
-  if (!phone) {
-    return { error: 'Enter your phone number.', fieldErrors: { phone: 'Required' } };
-  }
+  if (!accessToken) return { error: 'Verification failed. Start again.' };
 
   try {
-    await authApi.requestOtp(phone);
-  } catch (error) {
-    return toFormState(error);
-  }
-
-  redirect(`/otp-verification?phone=${encodeURIComponent(phone)}`);
-}
-
-/**
- * Verify a code and start a session.
- *
- * A phone with no account gets one created here -- this is registration as
- * well as sign-in.
- */
-export async function verifyOtp(
-  _previous: AuthFormState,
-  formData: FormData,
-): Promise<AuthFormState> {
-  const phone = String(formData.get('phone') ?? '').trim();
-  const otp = String(formData.get('otp') ?? '').trim();
-  const next = String(formData.get('next') ?? '/my-account');
-
-  if (!phone) return { error: 'Start again from the sign-in page.' };
-
-  if (!/^\d{6}$/.test(otp)) {
-    return { error: 'Enter the 6-digit code.', fieldErrors: { otp: 'Enter 6 digits' } };
-  }
-
-  try {
-    const tokens = await authApi.verifyOtp(phone, otp);
+    const tokens = await authApi.widgetLogin(accessToken);
     await setSession(tokens);
 
     // Anything gathered while signed out moves into the real cart now, so
@@ -140,7 +115,7 @@ export async function logout(): Promise<void> {
  * signed in to an account they just asked to leave.
  */
 export async function deleteAccount(): Promise<void> {
-  const token = await getAccessToken();
+  const token = await getActionAccessToken();
 
   if (token) {
     try {
@@ -161,6 +136,6 @@ export async function deleteAccount(): Promise<void> {
  * link to a sign-in that lands on their own domain afterwards.
  */
 function safeRedirect(target: string): string {
-  if (!target.startsWith('/') || target.startsWith('//')) return '/my-account';
+  if (!target.startsWith('/') || target.startsWith('//')) return '/';
   return target;
 }

@@ -1,4 +1,4 @@
-/** Small inline line-icons for the Avera-style home page, kept dependency-free. */
+/** Small inline line-icons for the Zeen-style home page, kept dependency-free. */
 
 type IconProps = { size?: number; className?: string };
 
@@ -28,6 +28,12 @@ export const BagIcon = ({ size = 16, className }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base}>
     <path d="M6 8h12l-1 12H7L6 8Z" />
     <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+  </svg>
+);
+
+export const HeartIcon = ({ size = 17, className }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className={className} {...base}>
+    <path d="M12 20s-7.2-4.4-9.1-8.4A4.9 4.9 0 0 1 12 6.6a4.9 4.9 0 0 1 9.1 5C19.2 15.6 12 20 12 20Z" />
   </svg>
 );
 

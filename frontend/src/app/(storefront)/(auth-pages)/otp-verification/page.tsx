@@ -1,16 +1,12 @@
-import { Suspense } from 'react';
-
-import OtpVerification from '@/components/OtpVerification';
+import { redirect } from 'next/navigation';
 
 /**
- * The phone to verify arrives in the query string, and reading it with
- * useSearchParams opts the page out of prerendering unless the boundary is
- * here -- without it the production build fails on this route.
+ * Verification folded into sign-in.
+ *
+ * MSG91's widget holds the pending code in the browser, so navigating to a
+ * separate route would discard it. Both steps now live on /signin; this
+ * stays as a redirect so older links do not dead-end.
  */
 export default function OtpVerificationPage() {
-  return (
-    <Suspense>
-      <OtpVerification />
-    </Suspense>
-  );
+  redirect('/signin');
 }
