@@ -2,11 +2,10 @@
  * Wishlist page -- extends the same Zeen design system as the Product
  * Listing page. Reuses Home.module.css (container/h2/pillOutline/btnCircle)
  * and the Product Listing's own Listing.module.css (banner/crumb/subtitle,
- * card media/name/price/swatch, mobile bottom nav) directly rather than
- * redefining any of it; only what's genuinely different about a wishlist
- * card -- a fixed 2-column grid at every width, and an always-visible
- * Add to Cart + Remove action row instead of the listing card's
- * desktop-hides-the-button behaviour -- lives here.
+ * card media/wishlist-button/name/price) directly rather than redefining
+ * any of it; only what's genuinely different about a wishlist card -- a
+ * responsive grid, the star rating row and the single "Add to Bag" action --
+ * lives here.
  */
 
 .listingSection {
@@ -15,8 +14,10 @@
 
 .grid {
   display: grid;
+  /* Never 1-up, even on the narrowest phones -- see the max-width block
+     below for the compact 2-column mobile sizing this needs. */
   grid-template-columns: repeat(2, 1fr);
-  gap: 32px 24px;
+  gap: 14px 12px;
 }
 
 .card {
@@ -27,6 +28,18 @@
   min-width: 0;
 }
 
+/*
+ * Wishlist's own compact, square media box -- applied alongside the Product
+ * Listing's shared `.cardMedia` (background/overflow/etc stay reused) to
+ * override just its taller 4:5 aspect ratio for this page only. `.card`
+ * doubles the specificity so this wins regardless of stylesheet import
+ * order, without touching the shared Listing.module.css other pages use.
+ */
+.card .media {
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+}
+
 .cardBody {
   display: block;
   text-decoration: none;
@@ -34,68 +47,47 @@
   padding-top: 14px;
 }
 
-.variant {
-  font-size: 12px;
-  color: var(--muted, #8b857e);
-  margin: 0 0 6px;
-}
-
-.actions {
+.rating {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 14px;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
+  margin: 6px 0 0;
 }
 
-.primaryBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex: 1;
-  height: 44px;
-  border-radius: 999px;
-  border: none;
-  background: var(--ink, #1a1714);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: opacity 0.2s ease;
-}
-.primaryBtn:hover:not(:disabled) {
-  opacity: 0.85;
-}
-.primaryBtn:disabled {
-  opacity: 0.5;
-  cursor: default;
+.rating svg {
+  color: #c9a24b;
+  fill: #c9a24b;
 }
 
-.secondaryBtn {
-  display: inline-flex;
+.ratingCount {
+  font-weight: 400;
+  color: var(--muted, #8b857e);
+}
+
+.addToBagBtn {
+  display: flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
-  padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid var(--line, #e7e2db);
+  width: 100%;
+  height: 46px;
+  margin-top: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--ink, #1a1714);
   background: #fff;
   color: var(--ink, #1a1714);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  white-space: nowrap;
-  transition: border-color 0.2s ease, opacity 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
-.secondaryBtn:hover:not(:disabled) {
-  border-color: var(--ink, #1a1714);
+.addToBagBtn:hover:not(:disabled) {
+  background: var(--ink, #1a1714);
+  color: #fff;
 }
-.secondaryBtn:disabled {
+.addToBagBtn:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -110,17 +102,31 @@
   margin: 0 0 24px;
 }
 
-@media (max-width: 640px) {
+@media (min-width: 640px) {
   .grid {
-    gap: 20px 14px;
+    /* Tablet/iPad: 2 up, same as mobile, just with more breathing room. */
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 18px;
   }
-  .actions {
-    flex-direction: column;
-    align-items: stretch;
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    /* Desktop: at least 3 up. */
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px 20px;
   }
-  .secondaryBtn {
-    width: 100%;
+}
+
+@media (min-width: 1440px) {
+  .grid {
+    /* Comfortably wide desktops get a 4th column rather than 3 stretched,
+       oversized cards -- still >= the required minimum of 3. */
+    grid-template-columns: repeat(4, 1fr);
   }
+}
+
+@media (max-width: 639.98px) {
   .listingSection {
     padding-bottom: 96px;
   }
