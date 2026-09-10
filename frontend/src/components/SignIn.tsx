@@ -76,7 +76,7 @@ function readError(error: unknown, fallback: string): string {
  */
 export default function SignIn() {
   const searchParams = useSearchParams();
-  const next = searchParams.get('next') || '/my-account';
+  const next = searchParams.get('next') || '/';
 
   const [phone, setPhone] = useState('');
   const [otpLength, setOtpLength] = useState(DEFAULT_OTP_LENGTH);

@@ -4,6 +4,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 
+import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
+import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
@@ -26,7 +28,6 @@ import {
   StarIcon,
   TikTokIcon,
   TruckIcon,
-  UserIcon,
   XSocialIcon,
 } from './Icons';
 
@@ -291,12 +292,10 @@ export default function HomeClient({
             <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
               <SearchIcon />
             </Link>
-            <Link href="/signin" className={styles.headerIconBtn} aria-label="Account">
-              <UserIcon />
-            </Link>
-            <Link href="/cart-items" className={styles.cartPill}>
-              <span>My Cart</span>
-              <BagIcon />
+            <LuxeAccountNav />
+            <LuxeWishlistButton />
+            <Link href="/cart-items" className={styles.headerRoundBtn} aria-label="My cart">
+              <BagIcon size={17} />
             </Link>
             <button
               type="button"

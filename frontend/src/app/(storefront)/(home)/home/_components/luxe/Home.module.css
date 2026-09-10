@@ -206,7 +206,41 @@
   cursor: pointer;
   padding: 4px;
 }
-.cartPill {
+/* The wishlist and the cart, as a matched pair of round icon buttons. */
+.headerRoundBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink);
+  text-decoration: none;
+}
+.headerRoundBtn:hover { border-color: var(--ink); color: var(--rust); }
+
+.headerBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--rust);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Same pill as the cart, so the two sit as a pair rather than as an
+   afterthought next to it. */
+.authPill {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -219,8 +253,106 @@
   text-transform: uppercase;
   color: var(--ink);
   text-decoration: none;
+  white-space: nowrap;
 }
-.cartPill:hover { border-color: var(--ink); }
+.authPill:hover { border-color: var(--ink); }
+
+/* Signed in, the control is a filled pill with the shopper's initial, so it
+   never reads as the outlined login pill it replaces. */
+.accountMenu {
+  position: relative;
+}
+.profilePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  padding: 5px 14px 5px 5px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.profilePill:hover { background: var(--terracotta); border-color: var(--terracotta); }
+
+.profileInitial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--rust);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.profileChevron { transition: transform 0.2s ease; }
+.profilePill[aria-expanded='true'] .profileChevron { transform: rotate(180deg); }
+
+.profileDropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(26, 23, 20, 0.14);
+}
+.profileHead {
+  padding: 6px 12px 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+.profileHeadName {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.profileHeadContact {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.profileItem {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink-soft);
+  text-decoration: none;
+  cursor: pointer;
+}
+.profileItem:hover { background: var(--card); color: var(--ink); }
+.profileItem:disabled { opacity: 0.6; cursor: default; }
+.profileSignOut {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  padding-top: 12px;
+  color: var(--rust);
+  font-weight: 600;
+}
 
 .menuBtn {
   display: none;
@@ -1206,7 +1338,9 @@
 
 @media (max-width: 720px) {
   .container { padding: 0 20px; }
-  .nav, .headerRight .cartPill span { display: none; }
+  .nav, .headerRight .authPill span { display: none; }
+  .headerRight .profileLabel { display: none; }
+  .profilePill { padding: 5px 8px 5px 5px; }
   .menuBtn { display: inline-flex; }
   .mobileNav.open { display: flex; }
   .headerInner { grid-template-columns: auto 1fr auto; }

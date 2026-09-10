@@ -1,16 +1,12 @@
-import MainLayout from "@/components/MainLayout";
-import Registration from "./_components/Registration";
+import { redirect } from 'next/navigation';
 
-
-export const metadata = {
-  title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
-  description: "Elevate your online retail presence with Pixio Shop & eCommerce React Template. Crafted with precision, this responsive and feature-rich template provides a seamless and visually stunning shopping experience. Explore a world of possibilities with modern design elements, intuitive navigation, and customizable features. Transform your website into a dynamic online storefront with Pixio, where style meets functionality for a captivating and user-friendly eCommerce journey.",  
-};
-
-export default function RegistrationPage(){
-    return(
-        <MainLayout>
-            <Registration />
-        </MainLayout>
-    )
+/**
+ * Registration folded into sign-in, like /signup.
+ *
+ * The backend creates an account for any verified number that lacks one, so
+ * the username/email/password form here had no endpoint to post to and its
+ * buttons only linked between pages.
+ */
+export default function RegistrationPage() {
+  redirect('/signin');
 }

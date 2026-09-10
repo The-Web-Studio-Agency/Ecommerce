@@ -10,8 +10,9 @@ import {
   CloseIcon,
   MenuIcon,
   SearchIcon,
-  UserIcon,
 } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
+import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
+import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
 
 const NAV_LINKS = [
   { label: 'Shop', href: '/shop-list', chevron: true },
@@ -53,12 +54,10 @@ export default function LuxeHeader() {
           <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
             <SearchIcon />
           </Link>
-          <Link href="/signin" className={styles.headerIconBtn} aria-label="Account">
-            <UserIcon />
-          </Link>
-          <Link href="/cart-items" className={styles.cartPill}>
-            <span>My Cart</span>
-            <BagIcon />
+          <LuxeAccountNav />
+          <LuxeWishlistButton />
+          <Link href="/cart-items" className={styles.headerRoundBtn} aria-label="My cart">
+            <BagIcon size={17} />
           </Link>
           <button
             type="button"
