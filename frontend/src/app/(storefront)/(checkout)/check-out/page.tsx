@@ -1,21 +1,26 @@
-import CommanLayout from '@/components/CommanLayout';
+import { addressApi } from '@/lib/api/addresses';
 import { checkoutApi } from '@/lib/api/orders';
 import { getAccessToken } from '@/lib/auth/session';
+import type { Address } from '@/types/addresses';
 import Checkout from './_components/Checkout';
 
 /**
- * Price the cart before the form renders.
+ * Price the cart and load saved addresses before the form renders.
  *
- * Middleware has already turned guests away, so a missing preview here means
- * an empty cart or a backend that is down -- the form handles both.
+ * Middleware already turns guests away (`/check-out` requires a session), so
+ * a missing token here only means a backend hiccup -- the page degrades to
+ * an empty address list and no preview rather than crashing, and the form
+ * itself surfaces the real error on the next action it tries.
  */
 export default async function CheckoutPageRoute() {
   const token = await getAccessToken();
-  const preview = token ? await checkoutApi.preview(token).catch(() => null) : null;
 
-  return (
-    <CommanLayout>
-      <Checkout initialPreview={preview} />
-    </CommanLayout>
-  );
+  const [addresses, preview] = token
+    ? await Promise.all([
+        addressApi.list(token).catch((): Address[] => []),
+        checkoutApi.preview(token).catch(() => null),
+      ])
+    : [[] as Address[], null];
+
+  return <Checkout initialAddresses={addresses} initialPreview={preview} />;
 }

@@ -54,6 +54,36 @@ export async function saveAddress(_previous: CheckoutState, formData: FormData):
   return { status: 'success', message: 'Address saved' };
 }
 
+export async function updateAddress(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
+  const token = await getActionAccessToken();
+  if (!token) return { status: 'error', message: 'Sign in to continue.' };
+
+  const addressId = String(formData.get('address_id') ?? '');
+  if (!addressId) return { status: 'error', message: 'Missing address.' };
+
+  const payload = {
+    full_name: String(formData.get('full_name') ?? '').trim(),
+    phone: String(formData.get('phone') ?? '').trim(),
+    address_line_1: String(formData.get('address_line_1') ?? '').trim(),
+    address_line_2: String(formData.get('address_line_2') ?? '').trim() || null,
+    city: String(formData.get('city') ?? '').trim(),
+    state: String(formData.get('state') ?? '').trim(),
+    postal_code: String(formData.get('postal_code') ?? '').trim(),
+    country: String(formData.get('country') ?? 'India').trim(),
+    is_default: formData.get('is_default') === 'on',
+  };
+
+  try {
+    await addressApi.update(token, addressId, payload);
+  } catch (error) {
+    return toState(error);
+  }
+
+  revalidatePath('/check-out');
+  revalidatePath('/my-account');
+  return { status: 'success', message: 'Address updated' };
+}
+
 export async function deleteAddress(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
   const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to continue.' };
@@ -197,5 +227,33 @@ export async function previewCheckout(couponCode: string | null): Promise<Checko
     return await checkoutApi.preview(token, { couponCode: couponCode ?? undefined });
   } catch {
     return null;
+  }
+}
+
+/**
+ * Re-price the cart for a chosen address and coupon, keeping the reason a
+ * coupon didn't apply (invalid, expired, minimum not met...) rather than
+ * swallowing it like `previewCheckout` does -- the checkout page's coupon
+ * box needs that message to show the shopper why.
+ */
+export async function previewCheckoutFor(
+  addressId: string | null,
+  couponCode: string | null,
+): Promise<{ preview: CheckoutPreview | null; error: string | null }> {
+  const token = await getActionAccessToken();
+  if (!token) return { preview: null, error: 'Sign in to continue.' };
+
+  try {
+    const preview = await checkoutApi.preview(token, {
+      addressId: addressId ?? undefined,
+      couponCode: couponCode ?? undefined,
+    });
+    return { preview, error: null };
+  } catch (error) {
+    if (error instanceof ApiError) return { preview: null, error: error.message };
+    if (error instanceof ApiUnreachableError) {
+      return { preview: null, error: 'Could not reach Zeen. Try again in a moment.' };
+    }
+    throw error;
   }
 }
