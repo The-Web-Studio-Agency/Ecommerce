@@ -37,14 +37,14 @@ const FOOTER_COLUMNS = [
   },
 ];
 
-/** The Avera footer, shared by every page in the luxe design system. See LuxeHeader for why it's a copy, not an import, of the Home page's own markup. */
+/** The Zeen footer, shared by every page in the luxe design system. See LuxeHeader for why it's a copy, not an import, of the Home page's own markup. */
 export default function LuxeFooter() {
   return (
     <footer className={styles.footer}>
       <div className={styles.container}>
         <div className={styles.footerTop}>
           <div>
-            <p className={styles.footerBrand}>AVERA</p>
+            <p className={styles.footerBrand}>ZEEN</p>
             <p className={styles.footerTagline}>
               Crafting timeless leather handbags with exceptional craftsmanship, premium materials, and modern
               elegance.
@@ -77,11 +77,11 @@ export default function LuxeFooter() {
         </div>
 
         <div className={styles.footerImage}>
-          <img src="/home/footer-showroom.jpg" alt="Avera flagship showroom" />
+          <img src="/home/footer-showroom.jpg" alt="Zeen flagship showroom" />
         </div>
 
         <div className={styles.footerBottom}>
-          <span>© {new Date().getFullYear()} Avera. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} Zeen. All rights reserved.</span>
           <span>Crafted with care.</span>
         </div>
       </div>
