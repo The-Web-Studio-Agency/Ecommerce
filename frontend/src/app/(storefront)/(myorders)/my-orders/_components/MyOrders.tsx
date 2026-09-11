@@ -169,7 +169,7 @@ export default function MyOrders({ orders: allOrders }: { orders: OrderRow[] }) 
                       <div className={styles.orderBottom}>
                         <p className={styles.orderAmount}>{formatMoney(order.total_amount, order.currency)}</p>
                         <Link
-                          href={`/order-success/${order.id}`}
+                          href={`/order-details/${order.id}`}
                           className={styles.viewButton}
                           aria-label={`View order #${order.order_number}`}>
                           View Order
