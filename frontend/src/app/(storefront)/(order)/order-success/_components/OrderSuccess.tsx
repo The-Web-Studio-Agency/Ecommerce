@@ -71,7 +71,7 @@ export default function OrderSuccess({ order }: { order: Order }) {
             View My Order
             <ArrowIcon />
           </Link>
-          <Link href="/shop-standard" className={styles.secondaryBtn}>
+          <Link href="/" className={styles.secondaryBtn}>
             Continue Shopping
           </Link>
         </div>
