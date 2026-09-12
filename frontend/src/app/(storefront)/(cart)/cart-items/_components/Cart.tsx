@@ -11,6 +11,7 @@ import { BagIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import { useCart } from '@/context/CartContext';
+import { mediaUrl } from '@/lib/media';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { CartItem } from '@/types/cart';
@@ -106,7 +107,7 @@ function CartRow({
       <Link href={`/single-product/${item.product_id}`} className={styles.thumb} aria-label={item.product_name}>
         {item.image ? (
           <Image
-            src={item.image.url}
+            src={mediaUrl(item.image.url)}
             alt={item.image.alt_text ?? item.product_name}
             fill
             sizes="(min-width: 992px) 140px, 110px"

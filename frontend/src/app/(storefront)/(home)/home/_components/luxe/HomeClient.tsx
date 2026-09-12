@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
+import { mediaUrl } from '@/lib/media';
 import { formatPriceRange } from '@/lib/format';
 import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
 
@@ -62,7 +63,7 @@ const CAMPAIGN_IMAGES = [
  * this stops applying on its own once photography lands.
  */
 function campaignImage(url: string | null | undefined, index: number): string {
-  if (url && !url.includes('picsum.photos')) return url;
+  if (url && !url.includes('picsum.photos')) return mediaUrl(url);
   return CAMPAIGN_IMAGES[index % CAMPAIGN_IMAGES.length];
 }
 

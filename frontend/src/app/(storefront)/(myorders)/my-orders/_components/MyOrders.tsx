@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 
 import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
 import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
+import { mediaUrl } from '@/lib/media';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { OrderStatus, OrderSummary } from '@/types/orders';
 
@@ -136,7 +137,7 @@ export default function MyOrders({ orders: allOrders }: { orders: OrderRow[] }) 
                       <div className={`${listingStyles.cardMedia} ${styles.thumb}`}>
                         {order.preview_image ? (
                           <Image
-                            src={order.preview_image.url}
+                            src={mediaUrl(order.preview_image.url)}
                             alt={order.preview_image.alt_text ?? `Order #${order.order_number}`}
                             fill
                             sizes="96px"

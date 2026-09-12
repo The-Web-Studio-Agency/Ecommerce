@@ -5,7 +5,7 @@ import { useTransition } from 'react';
 import { logout } from '@/lib/auth/actions';
 
 /** Ends the session, revoking the refresh token server-side as well. */
-export default function SignOutButton() {
+export default function SignOutButton({ className = 'myorderFilterButton' }: { className?: string }) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -13,7 +13,7 @@ export default function SignOutButton() {
       type="button"
       disabled={pending}
       onClick={() => startTransition(() => logout())}
-      className="myorderFilterButton">
+      className={className}>
       {pending ? 'Signing out...' : 'Sign out'}
     </button>
   );

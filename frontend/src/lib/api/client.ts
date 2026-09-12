@@ -8,6 +8,11 @@ export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   query?: Record<string, QueryValue>;
   body?: unknown;
+  /**
+   * Multipart payload for the endpoints that take a file. Sent as-is, with
+   * no Content-Type header of our own so fetch can add the boundary.
+   */
+  formData?: FormData;
   /** Bearer token to send. Omit for the public storefront endpoints. */
   token?: string | null;
   headers?: Record<string, string>;
@@ -68,7 +73,18 @@ function retryAfterFrom(response: Response): number | null {
  * there is deliberately no tenant header to attach.
  */
 async function send<T>(path: string, options: RequestOptions): Promise<ApiEnvelope<T>> {
-  const { method = 'GET', query, body, token, headers = {}, cache, revalidate, tags, signal } = options;
+  const {
+    method = 'GET',
+    query,
+    body,
+    formData,
+    token,
+    headers = {},
+    cache,
+    revalidate,
+    tags,
+    signal,
+  } = options;
 
   const url = `${apiBaseUrl()}${path}${buildQuery(query)}`;
 
@@ -92,7 +108,7 @@ async function send<T>(path: string, options: RequestOptions): Promise<ApiEnvelo
     response = await fetch(url, {
       method,
       headers: requestHeaders,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: formData ?? (body === undefined ? undefined : JSON.stringify(body)),
       signal,
       ...(cache ? { cache } : {}),
       ...(Object.keys(next).length ? { next } : {}),

@@ -27,8 +27,33 @@ export default function SalesTrendChart({
   const total = data.reduce((sum, point) => sum + Number(point.revenue), 0);
   const orderCount = data.reduce((sum, point) => sum + point.order_count, 0);
 
+  /* Labels are formatted here rather than in an axis formatter: Apex calls
+     that formatter with values other than the category itself, and a Date
+     built from one of those throws and leaves the chart blank. */
+  /* Full currency strings are wider than the axis gutter and get clipped to
+     their last few digits, so the axis is compact ("₹12.4K") and the exact
+     figure lives in the tooltip. */
+  const axisMoney = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  });
+
+  const labels = data.map(point =>
+    new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(new Date(point.date)),
+  );
+
   const options: ApexOptions = {
-    chart: { type: 'area', toolbar: { show: false }, zoom: { enabled: false }, fontFamily: 'inherit' },
+    chart: {
+      type: 'area',
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      fontFamily: 'inherit',
+      // The entry animation buys nothing on a dashboard and leaves the
+      // series unpainted in headless renders.
+      animations: { enabled: false },
+    },
     colors: ['#487FFF'],
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 3 },
@@ -37,16 +62,9 @@ export default function SalesTrendChart({
       gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 100] },
     },
     grid: { borderColor: '#D1D5DB', strokeDashArray: 4 },
-    xaxis: {
-      type: 'category',
-      categories: data.map(point => point.date),
-      labels: {
-        formatter: value =>
-          new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(new Date(value)),
-      },
-    },
+    xaxis: { type: 'category', categories: labels },
     yaxis: {
-      labels: { formatter: value => formatMoney(String(value), currency) },
+      labels: { formatter: value => (Number.isFinite(value) ? axisMoney.format(value) : '') },
     },
     tooltip: {
       y: {

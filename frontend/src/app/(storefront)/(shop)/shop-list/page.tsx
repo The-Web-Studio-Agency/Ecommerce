@@ -17,13 +17,6 @@ export const metadata = {
 };
 
 const PAGE_SIZE = 12;
-/** The catalogue also carries a handful of empty/QA categories left over from
- *  backend testing (Bags, Accessories, "QA Category", ...). The storefront
- *  only actually sells kurtas and tops, so the listing is scoped to those. */
-const ALLOWED_CATEGORY_NAMES = ['Women Kurtas', 'Tops'];
-/** Seed/test rows that sit inside an otherwise-real category and don't
- *  belong in the storefront. */
-const EXCLUDED_PRODUCT_NAMES = new Set(['Ira Poplin Shirt']);
 /** A single backend page comfortably covers the whole (small) real catalogue,
  *  so filtering/pagination can be finished off in the route itself rather
  *  than needing a multi-category query the API doesn't offer. */
@@ -85,10 +78,6 @@ function pageWindow(current: number, total: number): (number | 'gap')[] {
   return out;
 }
 
-function isReal(allowedIds: Set<string>, product: { category_id: string; name: string }): boolean {
-  return allowedIds.has(product.category_id) && !EXCLUDED_PRODUCT_NAMES.has(product.name);
-}
-
 export default async function ShopListPage({
   searchParams,
 }: {
@@ -124,14 +113,16 @@ export default async function ShopListPage({
   const color = colorParam.trim();
   const size = sizeParam.trim();
 
+  /* Whatever the storefront endpoint returns is what the store sells: it
+     already hides drafts, archives and inactive categories, so the listing
+     shows every real product rather than a hand-kept allowlist. */
   const categoriesPage = await catalogueApi.listCategories({ page_size: 50 });
-  const categories = categoriesPage.items.filter(c => ALLOWED_CATEGORY_NAMES.includes(c.name));
-  const allowedIds = new Set(categories.map(c => c.id));
+  const categories = categoriesPage.items;
+  const knownIds = new Set(categories.map(c => c.id));
   const categoryById = new Map(categories.map(c => [c.id, c.name]));
 
-  // A category from the URL only applies if it's one of the two the store
-  // actually sells -- a stale or tampered link just falls back to "All".
-  const activeCategory = category && allowedIds.has(category) ? category : undefined;
+  // A stale or tampered category in the URL just falls back to "All".
+  const activeCategory = category && knownIds.has(category) ? category : undefined;
 
   // The brand facet reflects the real, full catalogue for the current
   // category scope (ignoring search/brand/price), so the dropdown always
@@ -149,7 +140,7 @@ export default async function ShopListPage({
     category_id: activeCategory,
     size: CATALOGUE_FETCH_SIZE,
   });
-  const realVariantItems = variantFacetSource.items.filter(p => isReal(allowedIds, p));
+  const realVariantItems = variantFacetSource.items;
   const colors = [
     ...new Set(realVariantItems.flatMap(p => p.variants.map(v => v.options.Color).filter((c): c is string => !!c))),
   ].sort((a, b) => a.localeCompare(b));
@@ -192,7 +183,7 @@ export default async function ShopListPage({
       sort: toSearchSort(sort),
       size: CATALOGUE_FETCH_SIZE,
     });
-    let items = discovery.items.filter(p => isReal(allowedIds, p));
+    let items = discovery.items;
     if (sort === 'rating_desc') {
       items = [...items].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
     }
@@ -207,10 +198,8 @@ export default async function ShopListPage({
     total_items = merged.length;
     products = merged.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   } else {
-    // The API has no multi-category filter, so "All" fetches the (small)
-    // real catalogue -- search/sort/brand/price all applied by the backend
-    // -- and the route itself drops anything outside the two allowed
-    // categories and the known-excluded rows before paginating what's left.
+    // Search, sort, brand and price are all applied by the backend; the
+    // route only has to paginate what comes back.
     const resultsPage = await catalogueApi.listProducts({
       page_size: CATALOGUE_FETCH_SIZE,
       category_id: activeCategory,
@@ -220,7 +209,7 @@ export default async function ShopListPage({
       min_price: minPrice || undefined,
       max_price: maxPrice || undefined,
     });
-    const filtered = resultsPage.items.filter(p => isReal(allowedIds, p));
+    const filtered = resultsPage.items;
     total_items = filtered.length;
     products = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   }

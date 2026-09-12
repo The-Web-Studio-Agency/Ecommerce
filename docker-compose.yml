@@ -44,9 +44,17 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tws}:${POSTGRES_PASSWORD:-tws_dev_password}@postgres:5432/${POSTGRES_DB:-tws_ecommerce}
       REDIS_URL: redis://redis:6379/0
+    # Uploaded product images are written to the app's own filesystem
+    # (LocalStorage -> var/uploads, served back at /media). Without this
+    # volume they live only in the container layer and every rebuild throws
+    # them away, the way postgres_data stops the database being ephemeral.
+    volumes:
+      - uploads_data:/app/var/uploads
     ports:
       - "${API_PORT:-58000}:8000"
 
 volumes:
   postgres_data:
     name: tws_ec2_postgres_data
+  uploads_data:
+    name: tws_ec2_uploads_data

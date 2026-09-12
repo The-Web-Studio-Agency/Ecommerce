@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
+import { mediaUrl } from '@/lib/media';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney, formatPriceRange } from '@/lib/format';
 import type { ProductStorefront, ProductSummaryStorefront, VariantStorefront } from '@/types/catalogue';
@@ -125,7 +126,7 @@ const SingleProduct = ({ product, rating, related }: Props) => {
           <div className={productStyles.galleryMain}>
             {images ? (
               <Image
-                src={images[selectedImage].url}
+                src={mediaUrl(images[selectedImage].url)}
                 alt={images[selectedImage].alt_text ?? product.name}
                 fill
                 sizes="(max-width: 720px) 100vw, 50vw"
@@ -149,7 +150,7 @@ const SingleProduct = ({ product, rating, related }: Props) => {
                   aria-current={selectedImage === index}
                 >
                   <Image
-                    src={item.url}
+                    src={mediaUrl(item.url)}
                     alt={item.alt_text ?? product.name}
                     fill
                     sizes="76px"
@@ -322,7 +323,7 @@ const SingleProduct = ({ product, rating, related }: Props) => {
                 <div className={listingStyles.cardMedia}>
                   {item.primary_image ? (
                     <Image
-                      src={item.primary_image.url}
+                      src={mediaUrl(item.primary_image.url)}
                       alt={item.primary_image.alt_text ?? item.name}
                       fill
                       sizes="(max-width: 720px) 50vw, (max-width: 1080px) 33vw, 25vw"

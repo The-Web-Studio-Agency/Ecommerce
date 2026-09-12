@@ -12,6 +12,7 @@ import {
 } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
 import { useWishlist } from '@/context/WishlistContext';
+import { mediaUrl } from '@/lib/media';
 import { reviewApi } from '@/lib/api/reviews';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
@@ -82,7 +83,7 @@ export default function WishlistCard({ item }: Props) {
           >
             {item.image ? (
               <Image
-                src={item.image.url}
+                src={mediaUrl(item.image.url)}
                 alt={item.image.alt_text ?? item.product_name}
                 fill
                 sizes="(max-width: 639px) 50vw, (max-width: 1023px) 50vw, (max-width: 1439px) 33vw, 25vw"

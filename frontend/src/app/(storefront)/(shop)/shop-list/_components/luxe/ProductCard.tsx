@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 
 import { BagIcon, HeartIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import { useWishlist } from '@/context/WishlistContext';
+import { mediaUrl } from '@/lib/media';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { ProductSummaryStorefront } from '@/types/catalogue';
@@ -64,7 +65,7 @@ export default function ProductCard({ product, colors = [] }: Props) {
 
             {product.primary_image ? (
               <Image
-                src={product.primary_image.url}
+                src={mediaUrl(product.primary_image.url)}
                 alt={product.primary_image.alt_text ?? product.name}
                 fill
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"

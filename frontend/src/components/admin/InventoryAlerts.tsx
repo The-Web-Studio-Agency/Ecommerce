@@ -26,7 +26,7 @@ export default function InventoryAlerts({ inventory }: { inventory: InventoryOve
   const clear = inventory.out_of_stock_count === 0 && inventory.low_stock_count === 0;
 
   return (
-    <div className="col-12">
+    <div className="col-xxl-8 col-xl-12">
       <div className="card h-100">
         <div className="card-body">
           <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-20">

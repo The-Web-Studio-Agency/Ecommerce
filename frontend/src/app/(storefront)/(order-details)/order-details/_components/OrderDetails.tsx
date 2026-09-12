@@ -7,6 +7,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
 
 import { useCart } from '@/context/CartContext';
+import { mediaUrl } from '@/lib/media';
 import { formatDate, formatMoney } from '@/lib/format';
 import { cancelOrder } from '@/lib/orders/actions';
 import { initialCheckoutState } from '@/lib/orders/state';
@@ -186,7 +187,7 @@ export default function OrderDetails({ order, images }: { order: Order; images: 
                       <div className={styles.itemImage}>
                         {image ? (
                           <Image
-                            src={image.url}
+                            src={mediaUrl(image.url)}
                             alt={image.alt_text ?? item.product_name}
                             fill
                             sizes="96px"
@@ -366,7 +367,7 @@ export default function OrderDetails({ order, images }: { order: Order; images: 
                     <div className={styles.cancelItemImage}>
                       {image ? (
                         <Image
-                          src={image.url}
+                          src={mediaUrl(image.url)}
                           alt={image.alt_text ?? item.product_name}
                           fill
                           sizes="56px"

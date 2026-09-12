@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import { CloseIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import productStyles from '@/elements/SingleProductPage/luxe/Product.module.css';
 import { useCart } from '@/context/CartContext';
+import { mediaUrl } from '@/lib/media';
 import { catalogueApi } from '@/lib/api/catalogue';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
@@ -136,7 +137,7 @@ export default function AddToBagModal({ item, onClose }: { item: WishlistItem; o
                       className={`${styles.thumb} ${index === activeImage ? styles.thumbActive : ''}`}
                       onClick={() => setActiveImage(index)}
                       aria-label={`Show photo ${index + 1}`}>
-                      <Image src={image.url} alt={image.alt_text ?? item.product_name} fill sizes="70px" />
+                      <Image src={mediaUrl(image.url)} alt={image.alt_text ?? item.product_name} fill sizes="70px" />
                     </button>
                   ))}
                 </div>

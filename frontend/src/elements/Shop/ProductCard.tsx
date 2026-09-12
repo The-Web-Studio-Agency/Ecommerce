@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 
 import { useWishlist } from '@/context/WishlistContext';
+import { mediaUrl } from '@/lib/media';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { ProductSummaryStorefront } from '@/types/catalogue';
@@ -76,7 +77,7 @@ export default function ProductCard({ product, rating = 0 }: ProductCardProps) {
           <div className="product-img-container" style={{ position: 'relative', height: 'auto', aspectRatio: '3 / 4' }}>
             {image && (
               <Image
-                src={image.url}
+                src={mediaUrl(image.url)}
                 alt={image.alt_text ?? product.name}
                 fill
                 sizes="(max-width: 720px) 50vw, (max-width: 1080px) 33vw, 25vw"

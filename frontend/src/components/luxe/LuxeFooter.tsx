@@ -83,14 +83,11 @@ export default function LuxeFooter() {
         </div>
       </div>
 
-        <div className={styles.footerImage}>
-          <img src="/home/footer-showroom.jpg" alt="Zeen flagship showroom" />
-        </div>
-
-        <div className={styles.footerBottom}>
-          <span>© {new Date().getFullYear()} Zeen. All rights reserved.</span>
-          <span>Crafted with care.</span>
-        </div>
+      <div className={styles.footerImage}>
+        <img src="/home/footer.png" alt="Women wearing the Zeen collection" />
+        <span className={styles.footerWatermark} aria-hidden="true">
+          ZEEN
+        </span>
       </div>
     </footer>
   );

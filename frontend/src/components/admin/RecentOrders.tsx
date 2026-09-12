@@ -1,4 +1,4 @@
-import { formatDateTime, formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import type { RecentOrderSummary } from '@/types/admin';
 
 import { OrderStatusBadge, PaymentStatusBadge } from './StatusBadge';
@@ -6,7 +6,7 @@ import { OrderStatusBadge, PaymentStatusBadge } from './StatusBadge';
 /** Each order carries its own currency, so nothing here assumes the tenant's. */
 export default function RecentOrders({ orders }: { orders: RecentOrderSummary[] }) {
   return (
-    <div className="col-xxl-8 col-xl-12">
+    <div className="col-12">
       <div className="card h-100">
         <div className="card-body">
           <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-20">
@@ -34,8 +34,10 @@ export default function RecentOrders({ orders }: { orders: RecentOrderSummary[] 
                   {orders.map(order => (
                     <tr key={order.order_id}>
                       <td className="fw-medium">{order.order_number}</td>
-                      <td>{order.customer_email ?? <span className="text-neutral-400">Guest</span>}</td>
-                      <td>{formatDateTime(order.created_at)}</td>
+                      <td className="max-w-288-px text-truncate">
+                        {order.customer_email ?? <span className="text-neutral-400">Guest</span>}
+                      </td>
+                      <td className="text-nowrap">{formatDate(order.created_at)}</td>
                       <td>
                         <OrderStatusBadge status={order.order_status} />
                       </td>

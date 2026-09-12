@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
-import MasterLayout from '@/admin-masterLayout/MasterLayout';
 import DashboardMetrics from '@/components/admin/DashboardMetrics';
 import InventoryAlerts from '@/components/admin/InventoryAlerts';
+import PageHeader from '@/components/admin/PageHeader';
 import OrderPipeline from '@/components/admin/OrderPipeline';
 import RecentOrders from '@/components/admin/RecentOrders';
 import SalesTrendChart from '@/components/admin/SalesTrendChart';
@@ -29,7 +29,7 @@ const TOP_PRODUCT_LIMIT = 5;
  * wrong and no way for this page to ask for another store's numbers.
  */
 export default async function AdminDashboardPage() {
-  const { user, token } = await requireStaff();
+  const { token } = await requireStaff();
 
   /* The overview is the page; the trend and the top sellers are extras, so
      a failure there costs a panel rather than the whole dashboard. */
@@ -42,15 +42,8 @@ export default async function AdminDashboardPage() {
   ]);
 
   return (
-    <MasterLayout>
-      <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-24">
-        <div>
-          <h6 className="fw-semibold mb-0">Dashboard</h6>
-          <p className="text-sm text-neutral-500 mb-0">
-            Signed in as {user.name ?? user.email ?? user.phone} · {user.role}
-          </p>
-        </div>
-      </div>
+    <>
+      <PageHeader title="Dashboard" subtitle="Today's trading, at a glance." />
 
       {overview === null ? (
         <div className="card">
@@ -74,6 +67,6 @@ export default async function AdminDashboardPage() {
           </section>
         </>
       )}
-    </MasterLayout>
+    </>
   );
 }

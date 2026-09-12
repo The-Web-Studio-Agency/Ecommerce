@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useState } from 'react';
 
+import { mediaUrl } from '@/lib/media';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { CartItem } from '@/types/cart';
@@ -148,7 +149,7 @@ export default function OrderSummaryPanel({
             <div key={item.id} className={styles.summaryItem}>
               <div className={styles.summaryThumb}>
                 {item.image && (
-                  <Image src={item.image.url} alt={item.image.alt_text ?? item.product_name} fill sizes="52px" />
+                  <Image src={mediaUrl(item.image.url)} alt={item.image.alt_text ?? item.product_name} fill sizes="52px" />
                 )}
               </div>
               <div className={styles.summaryItemBody}>
