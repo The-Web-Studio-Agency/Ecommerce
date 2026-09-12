@@ -2,44 +2,49 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { toast } from 'react-toastify';
 
+import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
+import { BagIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
+// Reused from the Product Listing page -- same breadcrumb/heading banner
+// every luxe page opens with (see ShopWishList for the identical pattern).
+import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
+import MobileBottomNav from '@/components/MobileBottomNav';
 import { useCart } from '@/context/CartContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { CartItem } from '@/types/cart';
 import type { CheckoutPreview } from '@/types/orders';
 
+import styles from './Cart.module.css';
+
 // -----------------------------------
-// QUANTITY CONTROL
+// ROW
 // -----------------------------------
 
-function QuantityControl({
-  quantity,
+function QtyStepper({
+  item,
   disabled,
-  onChange,
+  onQtyChange,
 }: {
-  quantity: number;
+  item: CartItem;
   disabled: boolean;
-  onChange: (quantity: number) => void;
+  onQtyChange: (itemId: string, quantity: number) => void;
 }) {
   return (
-    <div className="cart-items-qty">
+    <div className={styles.qtyStepper}>
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => onChange(quantity === 1 ? quantity : quantity - 1)}
-        className="cart-items-qty-btn"
+        disabled={disabled || item.quantity <= 1}
+        onClick={() => onQtyChange(item.id, item.quantity - 1)}
         aria-label="Decrease quantity">
         −
       </button>
-
-      <span className="cart-items-qty-value">{quantity}</span>
-
+      <span>{item.quantity}</span>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => onChange(quantity + 1)}
-        className="cart-items-qty-btn"
+        onClick={() => onQtyChange(item.id, item.quantity + 1)}
         aria-label="Increase quantity">
         +
       </button>
@@ -47,11 +52,45 @@ function QuantityControl({
   );
 }
 
-// -----------------------------------
-// LINE
-// -----------------------------------
+function RemoveButton({
+  item,
+  disabled,
+  onRemove,
+}: {
+  item: CartItem;
+  disabled: boolean;
+  onRemove: (itemId: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.removeBtn}
+      disabled={disabled}
+      onClick={() => onRemove(item.id)}
+      aria-label={`Remove ${item.product_name} from cart`}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M5 5l14 14M19 5 5 19" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
 
-function CartLineItem({
+/**
+ * Below `md` this renders as a stacked row: image, then name/variant/price/
+ * qty stacked underneath with the remove "X" at top right. At `md` and up
+ * it switches to a single row -- image, name/variant/price, then quantity,
+ * line total and remove lined up on the right -- so `.desktopMeta`
+ * duplicates the qty stepper and remove button for that row (CSS shows
+ * exactly one copy of each at a time; see Cart.module.css) rather than
+ * reflowing the same nodes, which CSS alone can't do across a breakpoint
+ * that also regroups the surrounding markup.
+ *
+ * The image box uses `object-fit: contain` rather than the Product Listing
+ * grid's `cover` crop -- a cart line is the shopper's own chosen item, not
+ * a browsing tile, so the whole photo stays visible instead of being cropped
+ * to fill a fixed box.
+ */
+function CartRow({
   item,
   disabled,
   onQtyChange,
@@ -63,71 +102,45 @@ function CartLineItem({
   onRemove: (itemId: string) => void;
 }) {
   return (
-    <div className="cart-items-card">
-      <div className="cart-items-card-inner">
-        {/* IMAGE */}
+    <div className={styles.row}>
+      <Link href={`/single-product/${item.product_id}`} className={styles.thumb} aria-label={item.product_name}>
+        {item.image ? (
+          <Image
+            src={item.image.url}
+            alt={item.image.alt_text ?? item.product_name}
+            fill
+            sizes="(min-width: 992px) 140px, 110px"
+          />
+        ) : (
+          <div className={styles.thumbEmpty}>No image yet</div>
+        )}
+      </Link>
 
-        <div className="cart-items-image-wrap">
-          {item.image && (
-            <Image
-              src={item.image.url}
-              alt={item.image.alt_text ?? item.product_name}
-              className="cart-items-image"
-              width={100}
-              height={100}
-            />
-          )}
-        </div>
-
-        {/* DETAILS */}
-
-        <div className="cart-items-details">
-          <div className="cart-items-details-top">
-            <div>
-              <h3 className="cart-items-name">
-                <Link href={`/single-product/${item.product_id}`}>{item.product_name}</Link>
-              </h3>
-
-              <p className="cart-items-variant">{item.variant_name}</p>
-
-              <p className="cart-items-variant">SKU: {item.sku}</p>
-            </div>
+      <div className={styles.info}>
+        <div className={styles.infoTop}>
+          <div>
+            <p className={styles.name}>
+              <Link href={`/single-product/${item.product_id}`}>{item.product_name}</Link>
+            </p>
+            <p className={styles.variant}>{item.variant_name}</p>
           </div>
 
-          <div className="cart-items-quantity-details">
-            <div className="cart-items-actions">
-              <QuantityControl
-                quantity={item.quantity}
-                disabled={disabled}
-                onChange={quantity => onQtyChange(item.id, quantity)}
-              />
-            </div>
+          <div className={styles.removeBtnMobile}>
+            <RemoveButton item={item} disabled={disabled} onRemove={onRemove} />
           </div>
         </div>
 
-        {/* PRICE */}
+        <p className={styles.price}>{formatMoney(item.unit_price, STOREFRONT_CURRENCY)}</p>
 
-        <div className="cart-items-price-details">
-          <div className="cart-items-price-block">
-            <div className="cart-items-price">{formatMoney(item.subtotal, STOREFRONT_CURRENCY)}</div>
-
-            {item.quantity > 1 && (
-              <div className="cart-items-price-each">
-                {formatMoney(item.unit_price, STOREFRONT_CURRENCY)} each
-              </div>
-            )}
-          </div>
-
-          {/* REMOVE */}
-
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => onRemove(item.id)}
-            className="cart-items-link">
-            <Image src="/assets/dustbin.png" alt="remove-button-image" width={20} height={20} />
-          </button>
+        <div className={styles.qtyStepperMobile}>
+          <QtyStepper item={item} disabled={disabled} onQtyChange={onQtyChange} />
         </div>
+      </div>
+
+      <div className={styles.desktopMeta}>
+        <QtyStepper item={item} disabled={disabled} onQtyChange={onQtyChange} />
+        <p className={styles.lineTotal}>{formatMoney(item.subtotal, STOREFRONT_CURRENCY)}</p>
+        <RemoveButton item={item} disabled={disabled} onRemove={onRemove} />
       </div>
     </div>
   );
@@ -140,114 +153,143 @@ function CartLineItem({
 /**
  * The cart page.
  *
- * Line totals and the subtotal are the backend's; shipping and tax only
- * exist once checkout prices them, which needs a session -- so a guest sees
- * the subtotal and is told the rest is worked out at checkout, rather than
- * being shown a guess that changes at the last step.
+ * All data comes from CartContext, the same real, backend-held cart the
+ * header badge and every "Add to Cart" button already use -- there is no
+ * separate fetch or mock data here. Restyled to the same Zeen design system
+ * as Home/Product Listing/Wishlist (their shared header/footer/mobile nav,
+ * `Home.module.css` tokens and the Listing page's banner/breadcrumb), not
+ * just a visual approximation of it.
  */
 export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
-  const { cart, items, itemCount, pending, error, updateQuantity, removeFromCart } = useCart();
+  const { cart, items, pending, error, updateQuantity, removeFromCart, clearCart } = useCart();
+
+  async function handleRemove(itemId: string) {
+    await removeFromCart(itemId);
+    toast.info('Removed from your cart');
+  }
+
+  async function handleClearCart() {
+    if (!window.confirm('Remove everything from your cart?')) return;
+    await clearCart();
+    toast.info('Cart cleared');
+  }
+
+  const total = preview ? preview.total_amount : cart.subtotal;
 
   return (
-    <div className="cart-items-page">
-      <div className="cart-items-container">
-        {/* =================================
-            CART LIST
-        ================================= */}
+    // Scoped to `homeStyles.page` so the reused Home/Listing classes below
+    // (crumb, h2, pill, --ink/--line/etc tokens) render correctly, without
+    // wrapping -- or restyling -- the page's own header/footer.
+    <div className={homeStyles.page}>
+      <section className={listingStyles.banner}>
+        <div className={homeStyles.container}>
+          <p className={listingStyles.crumb}>
+            <Link href="/">Home</Link>
+            <span>/</span>
+            <span aria-current="page">Cart</span>
+          </p>
+          <h1 className={homeStyles.h2}>My Cart</h1>
+          <p className={listingStyles.subtitle}>
+            {items.length === 0
+              ? 'Your cart is empty.'
+              : `${items.length} item${items.length === 1 ? '' : 's'} in your cart.`}
+          </p>
+        </div>
+      </section>
 
-        <div className="cart-items-list">
-          <h1 className="cart-items-title">
-            Your Cart{' '}
-            <span className="cart-items-count">
-              ({itemCount} {itemCount === 1 ? 'item' : 'items'})
-            </span>
-          </h1>
-
-          {error && <div className="cart-items-empty">{error}</div>}
+      <section className={styles.cartSection}>
+        <div className={homeStyles.container}>
+          {error && <div className={styles.error}>{error}</div>}
 
           {items.length === 0 ? (
-            <div className="cart-items-empty">Your cart is empty.</div>
+            <div className={styles.empty}>
+              <div className={styles.emptyIcon}>
+                <BagIcon size={30} />
+              </div>
+              <p className={styles.emptyHeading}>Your cart is empty</p>
+              <p className={styles.emptyText}>Looks like you haven&apos;t added anything yet.</p>
+              <Link href="/shop-list" className={homeStyles.pillOutline}>
+                Continue Shopping
+              </Link>
+            </div>
           ) : (
-            items.map(item => (
-              <CartLineItem
-                key={item.id}
-                item={item}
-                disabled={pending}
-                onQtyChange={updateQuantity}
-                onRemove={removeFromCart}
-              />
-            ))
+            <div className={styles.layout}>
+              <div className={styles.list}>
+                {items.map(item => (
+                  <CartRow
+                    key={item.id}
+                    item={item}
+                    disabled={pending}
+                    onQtyChange={updateQuantity}
+                    onRemove={handleRemove}
+                  />
+                ))}
+
+                <button type="button" className={styles.clearCartBtn} disabled={pending} onClick={handleClearCart}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <path
+                      d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Clear Cart
+                </button>
+              </div>
+
+              <div className={styles.summary}>
+                <h2 className={styles.summaryTitle}>Order Summary</h2>
+
+                <div className={styles.summaryRow}>
+                  <span>Subtotal</span>
+                  <span>{formatMoney(cart.subtotal, STOREFRONT_CURRENCY)}</span>
+                </div>
+
+                {preview && Number(preview.discount_amount) > 0 && (
+                  <div className={styles.summaryRow}>
+                    <span>Discount{preview.coupon_code ? ` (${preview.coupon_code})` : ''}</span>
+                    <span className={styles.discountValue}>
+                      − {formatMoney(preview.discount_amount, STOREFRONT_CURRENCY)}
+                    </span>
+                  </div>
+                )}
+
+                {preview && (
+                  <div className={styles.summaryRow}>
+                    <span>Shipping</span>
+                    <span>
+                      {Number(preview.shipping_amount) === 0
+                        ? 'Free'
+                        : formatMoney(preview.shipping_amount, STOREFRONT_CURRENCY)}
+                    </span>
+                  </div>
+                )}
+
+                {preview && (
+                  <div className={styles.summaryRow}>
+                    <span>Tax</span>
+                    <span>{formatMoney(preview.tax_amount, STOREFRONT_CURRENCY)}</span>
+                  </div>
+                )}
+
+                <div className={styles.summaryTotalRow}>
+                  <span>Total</span>
+                  <span>{formatMoney(total, STOREFRONT_CURRENCY)}</span>
+                </div>
+
+                <Link href="/check-out" className={`${homeStyles.pill} ${styles.checkoutBtn}`}>
+                  Proceed to Checkout
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
           )}
         </div>
+      </section>
 
-        {/* =================================
-            ORDER SUMMARY
-        ================================= */}
-        {items.length !== 0 && (
-          <div className="cart-items-summary">
-            <h2 className="cart-items-summary-title">Order Summary</h2>
-
-            <div className="cart-items-summary-rows">
-              {/* SUBTOTAL */}
-
-              <div className="cart-items-summary-row">
-                <span>Subtotal ({itemCount} items)</span>
-
-                <span className="cart-items-summary-value">
-                  {formatMoney(preview ? preview.subtotal : cart.subtotal, STOREFRONT_CURRENCY)}
-                </span>
-              </div>
-
-              {/* SHIPPING */}
-
-              <div className="cart-items-summary-row">
-                <span>Shipping</span>
-
-                <span className="cart-items-summary-value">
-                  {preview ? formatMoney(preview.shipping_amount, STOREFRONT_CURRENCY) : 'At checkout'}
-                </span>
-              </div>
-
-              {/* TAX */}
-
-              <div className="cart-items-summary-row">
-                <span>Tax</span>
-
-                <span className="cart-items-summary-value">
-                  {preview ? formatMoney(preview.tax_amount, STOREFRONT_CURRENCY) : 'At checkout'}
-                </span>
-              </div>
-            </div>
-
-            {/* =================================
-              TOTAL
-              ================================= */}
-
-            <div className="cart-items-total">
-              <span className="cart-items-total-label">Total</span>
-
-              <span className="cart-items-total-value">
-                {formatMoney(preview ? preview.total_amount : cart.subtotal, STOREFRONT_CURRENCY)}
-              </span>
-            </div>
-
-            {/* CHECKOUT */}
-            <Link href={'/check-out'}>
-              <button type="button" className="cart-items-checkout-btn">
-                Proceed to Checkout
-              </button>
-            </Link>
-
-            {/* NOTES */}
-
-            <div className="cart-items-notes">
-              <div className="cart-items-note">
-                <span>Secure checkout, encrypted payment</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <MobileBottomNav />
     </div>
   );
 }

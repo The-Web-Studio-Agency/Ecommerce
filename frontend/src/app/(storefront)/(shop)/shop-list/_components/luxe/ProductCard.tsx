@@ -4,13 +4,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
 
-import { BagIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
+import { BagIcon, HeartIcon } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 import { useWishlist } from '@/context/WishlistContext';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { ProductSummaryStorefront } from '@/types/catalogue';
 
-import { HeartIcon } from './Icons';
 import listingStyles from './Listing.module.css';
 
 interface Props {

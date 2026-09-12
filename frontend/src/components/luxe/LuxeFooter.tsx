@@ -38,20 +38,14 @@ const FOOTER_COLUMNS = [
   },
 ];
 
-/**
- * The Zeen footer, rendered once by the storefront layout for every page.
- *
- * The reveal attributes only animate where the browser drives them from CSS;
- * the JS fallback is gated on the Home page's own root, so out here the
- * columns simply paint.
- */
+/** The Zeen footer, shared by every page in the luxe design system. See LuxeHeader for why it's a copy, not an import, of the Home page's own markup. */
 export default function LuxeFooter() {
   return (
     <footer className={styles.footer}>
       <div className={styles.container}>
         <div className={styles.footerTop}>
           <div>
-            <p className={styles.footerBrand}>Zeen</p>
+            <p className={styles.footerBrand}>ZEEN</p>
             <p className={styles.footerTagline}>
               Everyday and ethnic wear for women, cut in considered fabrics with careful finishing and
               quiet modern ease.
@@ -89,11 +83,14 @@ export default function LuxeFooter() {
         </div>
       </div>
 
-      <div className={styles.footerImage}>
-        <img src="/home/footer.png" alt="Women wearing the Zeen collection" />
-        <span className={styles.footerWatermark} aria-hidden="true">
-          ZEEN
-        </span>
+        <div className={styles.footerImage}>
+          <img src="/home/footer-showroom.jpg" alt="Zeen flagship showroom" />
+        </div>
+
+        <div className={styles.footerBottom}>
+          <span>© {new Date().getFullYear()} Zeen. All rights reserved.</span>
+          <span>Crafted with care.</span>
+        </div>
       </div>
     </footer>
   );
