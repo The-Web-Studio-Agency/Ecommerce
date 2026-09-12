@@ -3,12 +3,11 @@ import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import { BlogGridData, CategoryData, TagData, widgetBox } from "@/constant/Alldata";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 
 export default function BlogGridBothSidebar(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Blog Grid Both Sidebar" parentText="Home" currentText="Blog Grid Both Sidebar" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -117,6 +116,6 @@ export default function BlogGridBothSidebar(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

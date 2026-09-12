@@ -1,7 +1,5 @@
 import Link from 'next/link';
 
-import LuxeFooter from '@/components/luxe/LuxeFooter';
-import LuxeHeader from '@/components/luxe/LuxeHeader';
 import { catalogueApi } from '@/lib/api/catalogue';
 import { searchApi } from '@/lib/api/search';
 import type { ProductSort, ProductSummaryStorefront } from '@/types/catalogue';
@@ -259,8 +257,6 @@ export default async function ShopListPage({
 
   return (
     <div className={homeStyles.page}>
-      <LuxeHeader />
-
       <section className={listingStyles.banner}>
         <div className={homeStyles.container}>
           <p className={listingStyles.crumb}>
@@ -363,7 +359,6 @@ export default async function ShopListPage({
         </div>
       </section>
 
-      <LuxeFooter />
       <MobileBottomNav />
     </div>
   );

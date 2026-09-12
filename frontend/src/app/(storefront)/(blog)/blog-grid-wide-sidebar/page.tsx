@@ -3,7 +3,6 @@ import CommanBanner from "@/components/CommanBanner";
 import { BlogGridData } from "@/constant/Alldata";
 import IMAGES from "@/constant/theme";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 
 const GridwideData = [
@@ -14,7 +13,7 @@ const updatedUsers = GridwideData.concat(BlogGridData);
 
 export default function BlogGridWideSidebar(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner parentText="Home" currentText="Blog Grid Wide" mainText="Blog Grid Wide" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -53,6 +52,6 @@ export default function BlogGridWideSidebar(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

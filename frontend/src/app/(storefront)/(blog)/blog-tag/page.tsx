@@ -4,11 +4,10 @@ import IMAGES from "@/constant/theme";
 import BlogSidebar from "@/elements/Blog/BlogSidebar";
 import { Bloglight2 } from "@/constant/Alldata";
 import CardBlog from "@/elements/Blog/CardBlog";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function BlogTag(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Blog Tags" parentText="Home" currentText="Blog Tags" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -47,6 +46,6 @@ export default function BlogTag(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

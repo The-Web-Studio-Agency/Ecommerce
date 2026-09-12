@@ -5,11 +5,10 @@ import CopySectionText from "@/constant/CopySectionText";
 import { HeaderOne } from "@/constant/HeaderAllData";
 import IMAGES from "@/constant/theme";
 import Link from 'next/link';
-import CommanLayout from '@/components/CommanLayout';
 
 export default function HeaderStyleFive(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <div className="dz-bnr-inr bg-secondary overlay-black-light" style={{backgroundImage:`url('${IMAGES.BackBg1.src}')`}}>
                     <div className="container">
@@ -54,6 +53,6 @@ export default function HeaderStyleFive(){
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

@@ -88,7 +88,7 @@ export async function passwordLogin(
     return toFormState(error);
   }
 
-  redirect('/');
+  redirect('/admin');
 }
 
 /** End the session, revoking the refresh token server-side as well. */

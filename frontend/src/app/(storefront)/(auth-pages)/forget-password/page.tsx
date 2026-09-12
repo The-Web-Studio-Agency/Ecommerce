@@ -1,4 +1,3 @@
-import MainLayout from "@/components/MainLayout";
 import ForgetPassword from "./_components/ForgotPassword";
 
 export const metadata = {
@@ -9,9 +8,9 @@ export const metadata = {
 
 const ForgetPasswordPage = () =>{
     return(
-        <MainLayout>
+        <>
             <ForgetPassword />
-        </MainLayout>
+        </>
     )
 }
 export default ForgetPasswordPage;

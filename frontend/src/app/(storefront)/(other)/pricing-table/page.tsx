@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout";
 import CommanBanner from "@/components/CommanBanner";
 import GetInTouch from "@/components/GetInTouch";
 import IMAGES from "@/constant/theme";
@@ -11,7 +10,7 @@ export const metadata = {
 
 const PricingTablePage = () =>{
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Pricing Table" parentText="Home" currentText="Pricing Table"  image={IMAGES.BackBg1.src} />
                 <section className="dz-pricingtable ">
@@ -23,7 +22,7 @@ const PricingTablePage = () =>{
                 </section>            
                 <GetInTouch />
             </div>
-        </CommanLayout>
+        </>
     )
 }
 export default PricingTablePage;

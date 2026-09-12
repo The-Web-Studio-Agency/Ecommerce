@@ -4,7 +4,6 @@ import IMAGES from "@/constant/theme";
 import Link from "next/link";
 import { Navigation, Pagination } from "swiper/modules";
 import Image, { StaticImageData } from "next/image";
-import WithoutFooterLayout from "@/components/WithoutFooterLayout";
 
 interface SliderDatatype{
     image : string | StaticImageData;
@@ -20,7 +19,7 @@ const SliderData : SliderDatatype[] = [
 
 export default function CarouselShowcase(){
     return(
-        <WithoutFooterLayout>
+        <>
             <div className="page-content bg-light">
                 <section className="pt-0 z-index-unset bg-white overflow-hidden">
                     <div className="container-fluid">
@@ -106,6 +105,6 @@ export default function CarouselShowcase(){
                     </div>
                 </section>
             </div>
-        </WithoutFooterLayout>
+        </>
     )
 }

@@ -4,12 +4,11 @@ import IMAGES from "@/constant/theme"
 import BlogSidebar from "@/elements/Blog/BlogSidebar";
 import { BlogGridData } from "@/constant/Alldata";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 
 export default function BlogGridLeftSidebar(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner parentText="Home" mainText="Blog Grid Left Sidebar" currentText="Blog Grid Left Sidebar" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -55,6 +54,6 @@ export default function BlogGridLeftSidebar(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

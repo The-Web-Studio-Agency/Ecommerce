@@ -3,7 +3,6 @@ import CommanBanner from "@/components/CommanBanner";
 import { voucherBlogData } from "@/constant/Alldata";
 import IMAGES from "@/constant/theme";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -12,7 +11,7 @@ export const metadata = {
 
 const OurGiftVouchers = () => {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Our Gift Vouchers" currentText="Our Gift Vouchers" parentText="Home" image={IMAGES.BackBg1.src} />
                 <section className="content-inner">
@@ -35,7 +34,7 @@ const OurGiftVouchers = () => {
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     );
 };
 

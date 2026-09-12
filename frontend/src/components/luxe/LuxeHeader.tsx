@@ -22,10 +22,11 @@ const NAV_LINKS = [
 ];
 
 /**
- * The Avera header, shared by every page that opts into the luxe design
- * system. Lifted verbatim out of the Home page's header markup (Home.module.css
- * stays the single source of truth for its styling) so other pages can look
- * identical without the Home page itself importing or re-exporting anything.
+ * The Zeen header, rendered once by the storefront layout for every page.
+ *
+ * Home.module.css stays the single source of truth for its styling -- the
+ * markup was lifted out of the Home page, which now renders this component
+ * like everywhere else.
  */
 export default function LuxeHeader() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -47,7 +48,7 @@ export default function LuxeHeader() {
         </nav>
 
         <Link href="/" className={styles.logo}>
-          AVERA
+          ZEEN
         </Link>
 
         <div className={styles.headerRight}>

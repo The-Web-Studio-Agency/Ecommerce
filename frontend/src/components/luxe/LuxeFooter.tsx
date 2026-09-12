@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 
 import styles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
 import {
@@ -37,33 +38,44 @@ const FOOTER_COLUMNS = [
   },
 ];
 
-/** The Avera footer, shared by every page in the luxe design system. See LuxeHeader for why it's a copy, not an import, of the Home page's own markup. */
+/**
+ * The Zeen footer, rendered once by the storefront layout for every page.
+ *
+ * The reveal attributes only animate where the browser drives them from CSS;
+ * the JS fallback is gated on the Home page's own root, so out here the
+ * columns simply paint.
+ */
 export default function LuxeFooter() {
   return (
     <footer className={styles.footer}>
       <div className={styles.container}>
         <div className={styles.footerTop}>
           <div>
-            <p className={styles.footerBrand}>AVERA</p>
+            <p className={styles.footerBrand}>Zeen</p>
             <p className={styles.footerTagline}>
-              Crafting timeless leather handbags with exceptional craftsmanship, premium materials, and modern
-              elegance.
+              Everyday and ethnic wear for women, cut in considered fabrics with careful finishing and
+              quiet modern ease.
             </p>
             <div className={styles.footerSocials}>
               <a href="#" aria-label="X (Twitter)">
-                <XSocialIcon />
+                <XSocialIcon size={21} />
               </a>
               <a href="#" aria-label="Instagram">
-                <InstagramIcon />
+                <InstagramIcon size={22} />
               </a>
               <a href="#" aria-label="TikTok">
-                <TikTokIcon />
+                <TikTokIcon size={21} />
               </a>
             </div>
           </div>
 
-          {FOOTER_COLUMNS.map(col => (
-            <div key={col.title} className={styles.footerCol}>
+          {FOOTER_COLUMNS.map((col, i) => (
+            <div
+              key={col.title}
+              className={styles.footerCol}
+              data-reveal
+              style={{ '--reveal-delay': `${(i + 1) * 90}ms` } as CSSProperties}
+            >
               <p className={styles.footerColTitle}>{col.title}</p>
               <ul>
                 {col.links.map(link => (
@@ -75,15 +87,13 @@ export default function LuxeFooter() {
             </div>
           ))}
         </div>
+      </div>
 
-        <div className={styles.footerImage}>
-          <img src="/home/footer-showroom.jpg" alt="Avera flagship showroom" />
-        </div>
-
-        <div className={styles.footerBottom}>
-          <span>© {new Date().getFullYear()} Avera. All rights reserved.</span>
-          <span>Crafted with care.</span>
-        </div>
+      <div className={styles.footerImage}>
+        <img src="/home/footer.png" alt="Women wearing the Zeen collection" />
+        <span className={styles.footerWatermark} aria-hidden="true">
+          ZEEN
+        </span>
       </div>
     </footer>
   );

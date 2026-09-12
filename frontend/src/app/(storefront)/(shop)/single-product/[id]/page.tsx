@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import LuxeFooter from '@/components/luxe/LuxeFooter';
-import LuxeHeader from '@/components/luxe/LuxeHeader';
 import ProductReviews from '@/elements/SingleProductPage/ProductReviews';
 import SingleProduct from '@/elements/SingleProductPage/SingleProduct';
 import { catalogueApi } from '@/lib/api/catalogue';
@@ -44,8 +42,6 @@ const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }
 
   return (
     <div className={homeStyles.page}>
-      <LuxeHeader />
-
       <section className={productStyles.crumbBar}>
         <div className={homeStyles.container}>
           <p className={listingStyles.crumb} style={{ margin: 0 }}>
@@ -63,8 +59,6 @@ const SingleProductPage = async ({ params }: { params: Promise<{ id: string }> }
       </div>
 
       <ProductReviews productId={id} reviews={reviews} summary={summary} currentUserId={user?.id ?? null} />
-
-      <LuxeFooter />
     </div>
   );
 };

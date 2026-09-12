@@ -1,5 +1,4 @@
 import CommanBanner from "@/components/CommanBanner";
-import CommanLayout from "@/components/CommanLayout";
 import IMAGES from "@/constant/theme";
 import AdditionalInfo from "@/elements/Post/AdditionalInfo";
 import AuthorProfile from "@/elements/Post/AuthorProfile";
@@ -17,7 +16,7 @@ export const metadata = {
 
 export default function PostSide(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Post Side" parentText="Home" currentText="Post Side" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -70,6 +69,6 @@ export default function PostSide(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

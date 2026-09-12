@@ -2,7 +2,6 @@ import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import { FooterStyleCode1 } from "@/constant/Alldata";
 import CopySectionText from "@/constant/CopySectionText";
-import CommanLayout from "@/components/CommanLayout";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -11,7 +10,7 @@ export const metadata = {
 
 export default function FooterStyle1(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner currentText="Footer Style 1" mainText="Footer Style 1" parentText="Home" image={IMAGES.BackBg1.src} />
                 <div className="content-inner">
@@ -27,6 +26,6 @@ export default function FooterStyle1(){
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

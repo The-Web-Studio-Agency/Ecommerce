@@ -3,14 +3,11 @@ import Link from 'next/link';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import IMAGES from "@/constant/theme";
 import { Autoplay, Parallax, EffectFade } from 'swiper/modules';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
 import BannerCommanSection from '@/components/BannerCommanSection';
 
 export default function BannerWithKanbern(){
     return(
         <div className="page-wraper">            
-            <Header design="header-text-white header-transparent"/>
             <div className="page-content bg-light">		
                 <div className="dz-bnr-inr bg-secondary overlay-black-light">
                     <div className="container">
@@ -43,7 +40,6 @@ export default function BannerWithKanbern(){
                 </div>
                 <BannerCommanSection />
             </div>
-            <Footer />
         </div>
     )
 }

@@ -4,11 +4,10 @@ import IMAGES from "@/constant/theme";
 import { Mousewheel, Pagination, Parallax } from "swiper/modules";
 import Link from "next/link";
 import Image from "next/image";
-import WithoutFooterLayout from "@/components/WithoutFooterLayout";
 
 export default function PortfolioSplitSlider(){
     return(
-        <WithoutFooterLayout>
+        <>
             <div className="page-content bg-light">
                 <div className="content-block">
                     <div className="section-full overflow-hidden">
@@ -213,6 +212,6 @@ export default function PortfolioSplitSlider(){
                     </div>
                 </div>
             </div>
-        </WithoutFooterLayout>
+        </>
     )
 }

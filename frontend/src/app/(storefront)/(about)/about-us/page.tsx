@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout";
 import AboutUs from "./_components/AboutUs";
 
 export const metadata = {
@@ -8,8 +7,8 @@ export const metadata = {
 
 export default function AboutUsPage(){
     return(
-        <CommanLayout>
+        <>
             <AboutUs />
-        </CommanLayout>
+        </>
     )
 }

@@ -8,7 +8,6 @@ import AuthorProfile from "@/elements/Post/AuthorProfile";
 import RelatedPost from "@/elements/Post/RelatedPost";
 import Comments from "@/elements/Post/Comments";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -17,7 +16,7 @@ export const metadata = {
 
 export default function PostStandard(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <section className="content-inner-1 bg-img-fix">
                     <div className="container">
@@ -71,6 +70,6 @@ export default function PostStandard(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>            
+        </>            
     )
 }

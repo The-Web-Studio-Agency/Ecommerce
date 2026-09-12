@@ -3,12 +3,11 @@ import CommanBanner from "@/components/CommanBanner"
 import IMAGES from "@/constant/theme"
 import { BlogGridData } from "@/constant/Alldata"
 import Image from "next/image"
-import CommanLayout from "@/components/CommanLayout"
 
 
 export default function BlogGridNoSidebar(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner parentText="Home" mainText="Blog Grid No Sidebar" currentText="Blog Grid No Sidebar" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -49,6 +48,6 @@ export default function BlogGridNoSidebar(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

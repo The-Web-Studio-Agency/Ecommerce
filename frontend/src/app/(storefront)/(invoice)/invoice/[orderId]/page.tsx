@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 
-import CommanLayout from '@/components/CommanLayout';
 import CommonBanner2 from '@/components/CommonBanner2';
 import { ApiError } from '@/lib/api/errors';
 import { orderApi } from '@/lib/api/orders';
@@ -24,9 +23,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ orderI
   }
 
   return (
-    <CommanLayout>
+    <>
       <CommonBanner2 parentText="Orders" currentText="Invoice" mainText="Shop Standard" />
       <Invoice order={order} />
-    </CommanLayout>
+    </>
   );
 }

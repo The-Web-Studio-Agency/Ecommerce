@@ -9,7 +9,6 @@ import PostTitleWithImage from "@/elements/Post/PostTitleWithImage";
 import RelatedPost from "@/elements/Post/RelatedPost";
 import SocialIcon from "@/elements/SocialIcon";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -18,7 +17,7 @@ export const metadata = {
 
 export default function PostLink(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <section className="content-inner-1 z-index-unset">
                     <div className="container">
@@ -76,6 +75,6 @@ export default function PostLink(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

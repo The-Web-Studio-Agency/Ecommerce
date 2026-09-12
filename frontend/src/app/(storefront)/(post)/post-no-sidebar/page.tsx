@@ -1,11 +1,9 @@
 import Link from "next/link";
-import Header from "@/components/Header";
 import IMAGES from "@/constant/theme";
 import AdditionalInfo from "@/elements/Post/AdditionalInfo";
 import Comments from "@/elements/Post/Comments";
 import PostTag from "@/elements/Post/PostTag";
 import SocialIcon from "@/elements/SocialIcon";
-import Footer from "@/components/Footer";
 import AuthorProfile from "@/elements/Post/AuthorProfile";
 import RelatedPost from "@/elements/Post/RelatedPost";
 import Image from "next/image";
@@ -18,7 +16,6 @@ export const metadata = {
 export default function PostNoSidebar(){
     return(
         <div className="page-wraper">
-            <Header design="border-bottom" />
             <div className="page-content bg-light">                            
                 <section className="content-inner-3">
                     <div className="min-container">                        
@@ -84,7 +81,6 @@ export default function PostNoSidebar(){
                     </div>
                 </section>
             </div>
-            <Footer />
         </div>
     )
 }   

@@ -1,4 +1,3 @@
-import CommanLayout from '@/components/CommanLayout';
 import { checkoutApi } from '@/lib/api/orders';
 import { getAccessToken } from '@/lib/auth/session';
 import Checkout from './_components/Checkout';
@@ -14,8 +13,8 @@ export default async function CheckoutPageRoute() {
   const preview = token ? await checkoutApi.preview(token).catch(() => null) : null;
 
   return (
-    <CommanLayout>
+    <>
       <Checkout initialPreview={preview} />
-    </CommanLayout>
+    </>
   );
 }

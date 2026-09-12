@@ -3,11 +3,10 @@ import Image from "next/image";
 import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function AccountCancellationRequests() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Cancellation Requests" parentText="Home" currentText="Cancellation Requests" />
                 <div className="content-inner-1">
@@ -90,6 +89,6 @@ export default function AccountCancellationRequests() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

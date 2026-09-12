@@ -1,4 +1,3 @@
-import WithoutFooterLayout from "@/components/WithoutFooterLayout";
 import PortfolioThumbsSlider from "./_components/PortfolioThumbsSlider";
 
 export const metadata = {
@@ -8,9 +7,9 @@ export const metadata = {
 
 const PortfolioThumbsSliderPage = () =>{
     return(
-        <WithoutFooterLayout>
+        <>
             <PortfolioThumbsSlider />
-        </WithoutFooterLayout>
+        </>
     )
 }
 export default PortfolioThumbsSliderPage;

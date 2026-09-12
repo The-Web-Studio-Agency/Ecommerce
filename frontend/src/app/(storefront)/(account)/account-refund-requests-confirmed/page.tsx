@@ -2,11 +2,10 @@ import Link from "next/link";
 import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function AccountRefundRequestConfirm() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Refund Requests Confirmed" parentText="Home" currentText="Refund Requests Confirmed" />
                 <div className="content-inner-1">
@@ -24,6 +23,6 @@ export default function AccountRefundRequestConfirm() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

@@ -1,7 +1,6 @@
 import Link from "next/link"
 import IMAGES from "@/constant/theme"
 import Image from "next/image"
-import CommanLayout from "@/components/CommanLayout"
 
 export const metadata = {
     title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -11,7 +10,7 @@ export const metadata = {
 
 const ErrorPage1 = () =>{
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <section className="content-inner-1">
                     <div className="container">
@@ -32,7 +31,7 @@ const ErrorPage1 = () =>{
                     </div>
                 </section>                
             </div>
-        </CommanLayout>
+        </>
     )
 }
 export default ErrorPage1

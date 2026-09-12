@@ -2,7 +2,6 @@ import Link from "next/link";
 import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import Image, { StaticImageData } from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 interface shirtStyletype{
     image: string | StaticImageData;
@@ -19,7 +18,7 @@ const shirtStyleData : shirtStyletype[] = [
 
 export default function ShopStyle2(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Shop Style 2" parentText="Home" currentText="Shop Style 2" image={IMAGES.BackBg1.src}/>
                 <section className="content-inner-1">
@@ -48,6 +47,6 @@ export default function ShopStyle2(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

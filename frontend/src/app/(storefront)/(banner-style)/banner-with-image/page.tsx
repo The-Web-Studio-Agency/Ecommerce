@@ -1,7 +1,6 @@
 import Link from "next/link";
 import IMAGES from "@/constant/theme";
 import CommanSection from "@/components/BannerCommanSection";
-import CommanLayout from "@/components/CommanLayout";
 import Image from "next/image";
 
 export const metadata = {
@@ -11,7 +10,7 @@ export const metadata = {
 
 export default function BannerWithImage(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">		
                 <div className="dz-bnr-inr" style={{backgroundImage:`url('${IMAGES.BgShape.src}')`}}>
                     <div className="container">
@@ -35,6 +34,6 @@ export default function BannerWithImage(){
                 </div>
                 <CommanSection />
             </div>
-        </CommanLayout>
+        </>
     )
 }

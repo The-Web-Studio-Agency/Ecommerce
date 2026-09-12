@@ -15,7 +15,7 @@ import type { UserProfile } from '@/types/auth';
 export async function requireStaff(): Promise<{ user: UserProfile; token: string }> {
   const [user, token] = await Promise.all([getCurrentUser(), getAccessToken()]);
 
-  if (!user || !token) redirect('/admin/login');
+  if (!user || !token) redirect('/admin-signin');
   if (user.role !== 'ADMIN' && user.role !== 'STAFF') redirect('/');
 
   return { user, token };

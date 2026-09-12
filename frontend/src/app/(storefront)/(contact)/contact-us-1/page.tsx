@@ -1,4 +1,3 @@
-import WithoutFooterLayout from "@/components/WithoutFooterLayout"
 import ContactUs from "./_components/ContactUs"
 
 export const metadata = {
@@ -8,9 +7,9 @@ export const metadata = {
 
 const ContactUsPage = () =>{
     return(
-        <WithoutFooterLayout>
+        <>
             <ContactUs />
-        </WithoutFooterLayout>
+        </>
     )
 }
 export default ContactUsPage;

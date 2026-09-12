@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import CommanLayout from '@/components/CommanLayout';
 import CommonBanner2 from '@/components/CommonBanner2';
 import DeleteAccountButton from '@/components/DeleteAccountButton';
 import SignOutButton from '@/components/SignOutButton';
@@ -28,7 +27,7 @@ export default async function MyAccountPage() {
   ]);
 
   return (
-    <CommanLayout>
+    <>
       <CommonBanner2 parentText="Home" currentText="My Account" mainText="My Account" />
 
       <div className="myorderPage">
@@ -126,6 +125,6 @@ export default async function MyAccountPage() {
           </div>
         </div>
       </div>
-    </CommanLayout>
+    </>
   );
 }

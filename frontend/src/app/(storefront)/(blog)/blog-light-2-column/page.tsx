@@ -2,7 +2,6 @@ import Link from "next/link";
 import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 interface BlogDark2Type{
     dealy : string;
@@ -20,7 +19,7 @@ const BlogLight2 : BlogDark2Type[] = [
 
 export default function BlogLight2Column(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner currentText="Blog Light 2 Column" mainText="Blog Light 2 Column" parentText="Home" image={IMAGES.BackBg1.src}/>
                 <section className="content-inner-1 z-index-unset">
@@ -58,6 +57,6 @@ export default function BlogLight2Column(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

@@ -4,8 +4,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 
-import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
-import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatPriceRange } from '@/lib/format';
 import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
@@ -14,29 +12,15 @@ import styles from './Home.module.css';
 import {
   ArrowRightIcon,
   BagIcon,
-  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CloseIcon,
   GiftIcon,
   HandshakeIcon,
-  InstagramIcon,
-  MenuIcon,
   MinusIcon,
   PlusIcon,
-  SearchIcon,
   StarIcon,
-  TikTokIcon,
   TruckIcon,
-  XSocialIcon,
 } from './Icons';
-
-const NAV_LINKS = [
-  { label: 'Shop', href: '/shop-list', chevron: true },
-  { label: 'Best Sellers', href: '/shop-list' },
-  { label: 'About', href: '/about-us' },
-  { label: 'Contact', href: '/contact-us-1' },
-];
 
 const ALL_FILTER = 'All';
 
@@ -124,36 +108,6 @@ const COMMITMENTS = [
   },
 ];
 
-const FOOTER_COLUMNS = [
-  {
-    title: 'Shop',
-    links: [
-      { label: 'New Arrivals', href: '/shop-list' },
-      { label: 'Collections', href: '/shop-list' },
-      { label: 'Best Sellers', href: '/shop-list' },
-      { label: 'Gift Cards', href: '/our-gift-vouchers' },
-    ],
-  },
-  {
-    title: 'About',
-    links: [
-      { label: 'Our Story', href: '/about-us' },
-      { label: 'Sustainability', href: '/about-us' },
-      { label: 'Journal', href: '/blog-list-no-sidebar' },
-      { label: 'Contact Us', href: '/contact-us-1' },
-    ],
-  },
-  {
-    title: 'Customer Care',
-    links: [
-      { label: 'Shipping & Returns', href: '/faqs-1' },
-      { label: 'FAQs', href: '/faqs-1' },
-      { label: 'Product Care', href: '/faqs-1' },
-      { label: 'Track Order', href: '/my-orders' },
-    ],
-  },
-];
-
 function money(product: { price_from: string | null; price_to: string | null } | null | undefined) {
   if (!product) return '';
   return formatPriceRange(product.price_from, product.price_to, STOREFRONT_CURRENCY);
@@ -186,7 +140,6 @@ export default function HomeClient({
 
   const filters = [ALL_FILTER, ...categories.slice(0, 3).map(category => category.name)];
 
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [heroThumb, setHeroThumb] = useState(0);
   const [activeFilter, setActiveFilter] = useState(ALL_FILTER);
   const [size, setSize] = useState(sizes[0]);
@@ -268,55 +221,6 @@ export default function HomeClient({
 
   return (
     <div className={styles.page} ref={pageRef}>
-      {/* ---------------------------------- Header ---------------------------------- */}
-      <header className={styles.header}>
-        <div className={`${styles.container} ${styles.headerInner}`}>
-          <nav aria-label="Primary">
-            <ul className={styles.nav}>
-              {NAV_LINKS.map(link => (
-                <li key={link.label}>
-                  <Link href={link.href}>
-                    {link.label}
-                    {link.chevron && <ChevronDownIcon size={12} />}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <Link href="/" className={styles.logo}>
-            ZEEN
-          </Link>
-
-          <div className={styles.headerRight}>
-            <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
-              <SearchIcon />
-            </Link>
-            <LuxeAccountNav />
-            <LuxeWishlistButton />
-            <Link href="/cart-items" className={styles.headerRoundBtn} aria-label="My cart">
-              <BagIcon size={17} />
-            </Link>
-            <button
-              type="button"
-              className={styles.menuBtn}
-              aria-label="Toggle menu"
-              onClick={() => setMobileNavOpen(v => !v)}
-            >
-              {mobileNavOpen ? <CloseIcon /> : <MenuIcon />}
-            </button>
-          </div>
-        </div>
-
-        <div className={`${styles.container} ${styles.mobileNav} ${mobileNavOpen ? styles.open : ''}`}>
-          {NAV_LINKS.map(link => (
-            <Link key={link.label} href={link.href} onClick={() => setMobileNavOpen(false)}>
-              {link.label}
-            </Link>
-          ))}
-        </div>
-      </header>
-
       {/* ---------------------------------- Hero ---------------------------------- */}
       <section className={styles.hero}>
         <div className={styles.heroWatermark}>CHURIDARS ZEEN</div>
@@ -697,57 +601,6 @@ export default function HomeClient({
           </span>
         </Link>
       </div>
-
-      {/* ---------------------------------- Footer ---------------------------------- */}
-      <footer className={styles.footer}>
-        <div className={styles.container}>
-          <div className={styles.footerTop}>
-            <div>
-              <p className={styles.footerBrand}>Zeen</p>
-              <p className={styles.footerTagline}>
-                Everyday and ethnic wear for women, cut in considered fabrics with careful finishing and
-                quiet modern ease.
-              </p>
-              <div className={styles.footerSocials}>
-                <a href="#" aria-label="X (Twitter)">
-                  <XSocialIcon size={21} />
-                </a>
-                <a href="#" aria-label="Instagram">
-                  <InstagramIcon size={22} />
-                </a>
-                <a href="#" aria-label="TikTok">
-                  <TikTokIcon size={21} />
-                </a>
-              </div>
-            </div>
-
-            {FOOTER_COLUMNS.map((col, i) => (
-              <div
-                key={col.title}
-                className={styles.footerCol}
-                data-reveal
-                style={{ '--reveal-delay': `${(i + 1) * 90}ms` } as CSSProperties}
-              >
-                <p className={styles.footerColTitle}>{col.title}</p>
-                <ul>
-                  {col.links.map(link => (
-                    <li key={link.label}>
-                      <Link href={link.href}>{link.label}</Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className={styles.footerImage}>
-          <img src="/home/footer.png" alt="Women wearing the Zeen collection" />
-          <span className={styles.footerWatermark} aria-hidden="true">
-            ZEEN
-          </span>
-        </div>
-      </footer>
     </div>
   );
 }

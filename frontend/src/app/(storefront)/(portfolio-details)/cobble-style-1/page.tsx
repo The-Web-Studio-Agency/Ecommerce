@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout"
 import { Fragment } from "react"
 import CobbleStyleOne from "./_components/CobbleStyle1"
 
@@ -10,9 +9,9 @@ export const metadata = {
 const CobbleStyleOnePage = () =>{
     return(
         <Fragment>
-            <CommanLayout>
+            <>
                 <CobbleStyleOne />
-            </CommanLayout>
+            </>
         </Fragment>
     )
 }

@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout";
 import PortfolioTiles from "./_components/PortfolioTiles";
 
 export const metadata = {
@@ -8,9 +7,9 @@ export const metadata = {
 
 const PortfolioTilesPage = ()=>{
     return(
-        <CommanLayout>
+        <>
             <PortfolioTiles />
-        </CommanLayout>
+        </>
     )
 }
 export default PortfolioTilesPage;

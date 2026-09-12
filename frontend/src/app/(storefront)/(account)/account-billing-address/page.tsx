@@ -1,11 +1,10 @@
 import CommanBanner from "@/components/CommanBanner";
-import CommanLayout from "@/components/CommanLayout";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
 
 export default function AccountBillingAddress(){
     return(
-		<CommanLayout>
+		<>
 			<div className="page-content bg-light">
 				<CommanBanner image={IMAGES.BackBg1.src} mainText="Billing Address" parentText="Home" currentText="Billing Address" />
 				<div className="content-inner-1">
@@ -100,6 +99,6 @@ export default function AccountBillingAddress(){
 					</div>
 				</div>
 			</div>
-		</CommanLayout>
+		</>
     )
 }

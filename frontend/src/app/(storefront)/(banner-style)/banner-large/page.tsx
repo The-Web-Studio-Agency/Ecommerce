@@ -1,6 +1,4 @@
 import Link from "next/link";
-import Footer from "@/components/Footer";
-import Header from "@/components/Header";
 import CommanSection from "@/components/BannerCommanSection";
 import IMAGES from "@/constant/theme";
 
@@ -12,7 +10,6 @@ export const metadata = {
 export default function BannerLarge() {
     return (
         <div className="page-wraper">
-            <Header design="header-text-white header-transparent" />
             <div className="page-content bg-light">
                 <div className="dz-bnr-inr bg-secondary overlay-black-light dz-bnr-inr-lg" style={{ backgroundImage: `url('${IMAGES.BackBg1.src}')` }}>
                     <div className="container">
@@ -29,7 +26,6 @@ export default function BannerLarge() {
                 </div>
                 <CommanSection />
             </div>
-            <Footer />
         </div>
 
     )

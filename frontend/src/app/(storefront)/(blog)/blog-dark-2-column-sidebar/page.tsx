@@ -2,7 +2,6 @@ import Link from "next/link";
 import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import BlogSidebar from "@/elements/Blog/BlogSidebar";
-import CommanLayout from "@/components/CommanLayout";
 import Image from "next/image";
 
 export const metadata = {
@@ -28,7 +27,7 @@ const BlogDark2SidebarData : BlogDark2Type[] = [
 
 export default function BlogDark2Sidebar(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner parentText="Home" currentText="Blog Dark 2 Column Sidebar" mainText="Blog Dark 2 Column Sidebar" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -75,6 +74,6 @@ export default function BlogDark2Sidebar(){
                     </div>
                 </section>
             </div> 
-        </CommanLayout>
+        </>
     )
 }

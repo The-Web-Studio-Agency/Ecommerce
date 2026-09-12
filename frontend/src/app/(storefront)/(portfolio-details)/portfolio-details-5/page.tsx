@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout";
 import PortfolioDetails3 from "../portfolio-details-3/_components/PortfolioDetails3";
 
 export const metadata = {
@@ -8,8 +7,8 @@ export const metadata = {
 
 export default function PortfolioDetail53Page(){
     return(
-        <CommanLayout>
+        <>
             <PortfolioDetails3 />
-        </CommanLayout>
+        </>
     )
 }

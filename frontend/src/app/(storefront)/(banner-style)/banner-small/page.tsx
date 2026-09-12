@@ -1,9 +1,7 @@
 import { Fragment } from "react/jsx-runtime";
 import Link from "next/link";
 import IMAGES from "@/constant/theme";
-import Header from "@/components/Header";
 import CommanSection from "@/components/BannerCommanSection";
-import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -14,7 +12,6 @@ export default function BannerSmall() {
     return (
         <Fragment>
             <div className="page-wraper">            
-                <Header design="header-text-white header-transparent"/>
                 <div className="page-content bg-light">
                     <div className="dz-bnr-inr bg-secondary overlay-black-light dz-bnr-inr-sm" style={{ backgroundImage: `url(${IMAGES.BackBg1.src})` }}>
                         <div className="container">
@@ -31,7 +28,6 @@ export default function BannerSmall() {
                     </div>
                     <CommanSection />
                 </div>
-                <Footer />
             </div>
         </Fragment>
     )

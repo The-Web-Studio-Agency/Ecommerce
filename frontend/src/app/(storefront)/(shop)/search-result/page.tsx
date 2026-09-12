@@ -1,6 +1,5 @@
 import Link from 'next/link';
 
-import CommanLayout from '@/components/CommanLayout';
 import CommonBanner2 from '@/components/CommonBanner2';
 import ProductCard from '@/elements/Shop/ProductCard';
 import { catalogueApi } from '@/lib/api/catalogue';
@@ -57,7 +56,7 @@ export default async function SearchResultPage({
     .map(toSummary);
 
   return (
-    <CommanLayout>
+    <>
       <CommonBanner2
         parentText="Home"
         currentText="Search"
@@ -99,6 +98,6 @@ export default async function SearchResultPage({
           </div>
         )}
       </div>
-    </CommanLayout>
+    </>
   );
 }

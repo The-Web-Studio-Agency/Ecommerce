@@ -3,7 +3,6 @@ import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import { CategoryData, TagData, widgetBox } from "@/constant/Alldata";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 interface Bloglight2Type{
     dealy : string;
@@ -23,7 +22,7 @@ const Bloglight2 : Bloglight2Type[] = [
 
 export default function BlogListBothSidebar(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Blog List Both Sidebar" parentText="Home" currentText="Blog List Both Sidebar" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -132,6 +131,6 @@ export default function BlogListBothSidebar(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

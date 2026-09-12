@@ -3,12 +3,11 @@ import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
 import { AccountProducts } from "@/constant/Alldata";
-import CommanLayout from "@/components/CommanLayout";
 import Image from "next/image";
 
 export default function AccountDownloads() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Downloads" parentText="Home" currentText="Downloads" />
                 <div className="content-inner-1">
@@ -45,6 +44,6 @@ export default function AccountDownloads() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

@@ -1,5 +1,4 @@
 import PortfolioDetails1 from "./_components/PortfolioDetails1";
-import CommanLayout from "@/components/CommanLayout";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -8,9 +7,9 @@ export const metadata = {
 
 const PortfolioDetails1Page = () => {
     return(
-        <CommanLayout>
+        <>
             <PortfolioDetails1 />
-        </CommanLayout>
+        </>
     )
 }
 export default PortfolioDetails1Page;

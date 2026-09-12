@@ -6,7 +6,6 @@ import { Bloglight2 } from "@/constant/Alldata";
 import CardBlog from "@/elements/Blog/CardBlog";
 import SocialIcon from "@/elements/SocialIcon";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -15,7 +14,7 @@ export const metadata = {
 
 export default function BlogAuthor(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Blog Author" parentText="Home" currentText="Blog Author" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -63,6 +62,6 @@ export default function BlogAuthor(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout";
 import PortfolioDetails2 from "./_components/PortfolioDetails2";
 
 export const metadata = {
@@ -8,9 +7,9 @@ export const metadata = {
 
 const PortfolioDetails2Page = () =>{
     return(
-        <CommanLayout>
+        <>
             <PortfolioDetails2 />
-        </CommanLayout>
+        </>
     )
 }
 export default PortfolioDetails2Page;

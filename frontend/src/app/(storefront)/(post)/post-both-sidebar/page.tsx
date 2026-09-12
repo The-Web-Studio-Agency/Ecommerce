@@ -1,6 +1,4 @@
 import Link from "next/link";
-import Footer from "@/components/Footer";
-import Header from "@/components/Header";
 import { CategoryData, TagData, widgetBox } from "@/constant/Alldata";
 import PostTitleWithImage from "@/elements/Post/PostTitleWithImage";
 import IMAGES from "@/constant/theme";
@@ -20,7 +18,6 @@ export const metadata = {
 export default function PostBothSidebar(){
     return(
         <div className="page-wraper">
-            <Header design="border-bottom" />
             <div className="page-content bg-light">
                 <section className="content-inner-1 z-index-unset">
                     <div className="container-fluid">
@@ -140,7 +137,6 @@ export default function PostBothSidebar(){
                     </div>
                 </section>
             </div>
-            <Footer />
         </div>
     )
 }

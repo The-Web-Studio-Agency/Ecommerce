@@ -3,12 +3,11 @@ import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import { Bloglight2 } from "@/constant/Alldata";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 
 export default function BlogListNoSidebar(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner parentText="Home" mainText="Blog List No Sidebar" currentText="Blog List No Sidebar" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -45,6 +44,6 @@ export default function BlogListNoSidebar(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

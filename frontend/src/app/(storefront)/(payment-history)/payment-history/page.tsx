@@ -1,4 +1,3 @@
-import CommanLayout from '@/components/CommanLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { orderApi } from '@/lib/api/orders';
 import { getAccessToken } from '@/lib/auth/session';
@@ -37,10 +36,10 @@ export default async function PaymentHistoryPage() {
   const payments = token ? await loadPayments(token) : [];
 
   return (
-    <CommanLayout>
+    <>
       <ProtectedRoute>
         <PaymentHistory payments={payments} />
       </ProtectedRoute>
-    </CommanLayout>
+    </>
   );
 }

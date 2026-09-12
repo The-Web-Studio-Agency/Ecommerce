@@ -1,4 +1,3 @@
-import CommanLayout from '@/components/CommanLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { orderApi } from '@/lib/api/orders';
 import { getAccessToken } from '@/lib/auth/session';
@@ -21,10 +20,10 @@ export default async function MyOrdersPage() {
     : [];
 
   return (
-    <CommanLayout>
+    <>
       <ProtectedRoute>
         <MyOrders orders={orders} />
       </ProtectedRoute>
-    </CommanLayout>
+    </>
   );
 }

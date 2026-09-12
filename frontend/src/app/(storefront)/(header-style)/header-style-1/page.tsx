@@ -1,12 +1,11 @@
 import CommanBanner from "@/components/CommanBanner";
-import CommanLayout from "@/components/CommanLayout";
 import CopySectionText from "@/constant/CopySectionText";
 import { HeaderOne } from "@/constant/HeaderAllData";
 import IMAGES from "@/constant/theme";
 
 export default function HeaderStyleOne(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner currentText="Header Style 1" mainText="Header Style 1" parentText="Home" image={IMAGES.BackBg1.src} />
                 <div className="content-inner">
@@ -23,6 +22,6 @@ export default function HeaderStyleOne(){
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

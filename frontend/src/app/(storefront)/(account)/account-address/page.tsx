@@ -2,11 +2,10 @@ import Link from "next/link";
 import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function AccountAddress() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Account Address" parentText="Home" currentText="Account Address" />
                 <div className="content-inner-1">
@@ -69,6 +68,6 @@ export default function AccountAddress() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

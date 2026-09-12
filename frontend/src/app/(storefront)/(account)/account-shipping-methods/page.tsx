@@ -3,11 +3,10 @@ import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function AccountShippingMethods() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Shipping Methods" parentText="Home" currentText="Shipping Methods" />
                 <div className="content-inner-1">
@@ -82,6 +81,6 @@ export default function AccountShippingMethods() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

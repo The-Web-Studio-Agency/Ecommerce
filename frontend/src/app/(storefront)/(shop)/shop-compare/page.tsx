@@ -1,7 +1,5 @@
 import Link from "next/link";
-import Header from "@/components/Header";
 import IMAGES from "@/constant/theme";
-import Footer from "@/components/Footer";
 import Image from "next/image";
 
 const shopCardStyle = [
@@ -13,7 +11,6 @@ const shopCardStyle = [
 const ShopComparePage = () =>{
     return(
         <div className="page-wraper">
-            <Header design="header-text-white header-transparent" />
             <div className="page-content bg-light">
                 <div className="dz-bnr-inr bg-secondary dz-bnr-inr-md">
                     <div className="container-fluid">
@@ -355,7 +352,6 @@ const ShopComparePage = () =>{
                     </div>
                 </section>
             </div>
-            <Footer />
         </div>
     )
 }

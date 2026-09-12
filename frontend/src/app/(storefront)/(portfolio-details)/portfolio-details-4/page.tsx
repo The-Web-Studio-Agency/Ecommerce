@@ -3,7 +3,6 @@ import DetailListBlog from "@/elements/Portfolio/DetailListBlog";
 import IMAGES from "@/constant/theme";
 import Portfolio4Slider from "@/elements/Portfolio/Portfolio4Slider";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 interface CardImgtype{
     image : any
@@ -33,7 +32,7 @@ const portfoliobox : CardImgtype[] = [
 
 export default function PortfolioDetails4(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <div className="container-fluid px-0 portfolio-detail-4">
                     <div className="portfolio-detail-inner column">
@@ -116,6 +115,6 @@ export default function PortfolioDetails4(){
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

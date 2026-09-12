@@ -1,11 +1,10 @@
 import Link from "next/link";
 import IMAGES from "@/constant/theme";
-import MainLayout from "@/components/MainLayout";
 import Image from "next/image";
 
 export default function ShopOrderTracking(){
     return(
-        <MainLayout>
+        <>
             <div className="page-content bg-light">
                 <section className="px-3">
                     <div className="row align-center-center">
@@ -45,7 +44,7 @@ export default function ShopOrderTracking(){
                     </div>
                 </section>
             </div>        
-        </MainLayout>
+        </>
         
     )
 }

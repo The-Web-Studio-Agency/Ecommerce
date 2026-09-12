@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout"
 import IMAGES from "@/constant/theme"
 import AdditionalInfo from "@/elements/Post/AdditionalInfo"
 import AuthorProfile from "@/elements/Post/AuthorProfile"
@@ -18,7 +17,7 @@ export const metadata = {
 
 export default function PostSlideShow(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <section className="content-inner z-index-unset">
                     <div className="container">
@@ -69,6 +68,6 @@ export default function PostSlideShow(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

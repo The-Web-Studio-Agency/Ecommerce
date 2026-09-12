@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout";
 import AboutMe from "./_components/AboutMe";
 
 export const metadata = {
@@ -8,9 +7,9 @@ export const metadata = {
 
 const AboutMePage = () =>{
     return(
-        <CommanLayout>
+        <>
             <AboutMe />
-        </CommanLayout>
+        </>
     )
 }
 export default AboutMePage;

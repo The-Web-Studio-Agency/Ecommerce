@@ -1,6 +1,5 @@
 import Link from "next/link";
 import CommanSection from "@/components/BannerCommanSection";
-import CommanLayout from "@/components/CommanLayout";
 
 export const metadata = {
   title: "Pixio: Shop & eCommerce NextJs Template | DexignZone",
@@ -9,7 +8,7 @@ export const metadata = {
 
 export default function BannerWithColor(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <div className="dz-bnr-inr bg-secondary">
                     <div className="container">
@@ -26,6 +25,6 @@ export default function BannerWithColor(){
                 </div>
                 <CommanSection />
             </div> 
-        </CommanLayout>
+        </>
     )
 }

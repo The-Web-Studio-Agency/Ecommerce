@@ -1,5 +1,3 @@
-import Footer from "@/components/Footer";
-import Header from "@/components/Header";
 import IMAGES from "@/constant/theme";
 import BlogSidebar from "@/elements/Blog/BlogSidebar";
 import AdditionalInfo from "@/elements/Post/AdditionalInfo";
@@ -20,7 +18,6 @@ export const metadata = {
 export default function PostRightSidebar(){
     return(
         <div className="page-wraper">
-            <Header design="border-bottom" />
             <div className="page-content bg-light">            
                 <section className="content-inner-1 z-index-unset">
                     <div className="container">
@@ -74,7 +71,6 @@ export default function PostRightSidebar(){
                     </div>
                 </section>
             </div>
-            <Footer />
         </div>
     )
 }

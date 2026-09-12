@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout"
 import IMAGES from "@/constant/theme"
 import AuthorProfile from "@/elements/Post/AuthorProfile"
 import Comments from "@/elements/Post/Comments"
@@ -9,7 +8,7 @@ import Image from "next/image"
 
 const PostGutenbergPage= () => {
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
 		
                 <section className="content-inner-3">
@@ -97,7 +96,7 @@ const PostGutenbergPage= () => {
                 </section>
                 
             </div>
-        </CommanLayout>
+        </>
     )
 }
 

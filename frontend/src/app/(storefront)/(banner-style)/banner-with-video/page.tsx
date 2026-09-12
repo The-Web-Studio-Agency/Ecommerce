@@ -1,6 +1,4 @@
 import Link from "next/link";
-import Footer from "@/components/Footer";
-import Header from "@/components/Header";
 import CommanSection from "@/components/BannerCommanSection";
 
 export const metadata = {
@@ -11,7 +9,6 @@ export const metadata = {
 export default function BannerWithVideo() {
     return (
         <div className="page-wraper">            
-            <Header design="header-text-white header-transparent"/>
             <div className="page-content bg-light">
                 <div className="dz-bnr-inr bg-secondary overlay-black-light">                        
                     <video autoPlay loop muted id="video-background">
@@ -31,7 +28,6 @@ export default function BannerWithVideo() {
                 </div>
                 <CommanSection />
             </div>
-            <Footer />
         </div>
     )
 }

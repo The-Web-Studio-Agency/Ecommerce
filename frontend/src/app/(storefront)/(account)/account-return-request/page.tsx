@@ -4,11 +4,10 @@ import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
 import { ReturnReqData } from "@/constant/Alldata";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function AccountReturnRequest() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Return Request" parentText="Home" currentText="Return Request" />
                 <div className="content-inner-1">
@@ -50,6 +49,6 @@ export default function AccountReturnRequest() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

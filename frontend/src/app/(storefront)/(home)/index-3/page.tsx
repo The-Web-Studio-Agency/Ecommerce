@@ -1,4 +1,3 @@
-import MainLayout from "@/components/MainLayout";
 import { Fragment } from "react"
 import HomeThird from "./_components/HomeThird";
 
@@ -11,9 +10,9 @@ export const metadata = {
 const HomePage3 = () =>{
     return(
         <div className="page-content bg-light">
-            <MainLayout>
+            <>
                 <HomeThird />
-            </MainLayout>
+            </>
         </div>
     )
 }

@@ -2,11 +2,10 @@ import Link from "next/link";
 import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function BlogExclusive(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner mainText="Blog Exclusive" currentText="Blog Exclusive" parentText="Home" image={IMAGES.BackBg1.src} />
                 <section className="content-inner-1 z-index-unset">
@@ -172,6 +171,6 @@ export default function BlogExclusive(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

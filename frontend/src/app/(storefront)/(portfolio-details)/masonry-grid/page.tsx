@@ -7,7 +7,6 @@ import IMAGES from "@/constant/theme";
 import Isotope from "isotope-layout";
 // import imagesLoaded from "imagesloaded";
 import Image, { StaticImageData } from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 interface CollageStyleType{
     image:string | StaticImageData;
@@ -69,7 +68,7 @@ export default function MasonryGrid(){
         });
     };
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner currentText="Collage Style 2" parentText="Home" mainText="Collage Style 2" image={IMAGES.BackBg1.src}/>
                 <section className="content-inner pt-0 z-index-unset">
@@ -113,6 +112,6 @@ export default function MasonryGrid(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }

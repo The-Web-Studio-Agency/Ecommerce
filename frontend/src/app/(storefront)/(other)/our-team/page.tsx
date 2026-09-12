@@ -1,5 +1,4 @@
 import CommanBanner from "@/components/CommanBanner";
-import CommanLayout from "@/components/CommanLayout";
 import IMAGES from "@/constant/theme";
 import TeamCreators from "@/elements/About/TeamCreators";
 
@@ -10,7 +9,7 @@ export const metadata = {
 
 const OurTeam = () => {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner currentText="Our Team" mainText="Our Team"  parentText="Home" image={IMAGES.BackBg1.src} />
                 <section className="content-inner">
@@ -19,7 +18,7 @@ const OurTeam = () => {
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     );
 };
 

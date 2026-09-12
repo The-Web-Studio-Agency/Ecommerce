@@ -3,11 +3,10 @@ import CommanBanner from "@/components/CommanBanner";
 import { AccoountOrdersTable } from "@/constant/Alldata";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function AccountOrder() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Orders" parentText="Home" currentText="Orders" />
                 <div className="content-inner-1">
@@ -57,6 +56,6 @@ export default function AccountOrder() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

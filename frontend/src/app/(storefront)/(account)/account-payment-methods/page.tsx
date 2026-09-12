@@ -3,11 +3,10 @@ import CommanBanner from "@/components/CommanBanner";
 import IMAGES from "@/constant/theme";
 import CommanSidebar from "@/elements/MyAccount/CommanSidebar";
 import Image from "next/image";
-import CommanLayout from "@/components/CommanLayout";
 
 export default function AccountPaymentMethods() {
     return (
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <CommanBanner image={IMAGES.BackBg1.src} mainText="Review" parentText="Home" currentText="Review" />
                 <div className="content-inner-1">
@@ -94,6 +93,6 @@ export default function AccountPaymentMethods() {
                     </div>
                 </div>
             </div>
-        </CommanLayout>
+        </>
     )
 }

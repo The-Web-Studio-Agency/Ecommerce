@@ -13,14 +13,13 @@ import RelatedPost from "@/elements/Post/RelatedPost"
 import SocialIcon from "@/elements/SocialIcon"
 import StatusSlider from "@/elements/Post/StatusSlider"
 import { useState } from "react"
-import CommanLayout from "@/components/CommanLayout"
 
 
 export default function PostStatus(){
     const [statusModel, setStatusModel] = useState(false);
     return(
         <>
-            <CommanLayout>
+            <>
                 <div className="page-content bg-light">
                     <section className="content-inner z-index-unset">
                         <div className="container">
@@ -83,7 +82,7 @@ export default function PostStatus(){
                         </div>
                     </section>
                 </div>
-            </CommanLayout>
+            </>
             <Modal className="status-modal" 
                 id="staticBackdrop"
                 centered 

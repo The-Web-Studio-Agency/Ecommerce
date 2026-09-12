@@ -1,4 +1,3 @@
-import CommanLayout from "@/components/CommanLayout"
 import IMAGES from "@/constant/theme"
 import BlogSidebar from "@/elements/Blog/BlogSidebar"
 import AdditionalInfo from "@/elements/Post/AdditionalInfo"
@@ -19,7 +18,7 @@ export const metadata = {
 
 export default function PostText(){
     return(
-        <CommanLayout>
+        <>
             <div className="page-content bg-light">
                 <section className="content-inner z-index-unset">
                     <div className="container">
@@ -77,6 +76,6 @@ export default function PostText(){
                     </div>
                 </section>
             </div>
-        </CommanLayout>
+        </>
     )
 }
